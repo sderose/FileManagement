@@ -1,0 +1,18 @@
+#!/bin/bash
+#
+# Count how many files of each extension occur below current directory.
+#
+if [ "$1" == "-h" ]; then
+    echo "$0: Count how many files of each extension occur below current directory."
+    exit
+fi
+
+command ls -R |\
+    grep -v ':$' |\
+    sed 's/^.*\///' |\
+    grep '\.' |\
+    sed 's/^.*\.//' |\
+    sort |\
+    uniq -c |\
+    sort -rn
+

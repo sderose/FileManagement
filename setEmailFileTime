@@ -1,0 +1,156 @@
+#!/usr/bin/env python
+#
+# setEmailFileTime.py -- set the file-system timestamps on an email file
+# to match the MIME header "Date:" field.
+#
+# 2019-03-04: Written. Copyright by Steven J. DeRose.
+# Creative Commons Attribution-Share-alike 3.0 unported license.
+# See http://creativecommons.org/licenses/by-sa/3.0/.
+#
+# To do:
+#
+from __future__ import print_function
+import sys, os
+import argparse
+#import re
+#import string
+#import math
+import subprocess
+import codecs
+from datetime import datetime
+
+import PowerWalk
+
+#from collections import defaultdict
+
+#from sjdUtils import sjdUtils
+from alogging import ALogger
+
+__metadata__ = {
+    'creator'      : "Steven J. DeRose",
+    'cre_date'     : "2019-03-04",
+    'language'     : "Python 3.7",
+    'version_date' : "2019-03-04",
+}
+__version__ = __metadata__['version_date']
+
+#su = sjdUtils()
+lg = ALogger(1)
+
+###############################################################################
+#
+def doOneFile(path, fh):
+    """Deal with one individual file.
+    """
+    for rec in fh.readlines():
+        if (rec.startswith("Date:")):
+            dateLine = rec
+            break
+    fh.close()
+    if (not dateLine):
+        lg.eMsg("No 'Date:' line in '%s'." % (path))
+        return
+
+    # This should get like 'Fri, 17 Jul 2015 14:12:22 -0500'
+    dateValue = re.sub(r'^Date:\s*', '', dateLine)
+    dtObject = datetime.strptime(dateValue)
+
+    ftime = dtObject.strftime("%Y%m%d%H%M")
+
+    subprocess.check_output('touch -mt "%s"' % (ftime), shell=True)
+
+
+###############################################################################
+###############################################################################
+# Main
+#
+if __name__ == "__main__":
+    def processOptions():
+        descr = """
+=head1 Description
+
+Set the file-system timestamps on an email file
+to match the MIME header "Date:" field.
+
+touch -mt yyyymmddhhmm [file]
+
+should work.
+
+=head1 Related Commands
+
+stat, ls -lU, etc.
+
+=head1 Known bugs and Limitations
+
+=head1 Licensing
+
+Copyright 2019-03-04 by Steven J. DeRose. This script is licensed under a
+Creative Commons Attribution-Share-alike 3.0 unported license.
+See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
+
+=head1 Options
+"""
+
+        try:
+            from MarkupHelpFormatter import MarkupHelpFormatter
+            formatter = MarkupHelpFormatter
+        except ImportError:
+            formatter = None
+        parser = argparse.ArgumentParser(
+            description=descr, formatter_class=formatter)
+
+        parser.add_argument(
+            "--quiet", "-q",      action='store_true',
+            help='Suppress most messages.')
+        parser.add_argument(
+            "--recursive",        action='store_true',
+            help='Descend into subdirectories.')
+        parser.add_argument(
+            "--unicode",          action='store_const',  dest='iencoding',
+            const='utf8', help='Assume utf-8 for input files.')
+        parser.add_argument(
+            "--verbose", "-v",    action='count',       default=0,
+            help='Add more messages (repeatable).')
+        parser.add_argument(
+            "--version", action='version', version=__version__,
+            help='Display version information, then exit.')
+
+        parser.add_argument(
+            'files',             type=str,
+            nargs=argparse.REMAINDER,
+            help='Path(s) to input file(s)')
+
+        args0 = parser.parse_args()
+        if (args0.verbose): lg.setVerbose(args0.verbose)
+        return(args0)
+
+    ###########################################################################
+    #
+    args = processOptions()
+
+    if (len(args.files) == 0):
+        lg.error("No files specified....")
+        doOneFile("[STDIN]", sys.stdin)
+    else:
+        depth = 0
+        pw = PowerWalk.PowerWalk(args.files)
+        pw.setOption('recursive', args.recursive)
+        for path0, fh0 in pw.traverse():
+            if (fh0 == "DIR_END"):
+                depth -= 1
+                continue
+            print("    " * depth + path0)
+            if (fh0 == "DIR_START"):
+                depth += 1
+                continue
+
+            fileNum = pw.stats['itemsReturned']
+            if (fileNum % args.tickInterval == 0):
+                lg.vMsg(0, "At item #%d" % (fileNum))
+            fh0 = codecs.open(path0, "rb", encoding=args.iencoding)
+            doOneFile(path0, fh0)
+            fh0.close()
+
+    if (not args.quiet):
+        lg.vMsg(0,"Done.")
+        lg.showStats()

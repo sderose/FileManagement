@@ -1,0 +1,101 @@
+#!/usr/bin/perl -w
+#
+# findancestordir
+#
+# 2007-10-05: Written by Steven J. DeRose.
+# 2007-11-26 sjd: strict, Getopt.
+#
+
+use strict;
+use Getopt::Long;
+
+our $VERSION_DATE = "2012-09-12";
+
+my $quiet   = 0;
+my $verbose = 0;
+
+
+# Process options
+#
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+	"h|help|?"          => sub {
+        system "perldoc $0"; exit;
+    },
+	"q|quiet!"          => \$quiet,
+	"v|verbose+"        => \$verbose,
+    "version"           => sub {
+		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+	}
+	);
+
+($result) || die "findancestordir: Bad options.\n";
+
+
+###############################################################################
+# Main
+#
+($ARGV[0] ne '') || die
+    "No ancestor name specified: " . join(' ',@ARGV) . ".\n";
+
+my @tokens = split(/\//, $ENV{PWD});
+my $rc = "";
+for (my $i = (scalar @tokens) - 1; $i>=0; $i--) {
+	if ($tokens[$i] =~ m/$ARGV[0]/) {
+		for (my $j=0; $j<=$i; $j++) {
+			$rc .= $tokens[$j] . "/";
+		}
+		print $rc;
+		exit;
+	}
+}
+
+print ".";
+
+exit;
+
+
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+findancestordir [options] [name]
+
+Locates the nearest ancestor directory whose name contains [name].
+Most useful when passed to cd, for example:
+alias upto='cd `findancestordir $1`
+
+Note: Returns '.' on failure, so such a cd doesn't do anything.
+
+
+=head1 Options
+
+=over
+
+=item * B<--quiet> OR B<-q>
+Suppress most messages.
+
+=item * B<-v>
+
+Add more detailed messages.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=back
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

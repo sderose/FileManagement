@@ -1,0 +1,170 @@
+#!/usr/bin/env python
+#
+# lstimes
+#
+# 2016-02-05: Written. Copyright by Steven J. DeRose.
+# 2016-02-05, 2019-10-29: Lint.
+#
+# To do:
+#     INTEGRATE WITH 'lss' and maybe 'lsoutline'.
+#
+from __future__ import print_function
+import sys, os, argparse
+#import re
+import stat
+import pwd
+#import grp
+
+from alogging import ALogger
+from MarkupHelpFormatter import MarkupHelpFormatter
+
+lg = ALogger()
+
+__version_date__ = "2019-10-29"
+__metadata__ = {
+    'creator'      : "Steven J. DeRose",
+    'cre_date'     : "2016-02-05",
+    'language'     : "Python 2.7.6",
+    'version_date' : "2016-02-05",
+    'src_date'     : "$LastChangedDate$",
+    'src_version'  : "$Revision$",
+}
+
+###############################################################################
+#
+def processOptions():
+    parser = argparse.ArgumentParser(
+        description="""
+
+=head1 Description
+
+Show lots more information about a file than ls does.
+
+=head1 Related Commands
+
+C<ls>, C<stat -x>, C<file>.
+
+=head1 Known bugs and Limitations
+
+=head1 Licensing
+
+Copyright 2015 by Steven J. DeRose. This script is licensed under a
+Creative Commons Attribution-Share-alike 3.0 unported license.
+See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
+
+=head1 Options
+        """,
+        formatter_class=MarkupHelpFormatter
+    )
+    parser.add_argument(
+        "--color",  # Don't default. See below.
+        help='Colorize the output.')
+    parser.add_argument(
+        "--quiet", "-q",      action='store_true',
+        help='Suppress most messages.')
+    parser.add_argument(
+        "--verbose", "-v",    action='count',       default=0,
+        help='Add more messages (repeatable).')
+    parser.add_argument(
+        "--version", action='version', version=__version_date__,
+        help='Display version information, then exit.')
+
+    parser.add_argument(
+        'files',             type=str,
+        nargs=argparse.REMAINDER,
+        help='Path(s) to input file(s)')
+
+    args0 = parser.parse_args()
+    lg.setVerbose(args0.verbose)
+    if (args0.color == None):
+        args0.color = ("USE_COLOR" in os.environ and sys.stderr.isatty())
+    lg.setColors(args0.color)
+    return(args0)
+
+
+###############################################################################
+#
+def tryOneItem(path):
+    """Try to open a file (or directory, if -r is set).
+    """
+    lg.hMsg(1, "Starting item '%s'" % (path))
+    recnum = 0
+    if (not os.path.exists(path)):
+        lg.error("Couldn't find '%s'." % (path), stat="cantOpen")
+    elif (os.path.isdir(path)):
+        lg.bumpStat("totalDirs")
+        if (args.recursive):
+            for child in os.listdir(path):
+                recnum += tryOneItem(os.path.join(path,child))
+        else:
+            lg.vMsg(0, "Skipping directory '%s'." % (path))
+    else:
+        doOneFile(path)
+    return(recnum)
+
+
+###############################################################################
+#
+def getFileFlagChar(path):
+    if (os.path.isdir(path)): return("/")
+    return("")
+
+FMT = "%1s%9s%1s %3d %8s %6s %16s %16s %16s %s"
+def printHeader():
+    fields = [ ]
+
+    print(FMT %
+        ('dir', 'per', 'lnk', 'eh',
+         'usr', 'grp', 'sz',  'ct',
+         'mt',  'at',  'nm',  'flag'))
+    return
+
+def doOneFile(path):
+    """Deal with one individual file.
+    """
+    s = os.stat(path)  # follow_symlinks?
+    mode = s.st_mode	# protection bits,
+    ino = s.st_ino	# inode number,
+    dev = s.st_dev	# device,
+    nl  = s.st_nlink	# number of hard links,
+    uid = s.st_uid	# user id of owner,
+    gid = s.st_gid	# group id of owner,
+    sz  = s.st_size	# size of file, in bytes,
+    at  = s.st_atime	# time of most recent access,
+    mt  = s.st_mtime	# time of most recent content modification,
+    ct  = s.st_ctime	# time of last metadata change on Unix; cre on Win
+
+    dirName = os.path.isdir(path)
+    lnk = os.path.islink(path)
+    eh  = -1
+    usr = pwd.getpwuid(uid)[0]
+    #grp = grp.getgrgid(gid)[0]
+    grp = "???"
+    #sz  = os.path.getsize(path)
+    #ct  = os.path.getctime(path)
+    #mt  = os.path.getmtime(path)
+    #at  = os.path.getatime(path)
+    nm  = os.path.basename(path)
+    flag = getFileFlagChar(path)
+
+    filemode = stat.filemode(mode)
+    print(FMT %
+        (dirName, filemode, lnk, eh, usr, grp, sz, ct, mt, at, nm, flag))
+
+###############################################################################
+###############################################################################
+# Main
+#
+args = processOptions()
+
+if (len(args.files) == 0):
+    lg.error("No files specified....")
+    sys.exit()
+
+for f in (args.files):
+    lg.bumpStat("totalFiles")
+    doOneFile(f)
+
+if (not args.quiet):
+    lg.vMsg(0,"Done.")
+    lg.showStats()

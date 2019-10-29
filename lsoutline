@@ -1,0 +1,615 @@
+#!/usr/bin/perl -w
+#
+# lsoutline: Recursive list of files, with indentation.
+#
+# 2008-01-17: Written by Steven J. DeRose.
+# 2008-01-23 sjd: Switch from 'ls' to 'find'.
+# 2009-02-03 sjd: Unhardcode util path.
+# 2009-10-06 sjd: Make util path relative to HOME.
+# 2010-03-17 sjd: Default file args.
+# 2010-05-12 sjd: Add --absolute. --perldoc. Better --color.
+# 2010-09-12 sjd: Cleanup.
+# 2010-09-23 sjd: Add --all, sync colors w/ env LS_COLORS, --funky.
+# 2011-01-20 sjd: Add --dirs and --files.
+# 2011-08-29 sjd: Minor cleanup. Add --svn, --git, --bak. Funky only when --color.
+# 2012-02-02ff sjd: Lose colorstring for sjdUtils.pm.
+# 2013-09-25: Check whether 'dircolors' is present.
+# 2013-12-19: Add --path, --ipath.
+# 2015-09-09: Fix probs w/ --svn and --git. Add --raw, -F.
+#     --absdir to show absolute path only for directories.
+# 2016-01-11f: Start adding --html output option. Report maximum fanout.
+# 2016-11-10: Split out doHeader() and doTrailer(). Quote graphviz tokens.
+# 2018-09-19: Fixed maxNItems misreporting.
+# 2018-10-16: Add links to HTML output.
+#
+# To do:
+#     Port to Perl, integrate PowerWalk.
+#     Integrate 'find' to arrange results as outline.
+#     Factor out outlining so can apply to anything fielded?
+#     Output format options (--graphviz, Vue?...)
+#     Option for HTML or POD output, with links to open the files
+#     Make HTML output be happy with lynx
+#     Add --name and --iname like --path and --ipath. Maybe all 'find' opts?
+#     Allow passing --exec ___ to 'find'? at least for 'ls -F'
+#     Option to ignore stuff starting w/ \.
+#     Factor out common prefixes or numeric suffixes of filenames themselves??
+#     Maybe use File::Spec->rel2abs() for --absolute?
+#
+use strict;
+use Getopt::Long;
+use sjdUtils;
+
+our $VERSION_DATE = "2018-10-16";
+
+my $abbrev        = 1;
+my $absdir        = 0;
+my $absolute      = 0;
+my $all           = 0;
+my $bak           = 0;
+my $byExtension   = 0,
+my $color         = ($ENV{USE_COLOR} && -t STDOUT) ? 1:0;
+my $count         = 0;
+my $css           = "";
+my $dirs          = 1;
+my $files         = 1;
+my $flags         = 1;
+my $funky         = 1;
+my $graphviz      = 0;
+my $html          = 0;
+my $ipath         = "";
+my $indentString  = "    ";
+my $maxdepth      = 0; # unlimited
+my $path          = "";
+my $quiet         = 0;
+my $raw           = 0;
+my $svn           = 0;
+my $verbose       = 0;
+
+
+##############################################################################
+# Process options
+#
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "a|all!"            => \$all,
+    "abbrev!"           => \$abbrev,
+    "absolute!"         => \$absolute,
+    "absdir!"           => \$absdir,
+    "bak!"              => \$bak,
+    "byExtension|x!"    => \$byExtension,
+    "c|count!"          => \$count,
+    "color!"            => \$color,
+    "css=s"             => \$css,
+    "dirs!"             => \$dirs,
+    "files!"            => \$files,
+    "flags|F!"          => \$flags,
+    "funky!"            => \$funky,
+    "graphviz!"         => \$graphviz,
+    "h|help|?"          => sub { system "perldoc $0"; exit; },
+    "html!"             => \$html,
+    "ipath=s"           => \$ipath,
+    "iString=s"         => \$indentString,
+    "maxdepth=i"        => \$maxdepth,
+    "path=s"            => \$path,
+    "q|quiet!"          => \$quiet,
+    "raw!"              => \$raw,
+    "git|svn!"          => \$svn,
+    "v|verbose+"        => \$verbose,
+    "version"           => sub {
+        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+    },
+    );
+
+($result) || die "Bad options.\n";
+
+
+# Validate and default options
+#
+sjdUtils::setColors($color);
+sjdUtils::setVerbose($verbose);
+
+if ($count) { $files = 0; }
+
+my %extensionColorMap = ();
+my $cBlack = my $cRed = my $cGreen = my $cYellow = my $cBlue
+    = my $cMagenta = my $cCyan = my $cWhite = my $cEnd = "";
+
+if ($color) {
+    %extensionColorMap = %{readDirColors()};
+
+    sjdUtils::setColors(1);
+    $cBlack   = sjdUtils::getColorString("black");
+    $cRed     = sjdUtils::getColorString("red");
+    $cGreen   = sjdUtils::getColorString("green");
+    $cYellow  = sjdUtils::getColorString("yellow");
+    $cBlue    = sjdUtils::getColorString("blue");
+    $cMagenta = sjdUtils::getColorString("magenta");
+    $cCyan    = sjdUtils::getColorString("cyan");
+    $cWhite   = sjdUtils::getColorString("white");
+    $cEnd     = sjdUtils::getColorString("default");
+}
+
+my $fileColor = $cBlue;
+my $dirColor  = $cRed;
+
+
+##############################################################################
+##############################################################################
+# Main
+#
+my @flist = ();
+my %filesByExtension = ();
+my $deepest = 0;
+my $head = "";
+my $tail = "";
+my $fct  = 0;
+my $f    = "";
+
+# Use 'find' to generate a list of all the files
+#
+getFileList();
+
+# Issue any format-specific header info
+doHeader();
+
+my $maxNItems = 0;
+my $maxNItemsPath = "";
+my $prevDepth = 0;
+my $prevPath = "";
+my $prevHead = "";
+my $nItems = 0;
+
+# Go through what 'find' returned, and format as needed
+#
+for $f (@flist) {
+    chomp $f;
+    $fct++;
+
+    next if ($f =~ m/^\s*$/);
+    next if (!$files && ! -d $f);
+
+    (my $slashes = $f) =~ s/[^\/]//g;
+    my $depth = length($slashes);
+    if ($depth > $deepest) { $deepest = $depth; }
+    my $ind = $indentString x $depth;
+
+    ($tail = $f) =~ s/.*\///;
+    $head = substr($f,0,length($f)-length($tail));
+    if ($head eq $prevHead) {  # Still in same dir
+        $nItems++;
+    }
+    else {  # New dir
+        if ($nItems > $maxNItems) {
+            $maxNItems = $nItems;
+            $maxNItemsPath = $prevHead;
+        }
+        $nItems = 1;
+    }
+    # This should probably use LS_COLORS environment info.
+    #
+    my ($phead, $ptail) = ($head, $tail);
+    my $abshead = $phead;
+    $abshead =~ s@^\.@$ENV{PWD}@;
+
+    if ($color) { ($phead, $ptail) = doColor($head, $tail); }
+
+    if ($flags) {
+        if    (-d $f) { $ptail .= "/"; }    # directory
+        elsif (-x $f) { $ptail .= "*"; }    # executable
+        elsif (-l $f) { $ptail .= "@"; }    # symlink
+        elsif (-S $f) { $ptail .= "="; }    # socket
+        #elsif () { $ptail .= "%"; }    # whiteout (fake deletion from R/O fsys)
+        elsif (-p $f) { $ptail .= "|"; }    # fifo
+    }
+
+    # Display the file info
+    if ($html) {
+        while ($prevDepth > $depth) {
+            print($ind . "</ul>\n");
+            $prevDepth--;
+        }
+        while ($prevDepth < $depth) {
+            print($ind . '<ul class="dir">' . "\n");
+            $prevDepth++;
+        }
+        printf('%s<li><a href="file://%s">%s</a></li>' . "\n", $ind,
+            sjdUtils::escapeXmlAttribute("$abshead$ptail"), sjdUtils::escapeXml($tail));
+    }
+    elsif ($graphviz) {
+        print("    node [ color=$fileColor; ] '$ptail';\n");
+        print("    '$phead' -> '$ptail';\n");
+    }
+    else {
+        if ($absolute || ($absdir and -d $f))  {
+            print "$ind$abshead$ptail\n";
+        }
+        elsif ($abbrev) { print "$ind$ptail\n"; }
+        else            { print "$ind$phead$ptail\n"; }
+
+        if ($byExtension) {
+            my $ext = "(none)";
+            if ($tail =~ /\./) {
+                ($ext = $ptail) =~ s/^.*\.//;
+            }
+            $filesByExtension{$ext}++;
+        }
+    }
+
+    $prevDepth = $depth;
+    $prevPath = $f;
+    $prevHead = $head;
+} # for
+
+# Done with the list, issue any format-specific closer
+#
+doTrailer();
+
+# Final reporting
+#
+if (!$quiet) {
+    printf("\nDone after %d directories%s. Max depth %d.\n",
+         $fct, ($files) ? " and files":"", $deepest);
+    ($files) && printf("Max items in a dir: %d in '%s'.\n",
+         $maxNItems, $maxNItemsPath);
+}
+if ($byExtension) {
+    print "Item counts by extension:\n";
+    for my $x (sort keys %filesByExtension) {
+        printf "    %-10s %8d\n", $x, $filesByExtension{$x};
+    }
+}
+
+exit;
+
+
+##############################################################################
+#
+sub getFileList {
+    my $args = join(" ", @ARGV);
+    if ($args eq "") { $args = "."; }
+    my $cmd = "find '$args'";
+
+    if ($maxdepth)   { $cmd .= " -maxdepth $maxdepth"; }
+
+    if    (!$files)  { $cmd .= " -type d"; }
+    elsif (!$dirs)   { $cmd .= " -type f"; }
+
+    if    ($all)     { $cmd .= " -name '*'"; }
+    elsif ($path)    { $cmd .= " -path '$path'"; }
+    elsif ($ipath)   { $cmd .= " -ipath '$ipath'"; }
+    else             { $cmd .= " -name '[^.]*'"; }
+
+    if (!$svn)       { $cmd .= " ! -path '*.svn*' ! -path '*.git*'"; }
+
+    if (!$bak)       { $cmd .= " ! -name '*~' ! -name '#*' ! -name '*.bak'"; }
+
+    @flist = `$cmd`;
+    #warn ("Found " . scalar(@flist) . " files and directories.\n");
+} # getFileList
+
+sub doHeader {
+    if ($raw) {
+        if ($absolute) {
+            for (my $i=0; $i<scalar(@flist); $i++) {
+                $flist[$i] =~ s@^\.@$ENV{PWD}@;
+            }
+        }
+        print join("", @flist) . "\n";
+        exit;
+    }
+    if ($html) {
+        print(qq@
+<html>
+<head>
+    <title>lsoutline of $ENV{'PWD'}</title>
+    <style type="text/css" href="$css"></style>
+</head>
+<body>
+@);
+    }
+    elsif ($graphviz) {
+        warn("--graphviz output option is unfinished.\n");
+        print(qq!// Graphviz file generated by $ARGV[0].
+digraph abstract {
+    compound=true;
+    size="12,12";
+    label='"' . $flist[0] . '"';
+    URL="http://www.derose.net/steve/utilities";
+    fontsize=48;
+    !);
+    }
+} # doHeader
+
+sub doTrailer {
+    if ($html) {
+        while ($prevDepth>0) {
+            print("</ul>");
+            $prevDepth--;
+        }
+        print("\n</body>\n</html>\n");
+    }
+    elsif ($graphviz) {
+        print("}\n");
+    }
+} # doTrailer
+
+
+##############################################################################
+##############################################################################
+#
+sub doColor {
+    my ($head, $tail) = @_;
+    $head =~ s/\//$cRed\/$cEnd/g;
+    (my $ext = $tail) =~ s/^.*\././;
+
+    # Our own special categories
+    if ($color && $funky &&
+        $tail =~ m/[^_.\w\d~\#]/) { # Funky chars
+        $tail = "$cRed$tail$cEnd/";
+    }
+    elsif ($f =~ m/[#~]\s*$/) {                         # Backups
+        $tail = "$cMagenta$tail$cEnd";
+    }
+    elsif ($tail =~ m/^\./) {                           # Backups
+        $tail = "$cCyan$tail$cEnd";
+    }
+    elsif (!-w $f) { $tail = "$cRed$tail$cEnd"; }       # R/O
+
+    # 'dircolors' categories
+    elsif (-x $f) { $tail = "$cGreen$tail$cEnd"; }      # EXEC
+    elsif (-d $f) {                                     # DIR
+        $tail = "$cBlue$tail$cEnd/";
+    }
+    elsif (defined $extensionColorMap{$ext}) {
+        $tail = $extensionColorMap{$ext} . $tail . $cEnd;
+    }
+    else          {
+        #$tail = "$cMagenta$tail$cEnd";
+    }
+    return($head, $tail);
+}
+
+
+# BASH color support for 'ls'. Assigns color codes to .extension and to:
+#     NORMAL FILE RESET DIR LINK MULTIHARDLINK
+#     FIFO SOCK DOOR BLK CHR ORPHAN SETUID SETGID CAPABILITY
+#     STICKY_OTHER_WRITABLE OTHER_WRITABLE STICKY EXEC
+#
+# Not available on MacOSX/BSD. Cf http://unix.stackexchange.com/questions/91937
+#
+sub readDirColors {
+    my %extMap = ();
+    if (`which dircolors`) {
+        for my $rec (split(/\n/, `dircolors --print-database`)) {
+            if ($rec =~ m/^#/) {
+                next;
+            }
+            elsif ($rec =~ m/^(\.?\w+)\s+(.*)/) {
+                $extMap{$1} = chr(27) . "[" . $2 . "m";
+            }
+        }
+    }
+    else {
+        ($verbose) && warn "dircolors command not available.\n";
+    }
+    return(\%extMap);
+}
+
+
+##############################################################################
+##############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+lsoutline [options] [files]
+
+Show a recursive C<ls>, indenting the levels to make an outline, and/or
+generating absolute pathnames.
+
+By default, backup files and version-control copies are not included
+(see I<--bak>, I<--git>, and I<--svn>), and files with unusual characters in
+their names are colorized (see I<--funky>).
+
+There are options to show just files (I<--nodirs>)
+or just directories (I<--nofiles>),
+and to show the full (absolute) path for either.
+
+I find these effects difficult to tease out of regular C<ls>.
+
+The outline can also be output as HTML lists if desired (I<--html>).
+Graphviz output support is being added (I<--graphviz>).
+
+To execute a command on a huge number of files
+buried at arbitrary levels below a directory(s), pipe this into C<xargs>
+(on which see L<"Related Commands">, below).
+
+
+=head1 Options
+
+(prefix 'no' to negate when applicable)
+
+=over
+
+=item * B<--abbrev>
+
+Remove common leading path portions
+(default;  to turn this option off, specify I<--noabbrev>).
+See also I<--absdir>, I<--absolute>
+
+=item * B<--absdir>
+
+Show absolute paths for directories, but not files. See also I<--absolute>.
+
+=item * B<--absolute>
+
+Show absolute paths for files and directories. See also I<--absdir>.
+
+=item * B<--all>
+
+Show dot-initial files, as for C<ls -a>.
+See also I<--path> and I<--ipath>.
+
+=item * B<--count>
+
+Show count of files per directory (implies I<"--dirs">). Not yet supported.
+
+=item * B<--color>
+
+Colorize output. This is the default if environment variable
+C<USE_COLOR> is set and STDOUT is going to a terminal.
+
+=item * B<--css> I<path>
+
+Requires I<--html>. Add a <style> element to the generated HTML, linking
+to I<path> as a CSS stylesheet. Default: off.
+
+=item * B<--dirs>
+
+Show directories (default).
+Use I<--nofiles> to get a list of I<only> directories. See also I<--files>.
+
+=item * B<--files>
+
+Show files (default). Use I<--nofiles> to turn off. See also I<--dirs>.
+
+=item * B<--flags> OR B<-F>
+
+Append characters to names, to show special kinds of entries, like C<ls -F>.
+Default: On (use I<--noflags> to turn off).
+The flags used are:
+
+=over
+
+=item * B</> --  directory
+
+=item * B<*> --  executable
+
+=item * B<@> --  symlink
+
+=item * B<=> --  socket
+
+=item * B<|> --  fifo
+
+=back
+
+B<Note>: The B<%> flag for "whiteouts" (Linux-speak for a
+fake deletion from read-only filesystems) is not supported.
+
+=item * B<--funky>
+
+Colorize names that have unusual characters in them
+(including space and hyphen, which can trip up scripts). Default: on.
+
+=item * B<--html>
+
+Write output as a set of nested HTML lists.
+Experimental. See also I<--css>.
+
+=item * B<--ipath> I<expr>
+
+Same as I<--path>, but ignores case when matching.
+See also I<--all> and I<--path>.
+
+=item * B<--iString> I<'s'>
+
+Specify the string to be repeated for each level of indentation.
+Some useful cases:
+    '    ' the default;
+    '' for no indentation;
+    '|   ' makes a nice display for complex trees;
+    '*' generates output that can feed C<emacs> outline mode.
+
+=item * B<--maxdepth> I<n>
+
+Only recurse this many levels (uses C<find -maxdepth>).
+
+=item * B<--path> I<expr>
+
+Show only files whose paths match I<expr> (to match only I<parts> of paths,
+use initial and/or final asterisks as wildcards).
+B<Note>: Ancestor directories will not be shown unless they also match,
+so with this option the overall outline will not typically look right.
+See also I<--all> and I<--ipath>.
+
+I<expr> is merely passed to the *nix C<find> command's corresponding option,
+and therefore uses that syntax:
+
+=over
+
+shell pattern matching characters (``['',
+``]'', ``*'', and ``?'') may be used as part of pattern.  These
+characters may be matched explicitly by escaping them with a backslash (``\'').
+
+=back
+
+=item * B<--quiet> OR B<-q>
+
+Suppress most messages.
+
+=item * B<--raw>
+
+Don't do outline or other formatting, just display the C<find> output.
+
+=item * B<--svn> or B<--git>
+
+Include SVN and GIT files. Default: off.
+I<--all> also has this effect.
+
+=item * B<--verbose> OR B<-v>
+
+Add more detailed messages. Repeatable.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=item * B<-x> or B<--byExtension>.
+
+Also count number of files by extension.
+
+=back
+
+
+=head1 Known bugs and limitations
+
+I<--count> option is not finished.
+
+The maximum number of files found in any directory, is not yet reported
+correctly.
+
+I<--color> doesn't respect environment variable LS_COLORS.
+
+Some colorizing functionality depends on C<dircolors>, which is part of
+Gnu Coreutils, and may not be available on BSD-like systems.
+
+Should have a way to take an arbitrary list of files (say, from independent
+use of C<find>), and format it nicely.
+
+
+=head1 Related Commands
+
+C<find> -- generic *nix tool for searching directory subtrees; used by this
+script to find the files shown.
+
+C<xargs> -- run a command on a whole mess of files (pipe the list into it).
+For example:
+
+    lsoutline -is '' -abs -nodirs myPath | xargs -L 100 wc -l
+
+This would generate a list of files, and have C<xargs> feed 100 of them
+at a time to C<wc -l>. B<Note>: Do I<not> quote the command and its
+arguments ("wc -l" in this example).
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

@@ -1,0 +1,823 @@
+#!/usr/bin/perl -w
+#
+# spot: Command-line interface for Mac OS X Spotlight.
+#
+# 2013-08-27f: Written by Steven J. DeRose, sderose@acm.org.
+# 2013-09-05: Support $BACKUP_DIR.
+# 2014-01-09: Add --wildcards.
+# 2014-07-02: Add warning for --xname fail if no extension included.
+# 2015-09-22: Add --head. Lose File::Stat, which seems badly broken.
+#
+# To do:
+#     Color backups in yellow?
+#     Move in XSV data from ./macOsxSpotLightKeys.pl, drop XmlTuples.
+#     Don't break out single-digit mail subdirs?
+#         or perhaps, any dir w/ same number of files as child?
+#     Support Spotlight operators
+#     --count, --live, --interpret -- as for mdfind.
+#     --path, --links, interface to diff
+#     option to write output as HTML expandable outline and send to browser
+#     option to move, copy, or link all found files
+#     Add some env variables for BACKUPPATH, MAILPATH, etc?
+#
+use strict;
+use Getopt::Long;
+
+use XmlTuples; # FIX
+
+my $version = "2015-09-22";
+
+use Cwd 'abs_path';
+(my $thisPath = abs_path($0)) =~ s|/[^/]*$||;
+# Used to keep keys in: $ENV{HOME}/bin/tupleSets/
+
+# Options
+#
+my $age           = 0;
+my $align         = "L";
+my $bak           = 1;
+my $color         = ($ENV{USE_COLOR} && -t STDERR) ? 1:0;
+my $content       = "";
+my $date          = 1;
+my $days          = 0;
+my $grep          = 1;
+my $head          = 1;
+my $ignoreCase    = 1;
+my $ignoreDiacritics = 0;
+my $iString       = "    ";
+my $key           = "";
+my $keyFile       = "$thisPath/macOsxSpotLightKeys.xsv";
+my $listKeys      = 0;
+my $man           = 0;
+my $name          = "";
+my $nohome        = 0;
+my $nomail        = 0;
+my @onlyIn        = ();
+my $outline       = 0;
+my $quiet         = 0;
+my $size          = 1;
+my $svn           = 1;
+my $terse         = 1;
+my $verbose       = 0;
+my $value         = "";
+my $wildcards     = 1;
+my $wrap          = 0;
+my $xname         = "";
+
+
+###############################################################################
+#
+my %getoptHash = (
+    "age!"               => \$age,
+    "align=s"            => \$align,
+    "bak|backup!"        => \$bak,
+    "color!"             => \$color,
+    "content|text=s"     => \$content,
+    "date!"              => \$date,
+    "days=i"             => \$days,
+    "grep!"              => \$grep,
+    "head!"              => \$head,
+    "h|help"             => sub { system "perldoc $0"; exit; },
+    "i|ignoreCase!"      => \$ignoreCase,
+    "iString=s"          => \$iString,
+    "ignoreDiacritics!"  => \$ignoreDiacritics,
+    "key=s"              => \$key,
+    "keyFile=s"          => \$keyFile,  # FIX
+    "listKeys"           => \$listKeys,
+    "n|name=s"           => \$name,
+
+    "doc"                => sub { push @onlyIn, "$ENV{HOME}/Documents"; },
+    "down"               => sub { push @onlyIn, "$ENV{HOME}/Downloads"; },
+    "in|onlyIn|dir=s"    => \@onlyIn,
+    "here|current"       => sub { push @onlyIn, "$ENV{PWD}"; },
+    "home"               => sub { push @onlyIn, "$ENV{HOME}"; },
+    "mail"               => sub { push @onlyIn, "$ENV{HOME}/Library/Mail"; },
+    "man!"               => \$man,
+    "music"              => sub { push @onlyIn, "$ENV{HOME}/Music"; },
+    "nohome!"            => \$nohome,
+    "nomail!"            => \$nomail,
+    "pic"                => sub { push @onlyIn, "$ENV{HOME}/Pictures"; },
+
+    "outline!"           => \$outline,
+    "q|quiet!"           => \$quiet,
+    "size!"              => \$size,
+    "svn!"               => \$svn,
+    "terse!"             => \$terse,
+    "value=s"            => \$value,
+    "v|verbose+"         => \$verbose,
+    "version"            => sub {
+        die "Version of $version, by Steven J. DeRose.\n";
+    },
+    "wildcards!"         => \$wildcards,
+    "wrap!"              => \$wrap,
+    "xname=s"            => \$xname,
+    );
+Getopt::Long::Configure ("ignore_case");
+GetOptions(%getoptHash) || die "Bad options.\n";
+
+# See 'man man'.
+if ($man) {
+    my $mp = `man -w 2>/dev/null`;
+    chomp $mp;
+    push @onlyIn, split(/:/, $mp);
+}
+
+
+###############################################################################
+###############################################################################
+# Main
+#
+my $foo = new XmlTuples();
+$foo->open($keyFile) || die
+    "Couldn't open list of Spotlight keys from '$keyFile'.\n"; # FIX
+my $keysRef = $foo->getAllAsHash("Key"); # FIX
+
+if ($key) {
+    my $origKey = $key;
+    if ($key !~ m/^kMDItem/) { $key = "kMDItem" . $key; }
+    (defined $keysRef->{$key}) || die "Unknown -key value '$origKey'\n";
+}
+if ($listKeys) {
+    warn("\nAll key names start with 'kMDItem' (not shown below).");
+    for my $k (sort(keys(%{$keysRef}))) {
+        (my $shortKey = $k) =~ s/^kMDItem//;
+        warn(sprintf("%-24s", $shortKey) .
+            " " . $keysRef->{$k}->{"Typ"} .
+            "\n" . wrap($keysRef->{$k}->{"Dsc"}, 4));
+    }
+    warn("Total keys known: " . scalar(keys(%{$keysRef})) . ".\n");
+    exit;
+}
+
+# Assemble and run the 'mdfind' command, Apple's Spotlight i/f.
+#
+my $args = "";
+if ($name ne "") {
+    if ($wildcards) {
+        $args = "kMDItemDisplayName == \"*$name*\"";
+    }
+    else {
+        $args = "kMDItemDisplayName == \"$name\"";
+    }
+}
+elsif ($xname ne "") {
+    $args = "kMDItemDisplayName == \"$xname\"";
+}
+elsif ($key) {
+    ($value ne "") || die "No -value specified for -key $key.\n";
+    $args = "$key == \"$value\"";
+}
+
+elsif ($content ne "") {
+    $args = "$content";
+}
+
+if ($ignoreCase)       { $args .= "c"; }
+if ($ignoreDiacritics) { $args .= "d"; }
+
+my $options = "";
+if (scalar(@onlyIn)) {
+    for my $od (@onlyIn) {
+        (-d $od) || die "Can't find -onlyin directory '$od'.\n";
+        $options .= " -onlyin '$od'";
+    }
+}
+
+my $cmd = "mdfind $options '$args'";
+($quiet) || warn("Running: $cmd\n");
+my $buf = `$cmd`;
+my @files = sort(split(/[\r\n]+/, $buf));
+
+report();
+
+($quiet) || print "Total files found: " . scalar(@files) .
+    " (-bak $bak, -svn $svn)\n";
+if (!scalar(@files)) {
+    if ($ignoreCase && index($args, "*")<0 && !$quiet) {
+        warn "*** Try adding '*' wildcard(s) to your request?\n";
+    }
+    if ($xname && $xname !~ m/\.\w{1,4}$/) {
+        warn "*** With --xname you need to include the extension if applicable.\n";
+    }
+}
+
+if ($outline && !$quiet) {
+    print "\n======= File system path outline =======\n";
+    printPathOUtline();
+}
+
+exit;
+
+
+###############################################################################
+###############################################################################
+# Display results
+#
+sub lpad {
+    my ($s, $n) = @_;
+    my $needed = $n - len($s);
+    if ($needed > 0) {
+        $s = (" " x $needed) . $s;
+    }
+    return($s);
+}
+
+sub reportHead {
+    my $toPrint = "Path";
+    if ($size) {
+        $toPrint = sprintf("%8s ", "Size") . $toPrint;
+    }
+    if ($date) {
+        $toPrint = sprintf("%10s ", "Modtime") . $toPrint;
+    }
+    if ($age) {
+        $toPrint = sprintf("%6s ", "Age(d)") . $toPrint;
+    }
+    if ($align eq "R") {
+        $toPrint = lpad($toPrint, $ENV{COLUMNS});
+    }
+    elsif ($wrap) {
+        $toPrint = wrap($toPrint, 4);
+    }
+    print "$toPrint\n";
+}
+
+sub report {
+    if ($head) { reportHead(); }
+    my $prev = "";
+    for my $file (@files) {
+        chomp $file;
+        next if (!$svn && $file =~ m@\bsvn\b@);
+        next if (!$bak && isBackup($file));
+        next if ($nomail && $file =~ m@/Mail/@);
+        next if ($nohome && $file =~ m@^~@);
+
+        addPathToOutLine($file);
+
+        if ($days && (-M $file) > $days) { next; }
+
+        my $toPrint = $file;
+        if ($terse) {
+            $toPrint =~ s@^$ENV{HOME}@~@;
+            $toPrint =~ s@^$ENV{PWD}@.@;
+        }
+        if ($size) {
+            $toPrint = sprintf("%8d ", (-s $file)) . $toPrint;
+        }
+        if ($date) {
+            my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
+                $atime,$mtime,$ctime,$blksize,$blocks) = stat("/Users/sderose");
+            if (!$mtime) {
+                print("stat for '$file' failed.\n");
+                $mtime = "???";
+            }
+            $toPrint = sprintf("%10s ", $ctime) . $toPrint;
+        }
+        if ($age) {
+            $toPrint = sprintf("%6.1f ", (-M $file)) . $toPrint;
+        }
+
+        if ($align eq "R") {
+            $toPrint = lpad($toPrint, $ENV{COLUMNS});
+        }
+        elsif ($wrap) {
+            $toPrint = wrap($toPrint, 4);
+        }
+        print("$toPrint\n");
+        if ($grep && $content && -T '$file') {
+            system "cat '$file' | tr '\015' '\012' | grep -iH '$content'";
+            print "\n";
+        }
+        $prev = $file;
+    } # for
+} # report
+
+
+# Mod to keep breakChar if not space? Cf Text::Wrap features
+#
+sub wrap {
+    my ($s, $indent, $width, $breakChar) = @_;
+    if (!$width)     { $width = $ENV{COLUMNS} || 80; }
+    if ($indent)     { $width -= $indent; }
+    if (!$breakChar) { $breakChar = " "; }
+
+    my $buf = "";
+    for my $line (split(/[\r\n]+/, $s)) {
+        while ($line ne "") {
+            my $lastShadow = rindex($line, $breakChar, $width);
+            if ($lastShadow < 0) {
+                $buf .= (" " x ($indent || 0)) .
+                    ssubstr($line, 0, $width) . "\n" ;
+                $line = ssubstr($line,$width);
+            }
+            else {
+                $buf .= (" " x ($indent || 0)) .
+                    ssubstr($line, 0, $lastShadow-1) . "\n";
+                $line = ssubstr($line, $lastShadow+1);
+            }
+        }
+    }
+    return($buf);
+} # wrap
+
+
+###############################################################################
+###############################################################################
+#
+sub isBackup {
+    my ($file) = @_;
+    if ($file =~ m/^#|#$|~$|\.bak$/)                          { return(1); }
+    if ($file =~ m/^(Copy|Backup)( \d+)? of /i)               { return(1); }
+    if ($file =~ m/\/backups\//i)                             { return(1); }
+    if (index($file, "BBEdit Backups")>=0)                    { return(1); }
+    if ($ENV{BACKUP_DIR} && index($file,$ENV{BACKUP_DIR})>=0) { return(1); }
+    return(0);
+}
+
+
+BEGIN {
+    my $reserved = "#COUNT#";
+    my $pathOutline = { $reserved=>0 };
+
+    sub addPathToOutLine {
+        my ($path) = @_;
+        my $curNode = $pathOutline;
+        my @steps = split(/\//, $path);
+        if ($steps[0] eq "") { shift @steps; }
+        my $leaf = pop @steps;
+        for my $step (@steps) {
+            $curNode->{$reserved}++;
+            if (!defined $curNode->{$step}) {
+                $curNode->{$step} = { $reserved=>0 };
+            }
+            $curNode = $curNode->{$step};
+        }
+        $curNode->{$reserved}++;
+    }
+
+    sub printPathOUtline {
+        printPathOUtlineR(0, "", $pathOutline);
+    }
+
+    sub printPathOUtlineR {
+        my ($depth, $label, $node) = @_;
+        my $pbuf = ($iString x $depth) .
+            sprintf("%4d ", $node->{$reserved}) .
+            colorize("red", $label . "/");
+        print $pbuf . "\n";
+        for my $sub (sort(keys(%{$node}))) {
+            next if ($sub eq $reserved);
+            printPathOUtlineR($depth+1, $sub, $node->{$sub});
+        }
+    }
+} # END
+
+
+###############################################################################
+#    Extracted by Steven J. DeRose, August 2013.
+#    Last modified: 2015-09-22.
+#
+#    Key: Always starts with 'kmdITem'
+#    Dom: (domain) common, image, video, audio, files.
+#    Fwk: Always "CoreServices/CoreServices.h" (except one typo)
+#    Hdr: Always "MDItem.h""
+#    Typ: These cases (occasionally w/ extra whitespace):
+#         CFString, CFNumber, Array of CFStrings, CFBoolean, CFDate
+#    Avl: "OS X v10.\d and later."
+#
+#    Added data:
+#    MARC:   What USMARC field/subfield is the nearest equivalent (if any).
+#            (experimental, unfinished, should be checked by domain expert)
+#
+#    Accessible via 'mdfind', 'mdutil', etc., or my 'spot'.
+#
+#    Source: https://developer.apple.com/library/mac/documentation/
+#        Carbon/Reference/MetadataAttributesRef/Reference/
+#        CommonAttrs.html#//apple_ref/doc/uid/TP40001694-SW1
+#
+sub setupMacOsxSpotLightKeys {
+}
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+spot [options] file
+
+Provide a more memorable interface to Spotlight from the shell.
+
+For example, to find all files anywhere under your home
+directory, that are (a) named exactly 'foo' or (b) have names containing
+"foo", use:
+
+    (a)   spot --home --xname foo
+    (b)   spot --home --name 'foo'
+
+The raw C<mdfind> syntax for that looks like:
+
+    (a)   mdfind --onlyin ~ 'kMDItemDisplayName == "foo"'
+    (b)   mdfind --onlyin ~ 'kMDItemDisplayName == "*foo*"'
+
+You can get an outline of what directories have matching files, and how many,
+with I<--outline>.
+
+I<--nomail> is useful for avoiding lots of mail files that may include your search terms.
+
+B<Warning>: The Spotlight index apparently does I<not> include data for
+Apps such as Apple C<Note>, which keep their data in MySQL rather than
+separate files. So this script, and the Finder C<Find> command,
+will not find hits in such documents. However,
+the Spotlight interface via the main menu bar magnifying glass, separately
+retrieves and merges such hits.
+
+
+=head2 Option overview
+
+It may be useful to create C<alias>es to search
+using whatever combinations you find most useful.
+
+To see a list of attribute names you can test via I<--key k>, use C<spot --list>.
+
+The operators are ==, <, >, <=, >=, ||, and &&.
+
+
+=head3 Target attributes
+
+  --name fname   Search filenames, allowing * at both ends.
+  --xname fname  Search exact filenames (w/ extension but not path)
+                  (if desired, you can do 'fname*', etc.)
+  --nm fname     Search for *fname*
+                  (mnemonic: 'nm' is incomplete 'name')
+  --content s    Search file content for s
+  --key k        Search attribute k (you can omit "kMDItem")
+  --list         Display the list of known keys
+
+=head3 Files to search
+
+If you specify one or more of these options, only the specified area(s)
+will be searched:
+
+  --dir d      Synonym for --onlyIn d
+  --doc        Look under $HOME/Documents
+  --down       Look under $HOME/Downloads
+  --here       Look under $PWD
+  --home       Look under $HOME
+                  (--nohome excludes this area)
+  --mail       Look under $HOME/Library/Mail (Apple Mail)
+                  (--nomail excludes this area)
+  --man        Look under directories known to 'man -w'
+  --music      Look under $HOME/Music
+  --onlyIn d   Look under directory at path d
+  --pic        Look under $HOME/Pictures
+  --text       Synonym for --content
+
+  --bak        Include backup files (-nobak excludes such files)
+  --svn        Include files under SVN version control
+
+-head3 Reporting
+
+  --age        Show days since last modified
+  --date       Show file mod date as yyyy-mm-dd
+  --days n     Don't show files unless modified in last n days
+  --list       List keys and values
+  --outline    Show the appicable directory tree, with file-counts
+  --size       Show file size
+  --terse      Use ~ and . to shorten output paths
+
+=head2 Special values
+
+There are some special values available for use with time searches
+(a number in parens extends in the future+ or past-).
+They are best used with comparison operators:
+    $time.today()
+    $time.yesterday()
+    $time.this_week()
+    $time.this_month()
+    $timethis_year()
+
+See also I<--days>.
+
+
+
+=head1 Options
+
+(prefix 'no' to negate where applicable; however, I<--nohome> and I<--nomail>
+are special -- see below)
+
+=over
+
+=item * B<--age>
+
+Show number of days since file was modified. See also I<--date>.
+To instead filter out files not modified recently, see I<--days>.
+
+=item * B<--bak>
+
+Include backup files, which are indicated by
+names with ~, #, .bak, Copy (n) of, Backup (n) of;
+having any ancestor directory whose name contains "BBEdit Backups";
+or having any ancestor directory named C<backups> (ignoring case).
+Default (use I<--nobak> to turn off).
+
+=item * B<--color>
+
+Colorize the output. Default to on if
+environment variable C<USE_COLOR> is set and STDERR is going to the terminal.
+
+=item * B<--date>
+
+Show date file was last modified. See also I<--age>.
+
+=item * B<--days> I<n>
+
+Report only files that have been modified in the last I<n> days (as reported by -M).
+
+=item * B<--dir> I<path>
+
+Look for files under the directory at I<path>.
+
+=item * B<--doc>
+
+Look for files under your F<Documents> directory.
+
+=item * B<--grep>
+
+With I<--content> searches, run C<grep> on each file so each match is shown in
+context (it would be nice to add pass-throughs for grep options such as
+-m, -A, -B, -C, -c, etc. but they aren't available at present).
+
+=item * B<--head>
+
+Show column headings above results. Default.
+
+=item * B<--here>
+
+Search under the current working directory (.).
+
+=item * B<--home>
+
+Search under your home directory.
+I<--nohome> will I<exclude> files under the home directory, so is not exactly
+the opposite of I<--home>.
+
+=item * B<--ignoreCase> or B<-i>
+
+Disregard upper/lower case distinctions. Default: on.
+B<Note>: ignoring case in C<mdfind> is done by appending 'c' to the target string.
+
+=item * B<--ignoreDiacritics>
+
+Disregard accents and other diacritics on characters.
+
+=item * B<--key> I<k>
+
+Search for files for which the Spotlight key named I<k> has a given value.
+To see all available keys, use C<spot --listKeys> (and see below).
+
+=item * B<--keyFile> I<path>  # FIX
+
+Where to find the list of known Spotlight keys. The default should suffice.
+If no such file is found, the I<--listKeys> option won't work, but you can still
+specify any key you like, and C<spot> will at least try it.
+
+=item * B<--listKeys>
+
+Display a list of all available keys, then exit. See also I<--key>,
+and a list of many Mac file system metadata keys, below.
+
+=item * B<--mail>
+
+Search under the C<Apple Mail> mailbox directories ($HOME/Library/Mail).
+I<--nomail> will I<exclude> files under the mail directory, so is not exactly
+the opposite of I<--mail>.
+
+=item * B<--man>
+
+Search under the directories known to the *nix C<man> command (documentation).
+B<Note>: These pages are usually compressed, in which case Spotlight doesn't seem
+to index their contents.
+
+=item * B<--name> I<fileName> or B<-n> I<fileName>
+
+Search via file-name (assumes wildcard at each end), not file contents.
+See also I<--xname>, I<--ignoreCase> and I<--ignoreDiacritics>.
+
+=item * B<--onlyIn> I<path> or B<--in>...
+
+Search 'only' under the directory at I<path>. However, this option is repeatable,
+and you can add directories to the same list using the options
+I<--dir>, I<--doc>, I<--here>, I<--home>, I<--mail>, I<--man>, I<--music>, I<--pic>.
+
+
+=item * B<--outline>
+
+At the end, show all the directories in which items were found, as an outline.
+With each name, show how many descendant items were found.
+Default: on (use I<--nooutline> or I<-q> to turn off).
+
+=item * B<--quiet> or B<-q>
+
+Suppress most messages.
+
+=item * B<--size>
+
+Show file sizes.
+
+=item * B<--svn>
+
+Include files within SVN (version control) directory trees.
+Default: on (use I<--nosvn> to turn off).
+
+=item * B<--terse>
+
+Shorten paths starting with the user's home directory, by substituting "~".
+Shorten paths starting with the current directory, by substituting ".".
+Default (use I<--noterse> to turn off).
+
+=item * B<--text>
+
+Synonym for I<--content> (to search in file contents).
+
+=item * B<--verbose> or B<-v>
+
+Add more messages (repeatable).
+
+=item * B<--version>
+
+Show version info and exit.
+
+=item * B<--wildcards>
+
+Automatically add wildcards ("*") around I<--name> searches. Default: on.
+
+=item * B<--wrap>
+
+Wrap long paths for display, indenting non-first lines.
+
+=item * B<--xname> I<fileName>
+
+Search via exact file-name, not contents (explicit "*" is still a wildcard)
+See also I<--name>, I<--ignoreCase> and I<--ignoreDiacritics>.
+
+=back
+
+
+
+=head1 Mac file system metadata keys
+
+You can list the available metadata for a given file with:
+    mdls [file]
+    mdls -name kMDItem... [file]
+
+Some useful keys are listed below. All keys start with "kMDItem"
+(which you can omit with I<--key>).
+
+The usual Mac OS X file-system attributes (obsolete?)
+    FSExists
+    FSIsReadable
+    FSIsWriteable
+
+Collected from a text file via C<mdls> under Yosemite:
+
+      Name                             Example value
+    kMDItemContentCreationDate     = public.tab-separated-values-text,
+    kMDItemContentModificationDate = 2015-03-17 15:28:56 +0000,
+    kMDItemContentType             = "public.tab-separated-values-text",
+    kMDItemContentTypeTree         = """(
+        "public.tab-separated-values-text",
+        "public.delimited-values-text",
+        "public.text",
+        "public.data",
+        "public.item",
+        "public.content"
+    )"""
+    kMDItemDateAdded               = 2015-03-17 15:28:56 +0000,
+    kMDItemDisplayName             = "lexicon.tsv",
+    kMDItemFSContentChangeDate     = 2015-03-17 15:28:56 +0000,
+    kMDItemFSCreationDate          = 2015-03-17 15:28:56 +0000,
+    kMDItemFSCreatorCode           = "",
+    kMDItemFSFinderFlags           = 0,
+    kMDItemFSHasCustomIcon         = (null),
+    kMDItemFSInvisible             = 0,
+    kMDItemFSIsExtensionHidden     = 0,
+    kMDItemFSIsStationery          = (null),
+    kMDItemFSLabel                 = 0,
+    kMDItemFSName                  = "lexicon.tsv",
+    kMDItemFSNodeCount             = (null),
+    kMDItemFSOwnerGroupID          = 20,
+    kMDItemFSOwnerUserID           = 501,
+    kMDItemFSSize                  = 15957,
+    kMDItemFSTypeCode              = "",
+    kMDItemKind                    = "Plain Text Document",
+    kMDItemLogicalSize             = 15957,
+    kMDItemPhysicalSize            = 16384,
+
+Known from documentation:
+
+    "kMDItemContributors",	    		#
+    "kMDItemCountry",			        #
+    "kMDItemCreator",       			#
+    "kMDItemLastUsedDate",				#
+    "kMDItemTextContent",				#
+    "kMDItemTitle",		        		#
+    "kMDItemWhereFroms",				# URI downloaded from (when applicable)
+    "kMDItemPixelHeight",				#
+    "kMDItemPixelWidth",				#
+    "kMDItemComposer",		    		# iTunes often sets this
+
+Collected from a screen-shot file via C<mdls> under Yosemite:
+
+    kMDItemAlternateNames          = (
+        "Screen Shot 2014-05-10 at 8.06.13 PM.png"
+    )
+    kMDItemBitsPerSample           = 32
+    kMDItemColorSpace              = "RGB"
+    kMDItemContentCreationDate     = 2014-05-11 00:06:22 +0000
+    kMDItemContentModificationDate = 2014-05-11 00:06:22 +0000
+    kMDItemContentType             = "public.png"
+    kMDItemContentTypeTree         = (
+        "public.png",
+        "public.image",
+        "public.data",
+        "public.item",
+        "public.content"
+    )
+    kMDItemDateAdded               = 2014-07-31 18:40:48 +0000
+    kMDItemDisplayName             = "Screen Shot 2014-05-10 at 8.06.13 PM"
+    kMDItemFSContentChangeDate     = 2014-05-11 00:06:22 +0000
+    kMDItemFSCreationDate          = 2014-05-11 00:06:22 +0000
+    kMDItemFSCreatorCode           = ""
+    kMDItemFSFinderFlags           = 16
+    kMDItemFSHasCustomIcon         = (null)
+    kMDItemFSInvisible             = 0
+    kMDItemFSIsExtensionHidden     = 1
+    kMDItemFSIsStationery          = (null)
+    kMDItemFSLabel                 = 0
+    kMDItemFSName                  = "Screen Shot 2014-05-10 at 8.06.13 PM.png"
+    kMDItemFSNodeCount             = (null)
+    kMDItemFSOwnerGroupID          = 20
+    kMDItemFSOwnerUserID           = 501
+    kMDItemFSSize                  = 45564
+    kMDItemFSTypeCode              = ""
+    kMDItemHasAlphaChannel         = 0
+    kMDItemIsScreenCapture         = 1
+    kMDItemKind                    = "Portable Network Graphics image"
+    kMDItemLogicalSize             = 45564
+    kMDItemOrientation             = 0
+    kMDItemPhysicalSize            = 49152
+    kMDItemPixelCount              = 101952
+    kMDItemPixelHeight             = 216
+    kMDItemPixelWidth              = 472
+    kMDItemProfileName             = "Color LCD"
+    kMDItemResolutionHeightDPI     = 144
+    kMDItemResolutionWidthDPI      = 144
+    kMDItemScreenCaptureType       = "selection"
+
+
+=head1 References
+
+L<https://developer.apple.com/library/mac/documentation/Carbon/Reference/SpotlightReference_Collection/_index.html#//apple_ref/doc/uid/TP40003857>
+
+L<http://www.macdevcenter.com/pub/a/mac/2006/01/04/mdfind.html?page=3>
+
+L<http://blog.superuser.com/2011/06/03/digging-deeper-mastering-spotlight-in-os-x/>
+
+L<https://developer.apple.com/library/mac/documentation/
+        Carbon/Reference/MetadataAttributesRef/Reference/
+        CommonAttrs.html#//apple_ref/doc/uid/TP40001694-SW1>
+
+
+
+=head1 Known Bugs and Limitations
+
+Does not support all C<mdfind> options.
+
+Does not provide operators other than C<==>.
+
+
+
+=head1 Related commands
+
+Mac OS X C<mdfind>, C<mdutil>, C<xattr>, C<mdls>.
+
+*nix C<find>, C<locate>, C<grep>.
+
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+The author's present email is sderose at acm.org.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

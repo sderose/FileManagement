@@ -1,0 +1,250 @@
+#!/usr/bin/perl -w
+#
+# 2011-04-05: Written by Steven J. DeRose, sderose@acm.org.
+# 2018-09-20: Handles paths containing spaces etc.
+#
+# http://www.filibeto.org/unix/macos/lib/dev/documentation/Carbon/Reference/Finder_Interface/finder_interface.pdf
+# (Extended)FolderInfo, D(X)Info, (Extended)FileInfo, F(X)Info
+# (Extended )Finder Flags...
+#
+# Re. creation date, which some *nix file systems don't have:
+#     https://unix.stackexchange.com/questions/91197/
+#     stat -c '%w
+#
+# To do:
+#     Option to get *all* xattr data, and/or to check kMDItemWhereFroms (see xattr -l,
+#         but chop trailing nulls, decode dates, etc.
+#
+use strict;
+use Getopt::Long;
+
+use alogging;
+
+my $version = "2018-09-20";
+
+my $quiet         = 0;
+my $verbose       = 0;
+
+
+###############################################################################
+#
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "h|help"                  => sub { system "perldoc $0"; exit; },
+    "q!"                      => \$quiet,
+    "v+"                      => \$verbose,
+    "version"                 => sub {
+        die "Version of $version, by Steven J. DeRose.\n";
+    }
+    );
+
+($result) || die "Bad options.\n";
+
+
+###############################################################################
+###############################################################################
+#
+my %finderFlags = (
+    kIsOnDesk       => 0x0001,
+    kColor          => 0x000E,
+    kIsShared       => 0x0040,
+    kHasNoINITs     => 0x0080,
+    kHasBeenInited  => 0x0100,
+    kHasCustomIcon  => 0x0400,
+    kIsStationery   => 0x0800,
+    kNameLocked     => 0x1000,
+    kHasBundle      => 0x2000,
+    kIsInvisible    => 0x4000,
+    kIsAlias        => 0x8000,
+    );
+
+my %extendedFinderFlags = (
+    kExtendedFlagsAreInvalid => 0x8000,
+    kExtendedFlagHasCustomBadge => 0x0100,
+    kExtendedFlagHasRoutingInfo => 0x0004,
+    );
+
+my @defaultColors = (
+    "none", "red", "orange", "yellow", "green", "blue", "purple", "gray"
+);
+
+my %cAliasFile = (
+    cAliasFile => 'alia',
+    cApplicationFile => 'appf',
+    cControlPanelFile => 'ccdv',
+    cDeskAccessoryFile => 'dafi',
+    cDocumentFile => 'docf',
+    cFontFile => 'fntf',
+    cSoundFile => 'sndf',
+    cClippingFile => 'clpf',
+    cContainer => 'ctnr',
+    cDesktop => 'cdsk',
+    cSharableContainer => 'sctr',
+    cDisk => 'cdis',
+    cFolder => 'cfol',
+    cSuitcase => 'stcs',
+    cAccessorySuitcase => 'dsut',
+    cFontSuitcase => 'fsut',
+    cTrash => 'ctrs',
+    cDesktopPrinter => 'dskp',
+    cPackage => 'pack',
+    cContentSpace => 'dwnd',
+    cContainerWindow => 'cwnd',
+    cInfoWindow => 'iwnd',
+    cSharingWindow => 'swnd',
+    cStatusWindow => 'qwnd',
+    cClippingWindow => 'lwnd',
+    cPreferencesWindow => 'pwnd',
+    cDTPWindow => 'dtpw',
+    cProcess => 'prcs',
+    cAccessoryProcess => 'pcda',
+    cApplicationProcess => 'pcap',
+    cGroup => 'sgrp',
+    cUser => 'cuse',
+    cSharingPrivileges => 'priv',
+    cPreferences => 'cprf',
+    cLabel => 'clbl',
+    cSound => 'snd ',
+    cAliasList => 'alst',
+    cSpecialFolders => 'spfl',
+    cOnlineDisk => 'cods',
+    cOnlineLocalDisk => 'clds',
+    cOnlineRemoteDisk => 'crds',
+    cEntireContents => 'ects',
+    cIconFamily => 'ifam',
+    );
+
+my %others = (
+    kMDItemWhereFroms => 1,
+);
+
+my $fmt = "  %-16s = '%s'\n";
+
+
+###############################################################################
+###############################################################################
+# Main
+#
+(scalar(@ARGV)) || die "No file(s) specified.\n";
+
+while (my $file = shift) {
+    ($verbose) && warn "*** Starting file '$file'\n";
+    doOneFile($file);
+}
+
+exit;
+
+
+###############################################################################
+###############################################################################
+#
+sub doOneFile {
+    my ($file) = @_;
+    my @attrNames = `xattr '$file'`;
+
+    for my $name (@attrNames) {
+	chomp $name;
+	my $cmd = "xattr -p $name '$file'";
+	my $val = `$cmd`;
+	print "\nName: '$name'\n";
+	if (" $val" =~ m/^(\s[0-9A-F][0-9A-F])+\s*$/s) {
+	    print "Str: '" . x2str($val) . "'\n";
+	}
+	else {
+	    print "Raw: [\n$val\n]\n";
+	}
+    }
+}
+
+
+
+###############################################################################
+###############################################################################
+#
+BEGIN {
+    my $theString = undef;
+    my $theOffset = 0;
+
+    sub setHexString {
+        my ($s) = @_;
+        $theString = $s;
+        $theOffset = 0;
+    }
+    sub nextN {
+        my ($n) = @_;
+        my $buf = substr($theString, $theOffset, $n);
+        $theOffset += $n;
+        return($buf);
+    }
+} # END
+
+sub x2str { # Doesn't handle utf8 or ucs2
+    my ($s) = @_;
+    my $buf = "";
+    while ($s =~ m/\s*([0-9a-f][0-9a-f])/ig) {
+	my $c = chr(hex("0x".$1));
+        $buf .= $c;
+    }
+    return($buf);
+}
+
+sub x2int {
+    my ($s) = @_;
+    return(hex("0x".$s));
+}
+
+
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+finderInfo [options] files
+
+Extract and diplay the 'finderInfo' for a given file, mostly using C<xattr>.
+
+*** Should add kMDItemWhereFroms (URI of downloaded file).
+
+
+=head1 Options
+
+(prefix 'no' to negate where applicable)
+
+=over
+
+=item * B<--quiet> OR B<-q>
+Suppress most messages.
+
+=item * B<--verbose> OR B<-v>
+Add more messages (repeatable).
+
+=item * B<--version>
+
+Show version info and exit.
+
+=back
+
+
+=head1 Known Bugs and Limitations
+
+
+=head1 Related Commands and Files
+
+F<macOsxSpotlightKeys.xsv>
+C<whereFrom>
+C<pdfinfo>
+C<file>
+C<xattr>
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see http://creativecommons.org/licenses/by-sa/3.0/.
+
+For the most recent version, see http://www.derose.net/steve/utilities/.
+
+=cut

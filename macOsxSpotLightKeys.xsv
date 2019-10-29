@@ -1,0 +1,685 @@
+<!-- XSV
+    Mac OS X 'spotlight' metadata keys.
+
+    Converted to XSV by Steven J. DeRose, August 2013.
+    Last modified: 2013-08-28.
+
+    Key: Always starts with 'kmdITem'
+    Fwk: Always "CoreServices/CoreServices.h" (except one typo)
+    Hdr: Always "MDItem.h""
+    Typ: These cases (occasionally w/ extra whitespace):
+      44 	Typ="CFString"
+      33 	Typ="CFNumber"
+      23 	Typ="Array of CFStrings"
+      10 	Typ="CFBoolean"
+       8 	Typ="CFDate"
+       1 	Typ="Array of CFStringss" (fixed)
+    Avl:
+     111 	Avl="OS X v10.4 and later."
+       5 	Avl="OS X v10.6 and later."
+       3 	Avl="Deprecated in OS X v10.4 and later."
+    Domain: One of: common, image, video, audio, files.
+
+    Added data:
+    MARC:   What USMARC field/subfield is the nearest equivalent (if any).
+                (experimental, unfinished, should be checked by domain expert)
+
+    Accessible via 'mdfind', 'mdutil', etc., or my 'spot' Perl script.
+
+    Source: https://developer.apple.com/library/mac/documentation/
+        Carbon/Reference/MetadataAttributesRef/Reference/
+        CommonAttrs.html#//apple_ref/doc/uid/TP40001694-SW1
+-->
+<Xsv>
+<Head Key="" Domain="" MARC=""
+    Dsc="" Typ="" Units="" Expect=""
+    Fwk="CoreServices/CoreServices.h"
+    Hdr="MDItem.h"
+    Avl="">
+
+<!-- Common Spotlight Metadata Attribute Keys -->
+<!-- Spotlight Metadata attribute keys that are common to many file types. -->
+
+<Rec Key="kMDItemAttributeChangeDate" Domain="common" MARC=""
+	Dsc="Date and time of the last change made to a metadata attribute."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAudiences" Domain="common"
+	Dsc="The audience for which the file is intended. The audience may be determined by the creator or the publisher or by a third party."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAuthors" Domain="common" MARC="245$c"
+	Dsc="The author, or authors, of the contents of the file. The order of the authors is preserved, but does not represent the main author or relative importance of the authors."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAuthorAddresses" Domain="common"
+	Dsc="This attribute indicates the author addresses of the document."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.6 and later." />
+
+<Rec Key="kMDItemCity" Domain="common"
+	Dsc="Identifies city of origin according to guidelines established by the provider. For example, 'New York', 'Cupertino', or 'Toronto'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemComment" Domain="common"
+	Dsc="A comment related to the file. This comment is not displayed by the Finder."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemContactKeywords" Domain="common"
+	Dsc="A list of contacts that are associated with this document, not including the authors."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemContentCreationDate" Domain="common" MARC="260$c"
+	Dsc="The date and time that the content was created."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemContentModificationDate" Domain="common"
+	Dsc="Date and time when the content of this item was modified."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemContentType" Domain="common"
+	Dsc="Uniform Type Identifier of the file. For example, a jpeg image file will have a value of public.jpeg. The value of this attribute is set by the Spotlight importer. Changes to this value are lost when the file attributes are next imported. This attribute is marked as nosearch. You must specify this attribute key explicitly in a query in order for its contents to be searched."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemContentTypeTree" Domain="common"
+	Dsc="Uniform Type Identifier hierarchy of the file. For example, a jpeg image file will return an array containing “public.jpeg”, “public.image”, and “public.data”. The value of this attribute is set by the Spotlight importer. Changes to this value are lost when the file attributes are next imported. This attribute is marked as nosearch. You must specify this attribute key explicitly in a query in order for its contents to be searched."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemContributors" Domain="common" MARC="245$c,700$a"
+	Dsc="Entities responsible for making contributions to the content of the resource. Examples of a contributor include a person, an organization or a service."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemCopyright" Domain="common"
+	Dsc="Copyright owner of the file contents."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemCountry" Domain="common"
+	Dsc="The full, publishable name of the country or primary location where the intellectual property of the item was created, according to guidelines of the provider."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemCoverage" Domain="common"
+	Dsc="Extent or scope of the content of the resource. Coverage will typically include spatial location (a place name or geographic co-ordinates), temporal period (a period label, date, or date range) or jurisdiction (such as a named administrative entity). Recommended best practice is to select a value from a controlled vocabulary, and that, where appropriate, named places or time periods be used in preference to numeric identifiers such as sets of co-ordinates or date ranges."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemCreator" Domain="common"
+	Dsc="Name of the application used to create the document content. For example, 'Pages' or 'Keynote'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemDescription" Domain="common"
+	Dsc="Description of the kind of item this file represents."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemDisplayName" Domain="common"
+	Dsc="Localized version of the file name. This is the localized version of the LaunchServices call LSCopyDisplayNameForURL() / LSCopyDisplayNameForRef() ."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemDueDate" Domain="common"
+	Dsc="Date this item is due."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemDurationSeconds" Domain="common"
+	Dsc="The duration, in seconds, of the content of the item. A value of 10.5 represents media that is 10 and 1/2 seconds long."
+	Typ="CFNumber"
+	Units="seconds"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemEmailAddresses" Domain="common"
+	Dsc="Email addresses related to this item."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemEncodingApplications" Domain="common"
+	Dsc="Applications used to convert the original content into it's current form. For example, a PDF file might have an encoding application set to 'Distiller'."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFinderComment" Domain="common"
+	Dsc="Finder comments for this item."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFonts" Domain="common"
+	Dsc="Fonts used by this item. You should store the font's full name, the postscript name, or the font family name, based on the Avlable information."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemHeadline" Domain="common"
+	Dsc="Publishable entry providing a synopsis of the contents of the item. For example, 'Apple Introduces the iPod Photo'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemIdentifier" Domain="common"
+	Dsc="Formal identifier used to reference the resource within a given context. For example, the Message-ID of a mail message."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemInstantMessageAddresses" Domain="common"
+	Dsc="Instant message addresses related to this item."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemInstructions" Domain="common"
+	Dsc="Instructions concerning the use of the item, such as embargoes and warnings. For example, 'Second of four stories'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemKeywords" Domain="common"
+	Dsc="Keywords associated with this file. For example, 'Birthday', 'Important', etc."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemKind" Domain="common"
+	Dsc="Description of the kind of item this file represents."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemLanguages" Domain="common"
+	Dsc="Indicates the languages used by the item. The recommended best practice for the values of this attribute are defined by RFC 3066."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemLastUsedDate" Domain="common"
+	Dsc="Date and time that the file was last used. This value is updated automatically by LaunchServices every time a file is opened by double clicking, or by asking LaunchServices to open a file."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemNumberOfPages" Domain="common"
+	Dsc="Number of pages in the document."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemNamedLocation" Domain="common"
+	Dsc="The name of the location or point of interest associated with the item. The name may be user provided."
+	Typ="CFString"
+	Avl="OS X v10.6 and later." />
+
+<Rec Key="kMDItemOrganizations" Domain="common"
+	Dsc="Companies or organizations that created the document."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemPageHeight" Domain="common"
+	Dsc="Height of the document page, in points (72 points per inch). For PDF files this indicates the height of the first page only."
+	Typ="CFNumber"
+	Units="points"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemPageWidth" Domain="common"
+	Dsc="Width of the document page, in points (72 points per inch). For PDF files this indicates the width of the first page only."
+	Typ="CFNumber"
+	Units="points"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemParticipants" Domain="common"
+	Dsc="The list of people who are visible in an image or movie or written about in a document."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.6 and later." />
+
+<Rec Key="kMDItemPhoneNumbers" Domain="common"
+	Dsc="Phone numbers related to this item."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemProjects" Domain="common"
+	Dsc="List of projects related to this item. For example, if you were working on a movie, all of the files could be marked as belonging to the project “My Movie”."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemPublishers" Domain="common"
+	Dsc="Publishers of the item. For example, a person, an organization, or a service."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemRecipients" Domain="common"
+	Dsc="Recipients of this item."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemRecipientAddresses" Domain="common"
+	Dsc="This attribute indicates the recipient addresses of the document."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.6 and later." />
+
+<Rec Key="kMDItemRights" Domain="common"
+	Dsc="Provides a link to information about rights held on the document. Contains a rights management statement for the document, or reference a service providing such information. Rights information often encompasses Intellectual Property Rights (IPR), copyright, and various property rights. If this attribute is absent, no assumptions can be made about the status of these and other rights with respect to the document."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemSecurityMethod" Domain="common"
+	Dsc="Encryption method used to make the item secure. PDF files return 'None' or 'Password Encrypted'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemStarRating" Domain="common"
+	Dsc="User rating of this item. For example, the user rating (number of stars) of an iTunes track."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemStateOrProvince" Domain="common"
+	Dsc="Province or state of origin according to guidelines established by the provider. For example, 'CA', 'Ontario', or 'Sussex'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemTextContent" Domain="common"
+	Dsc="Contains a text representation of the content of the document. Data in multiple fields should be combined using a whitespace character as a separator. An application's Spotlight importer provides the content of this attribute. Applications can create queries using this attribute, but are not able to read the value of this attribute directly."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemTitle" Domain="common"  MARC="240"
+	Dsc="Title of the item. For example, this could be the title of a document, the name of an song, or the subject of an email message."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemVersion" Domain="common"
+	Dsc="Version number of the item."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemWhereFroms" Domain="common"
+	Dsc="Describes where the item was obtained from. For example, a downloaded file may refer to the URL, files received by email may indicate the sender’s email address, message subject, etc."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+
+
+<!-- Image Metadata Attribute Keys -->
+<!-- Metadata attribute keys that are common to image files. -->
+
+<Rec Key="kMDItemAcquisitionMake" Domain="image"
+	Dsc="Manufacturer of the device used to acquire the document contents."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAcquisitionModel" Domain="image"
+	Dsc="Model of the device used to acquire the document contents."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAlbum" Domain="image"
+	Dsc="Title for the collection containing this item. This is analogous to a record label or photo album."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAperture" Domain="image"
+	Dsc="Aperture setting used when the image was created. This unit is the APEX value."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemBitsPerSample" Domain="image" MARC="007:6"
+	Dsc="Number of bits per sample. For example, the bit depth of an image (8-bit, 16-bit etc...) or the bit depth per audio sample of uncompressed audio data (8, 16, 24, 32, 64, etc..)."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemColorSpace" Domain="image"
+	Dsc="Color space model used by the document contents. For example, “RGB”, “CMYK”, “YUV”, or “YCbCr”."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemEXIFVersion" Domain="image"
+	Dsc="Version of the EXIF header used to generate the metadata."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemExposureMode" Domain="image"
+	Dsc="Exposure mode used to acquire the document contents."
+	Typ="CFNumber"
+	Expect="0 (auto exposure), 1 (manual exposure), 2 (auto bracket)"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemExposureProgram" Domain="image"
+	Dsc="Type of exposure program used by the camera to acquire the document contents. Possible values include: Manual, Normal, Aperture priority, etc."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemExposureTimeSeconds" Domain="image"
+	Dsc="Exposure time used to capture the document contents."
+	Typ="CFNumber"
+	Units="seconds"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemExposureTimeString" Domain="image"
+	Dsc="Time when the document contents were captured. Typically this corresponds to when a photograph is exposed."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFNumber" Domain="image"
+	Dsc="Diameter of the aperture relative to the effective focal length of the lens."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFlashOnOff" Domain="image"
+	Dsc="Whether a camera flash was used to capture the document contents."
+	Typ="CFBoolean"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFocalLength" Domain="image"
+	Dsc="Actual focal length of the lens, in millimeters."
+	Typ="CFNumber"
+	Units="millimeters"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemHasAlphaChannel" Domain="image"
+	Dsc="Whether the image has an alpha channel."
+	Typ="CFBoolean"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemISOSpeed" Domain="image"
+	Dsc="ISO speed used to acquire the document contents. For example, 100, 200, 400, etc."
+	Typ="CFNumber"
+	Units="ISO Speed"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemLayerNames" Domain="image"
+	Dsc="Names of the layers in the file."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemMaxAperture" Domain="image"
+	Dsc="Smallest F number of the lens in APEX value units, usually in the range of 00.00 to 99.99."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemMeteringMode" Domain="image"
+	Dsc="Metering mode used to acquire the image."
+	Typ="CFString"
+	Expect="Unknown, Average, CenterWeightedAverage, Spot, MultiSpot, Pattern, Partial"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemOrientation" Domain="image"
+	Dsc="Orientation of the document contents."
+	Typ="CFNumber"
+	Expect="0 (landscape), 1 (portrait)"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemPixelHeight" Domain="image" MARC="340$b"
+	Dsc="Height, in pixels, of the contents. For example, the image height or the video frame height."
+	Typ="CFNumber"
+	Units="pixels"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemPixelWidth" Domain="image" MARC="340$b"
+	Dsc="Width, in pixels, of the contents. For example, the image width or the video frame width."
+	Typ="CFNumber"
+	Units="pixels"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemPixelCount" Domain="image" MARC="340$b"
+	Dsc="The total number of pixels in the contents.. Same as kMDItemPixelWidth * kMDItemPixelHeight."
+	Typ="CFNumber"
+	Units="pixels"
+	Avl="OS X v10.6 and later." />
+
+<Rec Key="kMDItemProfileName" Domain="image"
+	Dsc="Name of the color profile used by the document contents."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemRedEyeOnOff" Domain="image"
+	Dsc="Whether red-eye reduction was used to take the picture."
+	Typ="CFBoolean"
+	Expect="0 (no red-eye reduction mode or unknown), 1 (red-eye reduction used)"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemResolutionHeightDPI" Domain="image" MARC="347$d"
+	Dsc="Resolution height, in DPI, of the item."
+	Typ="CFNumber"
+	Units="dots per inch (DPI)"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemResolutionWidthDPI" Domain="image" MARC="347$d"
+	Dsc="Resolution width, in DPI, of the item."
+	Typ="CFNumber"
+	Units="dots per inch (DPI)"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemWhiteBalance" Domain="image"
+	Dsc="White balance setting of the camera when the picture was taken."
+	Typ="CFNumber"
+	Expect="0 (auto white balance), 1 (manual)"
+	Avl="OS X v10.4 and later." />
+
+
+<!-- Video Metadata Attribute Keys -->
+<!-- Metadata attribute keys that are common to video files. -->
+
+<Rec Key="kMDItemAudioBitRate" Domain="video"
+	Dsc="Bit rate of the audio in the media."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemCodecs" Domain="video"
+	Dsc="Codecs used to encode/decode the media."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemDeliveryType" Domain="video"
+	Dsc="Method used to deliver streaming media."
+	Typ="CFString"
+	Expect="'Fast Start', 'RTSP'"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemMediaTypes" Domain="video"
+	Dsc="Media types present in the content. For example, a QuickTime movie may return: kMDItemMediaTypes = (Sound, Video, 'Hinted Video Track', 'Hinted Sound Track')  kMDItemMediaTypes = (Sound, Video)  kMDItemMediaTypes = ('MPEG1 Muxed')"
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemStreamable" Domain="video"
+	Dsc="Whether the content is prepared for streaming."
+	Typ="CFBoolean"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemTotalBitRate" Domain="video"
+	Dsc="Total bit rate, audio and video combined, of the media."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemVideoBitRate" Domain="video"
+	Dsc="Bit rate of the video in the media."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+
+<!-- Audio Metadata Attribute Keys -->
+<!-- Metadata attribute keys that describe an audio file. -->
+
+<Rec Key="kMDItemAppleLoopDescriptors" Domain="audio"
+	Dsc="Specifies multiple pieces of descriptive information about a loop. Besides genre and instrument, files can contain descriptive information that help users in refining searches."
+	Typ="Array of CFStrings"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAppleLoopsKeyFilterType" Domain="audio"
+	Dsc="Specifies key filtering information about a loop. Loops are matched against projects that often differ in a major or minor key. To assist users in identifying loops that will 'fit' with their compositions, loops can be tagged with one of the following key filters: 'AnyKey', 'Minor', 'Major', 'NeitherKey', or 'BothKeys'. 'AnyKey' means that it fits with anything (whether in a major key, minor key or neither). 'Minor' fits with compositions in a minor key. 'NeitherKey' doesn't work well with compositions that are in major or minor key. 'BothKeys' means it fits with compositions that are in major or minor key."
+	Typ="CFString"
+	Expect="'AnyKey', 'Minor', 'Major', 'NeitherKey', 'BothKeys'"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAppleLoopsLoopMode" Domain="audio"
+	Dsc="Specifies how a file should be played. Tagged files can either be loops or non-loops (e.g., a cymbal crash). 'Looping' indicates if the file should be treated as a loop. 'Non-looping' indicates the file should not be treated as a loop."
+	Typ="CFString"
+	Expect="'Looping', 'Non-looping'"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAppleLoopsRootKey" Domain="audio"
+	Dsc="Specifies the loop's original key. The key is the root note or tonic for the loop, and does not include the scale type"
+	Typ="CFString"
+	Expect="'C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B', 'NoKey'"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAudioChannelCount" Domain="audio"
+	Dsc="Number of channels in the audio data contained in the file. This integer value only represents the number of discrete channels of audio data found in the file. It does not indicate any configuration of the data in regards to a user's speaker setup."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAudioEncodingApplication" Domain="audio"
+	Dsc="Name of the application that encoded the audio of the document."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAudioSampleRate" Domain="audio"
+	Dsc="Sample rate of the item's audio data. The sample rate is a float value representing Hz (audio_frames/second). For example: 44100.0, 22254.54."
+	Typ="CFNumber"
+	Units="Hz (audio_frames/second)"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemAudioTrackNumber" Domain="audio"
+	Dsc="Track number of a song or composition when it is part of an album."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemComposer" Domain="audio"
+	Dsc="Composer of the song in the audio file."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemIsGeneralMIDISequence" Domain="audio"
+	Dsc="Whether the MIDI sequence contained in the file is set up for use with a General MIDI device."
+	Typ="CFBoolean"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemKeySignature" Domain="audio"  MARC="031$n"
+	Dsc="Musical key of the song in the audio file. For example: 'C', 'Dm', 'F#m', 'Bb'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemLyricist" Domain="audio"
+	Dsc="Lyricist of the song in the audio file."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemMusicalGenre" Domain="audio"  MARC="655"
+	Dsc="Musical genre of the song or composition contained in the audio file. For example: 'Jazz', 'Pop', 'Rock', 'Classical'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemMusicalInstrumentCategory" Domain="audio" MARC="031$m"
+	Dsc="Specifies the category of an instrument. Files should have an instrument associated with them ('Other Instrument' is provided as a catch-all). For some categories, such as 'Keyboards', there are instrument names which provide a more detailed instrument definition, for example 'Piano' or 'Organ'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemMusicalInstrumentName" Domain="audio" MARC="031$m"
+	Dsc="Specifies the name of instrument relative to the instrument category. Files can have an instrument name associated with them if they have certain instrument categories. For example, the 'Percussion' category has multiple instruments, including 'Conga' and 'Bongo'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemRecordingDate" Domain="audio"
+	Dsc="Recording date of the song or composition. This is in contrast to kMDItemContentCreationDate which, could indicate the creation date of an edited or 'mastered' version of the original art."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemRecordingYear" Domain="audio"
+	Dsc="Year the item was recorded. For example: 1964, 1995, 1997, or 2003."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemTempo" Domain="audio"
+	Dsc="Tempo of the music in the audio file. A floating point value."
+	Typ="CFNumber"
+	Units="Beats per Minute (BPM)"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemTimeSignature" Domain="audio"
+	Dsc="Time signature of the musical composition contained in the audio/MIDI file. For example: '4/4', '7/8'."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+
+<!-- File System Metadata Attribute Keys -->
+<!-- Metadata attribute keys that describe the file system attributes for a file. These attributes are Avlable for files on any mounted volume. -->
+
+<Rec Key="kMDItemFSContentChangeDate" Domain="files"
+	Dsc="Date the file contents last changed."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSCreationDate" Domain="files" MARC="008:7"
+	Dsc="Date that the contents of the file were created."
+	Typ="CFDate"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSInvisible" Domain="files"
+	Dsc="Whether the file is invisible."
+	Typ="CFBoolean"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSIsExtensionHidden" Domain="files"
+	Dsc="Whether the file extension of the file is hidden."
+	Typ="CFBoolean"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSLabel" Domain="files"
+	Dsc="Index of the Finder label of the file. Possible values are 0 through 7."
+	Typ="CFNumber"
+	Expect="0 through 7"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSName" Domain="files"
+	Dsc="File name of the item."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSNodeCount" Domain="files"
+	Dsc="Number of files in a directory."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSOwnerGroupID" Domain="files"
+	Dsc="Group ID of the owner of the file."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSOwnerUserID" Domain="files"
+	Dsc="User ID of the owner of the file."
+	Typ="CFNumber"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSSize" Domain="files"
+	Dsc="Size, in bytes, of the file on disk."
+	Typ="CFNumber"
+	Units="bytes"
+	Avl="OS X v10.4 and later." />
+
+<Rec Key="kMDItemPath" Domain="files"
+	Dsc="Complete path to the file. This value of this attribute can be retrieved, but can't be used in a query or to sort search results. This attribute can’t be used as a member of the valueListAttrs array parameter for MDQueryCreate or MDQueryCreateSubset."
+	Typ="CFString"
+	Avl="OS X v10.4 and later." />
+
+
+<!-- Deprecated Metadata Attribute Keys -->
+<!-- Metadata attribute keys that have been deprecated. -->
+
+<Rec Key="kMDItemFSExists" Domain="files"
+	Dsc="This attribute is deprecated and was never implemented."
+	Typ="CFBoolean"
+	Avl="Deprecated in OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSIsReadable" Domain="files"
+	Dsc="This attribute is deprecated and was never implemented."
+	Typ="CFBoolean"
+	Avl="Deprecated in OS X v10.4 and later." />
+
+<Rec Key="kMDItemFSIsWriteable" Domain="files"
+	Dsc="This attribute is deprecated and was never implemented."
+	Typ="CFBoolean"
+	Avl="Deprecated in OS X v10.4 and later." />
+
+</Head>
+</Xsv>
+

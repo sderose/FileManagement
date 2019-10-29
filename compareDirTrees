@@ -1,0 +1,509 @@
+#!/usr/bin/perl -w
+#
+# compareDirTrees.
+#
+# 2007-??: Written by Steven J. DeRose.
+# 2007-11-01 sjd: strict, Getopt, pmc_machine, --help.
+# 2010-09-12, 2012-10-05 sjd: Cleanup.
+# 2015-03-05: Add --content and non-diff checking. flagName().
+# 2016-04-07f: Add --include, --show, --diffOptions. Support >2 dirs.
+#     Make --exclude and --include repeatable. New merge algorithm.
+# 2019-03-22: Clean up. Fix --exclude.
+#
+# To do:
+# Offer comparison/display by size, time, permissions, attributes?
+# Add -r to scan regardless of placement in subtree.
+#
+#
+use strict;
+use Getopt::Long;
+use File::stat;
+use POSIX qw( strftime );
+use sjdUtils;
+use alogging;
+
+our $VERSION_DATE = "2018-03-22";
+
+my $all          = 0;
+my $color        = ($ENV{"USE_COLOR"} && -t STDOUT);
+my $colWidth     = 8;
+my $content      = 0;
+my $diffOptions  = ' -iEbB';
+my $dotFill      = 3;
+my @exclude      = ();
+my @include      = ();
+my $neat         = 0;
+my $quiet        = 0;
+my $show         = "plus";
+my $verbose      = 0;
+my $width        = 35;
+my $xslonly      = 0;
+
+# Process options
+#
+my %getoptHash = (
+	"all"               => \$all,
+	"color!"            => \$color,
+    "colWidth=o"        => \$colWidth,
+	"content!"          => \$content,
+    "diffOptions=s"     => \$diffOptions,
+    "dotFill=o"         => \$dotFill,
+	"exclude=s"         => \@exclude,
+	"include=s"         => \@include,
+	"h|help|?"          => sub { system "perldoc $0"; exit; },
+	"neat!"             => \$neat,
+	"q|quiet!"          => \$quiet,
+    "show=s"            => \$show,
+	"v|verbose+"        => \$verbose,
+    "version"           => sub {
+		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+	},
+	"width=i"           => \$width,
+	"xslonly"           => \$xslonly,
+	);
+
+Getopt::Long::Configure ("ignore_case");
+GetOptions(%getoptHash) || die("Bad options.\n");
+
+sjdUtils::setColors($color);
+sjdUtils::setVerbose($verbose);
+
+if (!$all) {
+    my $dftExclude = '(CVS|~|#|\.bak|\.bck|\.pyc)$';
+    alogging::vMsg(1, "Defaulting --exclude for '$dftExclude'.");
+    push @exclude, $dftExclude;
+}
+
+for my $x (@exclude) {
+    my $x2 = sjdUtils::trim($x);
+    alogging::vMsg(1, "--exclude for '$x': '$x2'.");
+    (sjdUtils::trim($x) ne "") || die "Blank --exclude value.\n";
+}
+for my $x (@include) {
+    alogging::vMsg(1, "--include for '$x'.");
+    (sjdUtils::trim($x) ne "") || die "Blank --include value.\n";
+}
+
+binmode(STDOUT, ":encoding(utf-8)");
+
+my @dirs = ();
+while (@ARGV) {
+    my $dir = shift;
+    (-d $dir) || die "Directory $dir does not exist.\n";
+    push @dirs, $dir;
+}
+(scalar(@dirs) >= 2) || die "Not enough directories specified.\n";
+
+
+###############################################################################
+#
+my $M = 60; my $H = 3600; my $D = 3600*24; my $Y = $D * 365.25;
+my $colorBad    = 'bold/white/red';
+my $colorGood   = 'bold/white/green';
+my $colorWarn   = '/yellow';
+my $colorHuh    = 'cyan';
+
+my $indentLevel = 1;
+my $xsLeft      = 0;
+my $xsRight     = 0;
+my $maxNameLengthSeen = 0;
+
+sub showPair {
+    my ($p1,$f1,$color1, $p2,$f2,$color2) = @_;
+    print(("  " x $indentLevel) .
+        colorize($color1,sjdUtils::rpad(flagName($p1,$f1),$width)) .
+        "    " . colorize($color2,flagName($p2,$f2)) . "\n");
+}
+
+sub flagName {
+    my ($p, $f) = @_;
+    # null-ish 0xD8, empty set 02205
+    if ($f eq "") { return(chr(0x2205)); }
+    my $f2 = $f;
+    if (-d "$p/$f") { return( "$f2/"); }
+    if (-x "$p/$f") { $f2 .= " ``"; }
+    if (-l "$p/$f") { $f2 .= " ->"; }
+    if (-z "$p/$f") { $f2 .= " 0"; }
+    if (-B "$p/$f") { $f2 .= " #"; }
+    if (!-f "$p/$f" && !-d "$p/$f") { $f2 .= " ?"; }
+    return($f2);
+}
+
+# Return ref to a sorted array of eligible filenames from a directory.
+sub listdir {
+    my ($path) = @_;
+    my @dlist = ();
+    my $h;
+    opendir($h, $path) || die "Cannot open directory '$path'.\n";
+    while (my $f = readdir($h)) {
+        if (substr($f,0,1) eq ".") { next; }
+        my $nuke = 0;
+        for my $x (@exclude) {
+            #warn "*** Checking file '$f' vs. exclusion '$x' ***\n";
+            if ($f =~ m/$x/) { $nuke = 1; }
+        }
+        if ($nuke) { next; }
+        if (scalar(@include)>0) {
+            my $found = 0;
+            for my $x (@include) {
+                if ($f =~ m/$x/) { $found = 1; last; }
+            }
+            if (!$found) { next; }
+        }
+        push @dlist, $f;
+        if (length($f) > $maxNameLengthSeen) {
+            $maxNameLengthSeen = length($f);
+        }
+    }
+    close($h);
+    @dlist = sort(@dlist);
+    return(\@dlist);
+}
+
+###############################################################################
+# Just compare what files are there, not the file contents.
+#
+BEGIN {
+    my $nDirs = 0;      # How many dirs to compare
+    my @dirLists = ();  # Refs to $nDirs sorted arrays of filenames
+    my @curPos = ();    # Index of next key in each dirList, -1 when done
+
+    sub findSmallest {
+        my $small = undef;
+        for (my $i=0; $i<$nDirs; $i++) {
+            next if ($curPos[$i] < 0);
+            if (!defined $small ||
+                $dirLists[$i]->[$curPos[$i]] lt $small) {
+                $small = $dirLists[$i]->[$curPos[$i]];
+            }
+        }
+        return($small); # undef if nobody left
+    }
+
+    # Compare just the filenames, not their content
+    #
+    sub doNonContent {
+        # Scan the requested directories and collect all their files
+        $nDirs = scalar(@dirs);
+        my $header = "";
+        for (my $i=0; $i<$nDirs; $i++) {
+            my $dirPath = $dirs[$i];
+            my $dl = listdir($dirPath);  # Shoudl be in alph order
+            push @dirLists, $dl;
+            push @curPos, 0;
+            $header .= makeCol('ul', sprintf("%4d", $i));
+            printf("Directory %3d: '%s' (%d items)\n",
+                $i, $dirPath, scalar(@{$dirLists[-1]}));
+        }
+
+        if ($width < 0) { $width = $maxNameLengthSeen; }
+        $header = "Filename" . (' ' x ($width-8)) . $header;
+        ($quiet) && print(
+            "    (omitting files that appear in all directories, because -q)\n");
+        print("\n" . sjdUtils::colorize('bold', $header) . "\n");
+
+        # Run a merge
+        my $lineNum = 0;
+        while (my $small = findSmallest()) {
+            $lineNum++;
+            alogging::vMsg(2, "Smallest key: '$small'.");
+            my $msg = sjdUtils::rpad($small, $width,
+                ($dotFill && ($lineNum % $dotFill)==0) ? '.':' ');
+            my $missing = 0;
+            my $path0 = "$dirs[0]/$small";
+            if (! -e $path0) { $path0 = ""; }
+            for (my $i=0; $i<$nDirs; $i++) {
+                if ($dirLists[$i]->[$curPos[$i]] eq $small) {
+                    $msg .= getDisplay($dirs[$i], $small, $path0);
+                    $curPos[$i]++;
+                    if ($curPos[$i] >= scalar(@{$dirLists[$i]})) {
+                        $curPos[$i] = -1;  # This dir is done
+                    }
+                }
+                else {
+                    $msg .= makeCol($colorBad, "NONE");
+                    $missing++;
+                }
+            }
+            if ($missing || !$quiet) { print("$msg\n"); }
+        } # while
+
+        sub makeCol {
+            my ($color, $text) = @_;
+            my $data = sjdUtils::lpad($text, $colWidth-1, ' ');
+            return(" " . sjdUtils::colorize($color, $data));
+        }
+        sub getDisplay {
+            my ($dir, $file, $path0) = @_;
+            my $path = "$dir/$file";
+            my $color = $colorGood;
+            my $flag  = '  +  ';
+
+            if ($show eq "size") {
+                $flag = -s $path;
+            }
+            elsif ($show eq "dsize") {
+                if (!$path0) { $flag = " N/A "; $color = $colorBad; }
+                else {
+                    if ($path eq $path0) { $flag = "  =  "; }
+                    my $ds = (-s $path0) - (-s $path);
+                    $flag = sprintf("%+5d", $ds);
+                    if ($ds) { $color = $colorWarn; }
+                }
+            }
+            elsif ($show eq "mtime") {
+                #my $tFormat = '%Y-%m-%d %H:%M:%S';
+                my $tFormat = '%m-%d';
+                $flag = (strftime($tFormat, localtime(stat($path)->[9])));
+            }
+            elsif ($show eq "dmtime") {
+                if (!$path0) { $flag = " N/A "; $color = $colorBad; }
+                else {
+                    if ($path eq $path0) { $flag = "  =  "; }
+                    my $dt = stat($path)->[9] - stat($path0)->[9];
+                    if ($dt) { $color = $colorWarn; }
+                    $flag = dispDuration($dt);
+                }
+            }
+            elsif ($show eq "diff") {
+                if (!$path0) { $flag = " N/A "; $color = $colorBad; }
+                else {
+                    if ($path eq $path0) { $flag = "  =  "; }
+                    my $cmd = "diff $diffOptions -q $path0 $path >/dev/null";
+                    my $rc = system($cmd);
+                    if ($rc) { $color = $colorWarn; $flag = 'DIFF'; }
+                    else { $flag = "SAME"; }
+                }
+            }
+            else {
+                # 'plus' just uses the default.
+            }
+            return(makeCol($color, $flag));
+        }
+    }
+    # Reduce a time-span to compact form
+    sub dispDuration {
+        my ($sec) = @_;
+        my $psec = abs($sec);
+        if ($psec < 3 * $M) { return(sprintf("%5.1fS", $sec)); }
+        if ($psec < 3 * $H) { return(sprintf("%5.1fM", $sec/$M)); }
+        if ($psec < 3 * $D) { return(sprintf("%5.1fH", $sec/$H)); }
+        if ($psec < 3 * $Y) { return(sprintf("%5.1fD", $sec/$D)); }
+        return                     (sprintf("%5.1fY", $sec/$Y));
+    }
+} # END
+
+
+###############################################################################
+sub doContent {
+    (scalar @dirs == 2) || die
+        "--content diffing requires exactly 2 directories.\n";
+    my $exclOps = "";
+    for my $x (@exclude) { $exclOps .= " -x '$x'"; }
+
+    my $cmd = "diff --recursive --ignore-space-change --brief $exclOps $dirs[0] $dirs[1]"
+        . " | grep -v 'Common subdirectories:'";
+
+    if ($neat) {
+        $cmd .= " | sed -e 's/: /:\#    /' -e 's/ and /\#  and /'"
+            . " | doubleSpace | tr '\#' '\012'";
+    }
+
+    if ($color) {
+        $cmd .= "| hilite"
+            . " -c $colorGood -e 'Only in $dirs[0].*\$'"
+            . " -c $colorWarn -e '^Files'"
+            . " -c $colorWarn -e ' and '"
+            . " -c $colorWarn -e ' differs\$'"
+            . " -c $colorBad  -e 'Only in $dirs[1].*\$'"
+            . " -c $colorHuh  -e 'CVS'";
+    }
+    if ($verbose) {
+        (my $pcmd = $cmd) =~ s/\|/\n    \|/g;
+        warn "Running: $pcmd\n";
+    }
+    system "$cmd";
+}
+
+
+###############################################################################
+###############################################################################
+# Main
+#
+if ($content) {
+    doContent();
+}
+else {
+    doNonContent();
+}
+
+exit;
+
+
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+compareDirTrees [options] dir1 dir2
+
+Check whether 2 or more directories have the same files, and report where
+(optionally how) they differ.
+For 2 directories, you can also run C<diff> on them.
+
+This does not check within sub-directories, except with the I<--content> option,
+which just uses C<diff>.
+
+For example, to see whether 3 directories all have the same CSS files:
+
+    compareDirTrees --include 'css$' dir1 dir2 dir3
+
+To omit files that are common to all the directories, use I<-q>.
+
+To see much the same display, but with file sizes noted as differences
+from the first directory:
+
+    compareDirTrees --include 'css$' --show dsize dir1 dir2 dir3
+
+
+=head1 Options
+
+=over
+
+=item * B<--all>
+
+Consider backup and CVS files, normally ignored.
+
+=item * B<--color>
+
+Colorize the output (see below).
+Default: off unless environment variable I<USE_COLOR> is set and
+STDOUT is going to a terminal.
+
+=item * B<--colWidth> I<n>
+
+How many columns to allow (including gutters) for each reporting column.
+Default: 6. See also I<--width>.
+
+=item * B<--content>
+
+Don't just compare what files are there, but also check contents
+(using C<diff>). This option is limited to 2 directories.
+
+=item * B<--diffOptions>
+
+What options to pass to the C<diff> command,
+for example when using I<--show diff>. Default: I<-iEbB>.
+
+=item * B<--dotfill> I<n>
+
+When not using I<--content>, on every I<n>th line pad the filename with dots.
+Default: 3 (use C<0> to turn off).
+
+=item * B<--exclude> I<regex>
+
+Don't consider files whose names (including extension, but not path)
+match I<regex>. Use ^ and/or $ if you want those effects.
+Repeatable. See also I<--include> and I<--all>.
+A name that matches both I<--include> and I<--exclude>, is excluded.
+
+B<Note>: By default, some files are excluded, namely those matching
+    '(CVS|~|#|\.bak|\.bck)$'
+
+To include all files, set I<--all>.
+
+=item * B<--include> I<regex>
+
+Consider only files whose names (including extension, but not path)
+match I<regex>. Use ^ and/or $ if you want those effects.
+Repeatable. See also I<--exclude> and I<--all>.
+A name that matches both I<--include> and I<--exclude>, is excluded.
+
+=item * B<--neat>
+
+When using I<--content>, shorten up the lines coming back from C<diff>.
+
+=item * B<--quiet> OR B<-q>
+
+Suppress most messages.
+In particular, when not using I<--content>, don't report anything for files that occur in *all*
+the directories.
+
+=item * B<--show> I<what>
+
+When not using I<--content>, change what is displayed
+for files that are present.
+Where 'difference' is mentioned below, it means as compared to the
+corresponding file in the first-listed directory
+(if the file does not exist there, "N/A" appears).
+
+    'plus':   Just show a plus-sign to show the file exists (the default)
+    'diff':   Whether the file is different (see also I<--diffOptions>)
+    'size':   Show the file size
+    'dsize':  The signed difference in size
+    'mtime':  The file's mod time
+    'dmtime': The signed difference in mod time
+
+For 'dmtime', the length of time will be reported approximately, as a
+number of seconds, minutes, hours, days, or years, with one post-decimal digit.
+
+=item * B<--verbose> OR B<-v>
+
+Add more detailed messages.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=item * B<--width> I<n>
+
+How many columns to leave for filenames.
+If set to a negative value, the actual value will be the length of
+the longest filename encountered.
+Default: 35. See also I<--colWidth>.
+
+=back
+
+
+=head1 Related commands
+
+C<hilite> -- used to colorize the output.
+
+C<diff -rq> -- is what this script uses, but this script also:
+
+    * Colorizes and formats the output
+    * Ignores CVS directories and obvious backups
+    * May add other checks, such as permissions, groups, times, etc.
+
+
+=head1 Known bugs and limitations
+
+It's not clear what color should apply to files in non-first directories
+when there is no corresponding file in the first directory. At present,
+the red/green distinction means purely whether the file exists, I<except>
+with I<--show> options involving differences from the first dir, where
+files that exist when the first dir file doesn't, do show up red.
+
+I<--content> and I<--nocontent> are not as similar as they ought to be.
+For example, only I<--content> is actually recursive, but
+only I<--nocontent> can compare more than 2 directories.
+
+I<--show dtime> is unfinished (and there are other I<--show> options
+that could usefully be added).
+
+There is no control over which colors I<--color> uses, short of changing
+declarations near the top of the code.
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

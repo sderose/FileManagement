@@ -1,0 +1,181 @@
+#!/usr/bin/perl -w
+#
+# watchDir: See when files in a directory change.
+#
+# 2006-10-16: Written by Steven J. DeRose.
+# 2012-09-04: Clean up, update.
+#
+use strict;
+use Getopt::Long;
+
+our $VERSION_DATE = "2012-09-05";
+
+my $color    = 0;
+my $expected = 9;                  # Num field exp. from 'ls'
+my $quiet    = 0;
+my $sleep    = 1;
+my $verbose  = 0;
+
+use sigtrap qw(die INT QUIT); # give user a way out
+
+###############################################################################
+# Process arguments
+#
+my %getoptHash = (
+    "color!"                  => \$color,
+    "h|help"                  => sub { system "perldoc $0"; exit; },
+    "n=o"                     => \$sleep,
+    "q|quiet!"                => \$quiet,
+    "verbose+"                => \$verbose,
+    "version"                 => sub {
+        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+    },
+    );
+Getopt::Long::Configure ("ignore_case");
+GetOptions(%getoptHash) || die "Bad options.\n";
+
+
+###############################################################################
+###############################################################################
+# Main
+#
+my $dir = $ARGV[0] || ".";
+(-d $dir) || die "Couldn't find directory '$dir'.\n";
+
+print "(hold ^C to exit)\n";
+
+my %prev = getLS($dir);
+while (1) {
+	my %next = getLS($dir);
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime;
+	$year+=1900; $mon+=1;
+	($mon<10) && ($mon  = "0$mon"); ($hour<10) && ($hour = "0$hour");
+	($min<10) && ($min = "0$min");  ($sec<10)  && ($sec  = "0$sec");
+
+	my $nchanged = 0;
+	foreach my $x (sort keys %prev) {
+		if (!defined $next{$x}) {
+			print "$x \tDISAPPEARED\n";
+			$nchanged++;
+		}
+	}
+	foreach my $x (sort keys %next) {
+		if (!defined $prev{$x}) {
+			print "$x \tAPPEARED\n";
+			$nchanged++;
+		}
+	}
+	foreach my $x (sort keys %next) {
+		if (defined $prev{$x} && $prev{$x} ne $next{$x}) {
+			print "$x \tUPDATED\n";
+			$nchanged++;
+		}
+	}
+	if ($nchanged) {
+		print "                    ($hour:$min:$sec: $nchanged CHANGED)\n\n";
+	}
+	%prev = %next;
+	if ($sleep > 0) {
+		if (`sleep $sleep`) { exit; }
+	}
+}
+
+print "Done.\n";
+
+exit;
+
+
+
+###############################################################################
+###############################################################################
+# Return a hash of file\ttime.
+#
+sub getLS {
+	my %rc = ();
+	my @raw = `ls -l --full-time $_[0] | grep -v '^total'`;
+	for (my $i=0; $i<scalar @raw; $i++) {
+		chomp($raw[$i]);
+		my @fields = split(/\s+/, $raw[$i]);
+		(scalar @fields == $expected) || die "Not $expected fields (but " .
+            (scalar @fields) . ") in '$raw[$i]':\n  " .
+            "|" . join("|", @fields) . "|\n";
+        my ($perm, $n, $user, $group, $size, $date, $time, $zone, $name)
+            = @fields;
+		$rc{$name} = $time;
+	}
+	($verbose) && print join("\n",@raw) . "\n\n";
+	return(%rc);
+}
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+watchDir [path]
+
+Reports when files are added, deleted, or modified in the directory.
+Use ^C (control-C) to exit.
+
+
+
+=head1 Options
+
+=over
+
+=item * B<-p>
+
+Check permissions, too (not implemented)
+
+=item * B<--quiet> OR B<-q>
+Suppress most messages.
+
+=item * B<-n> I<n>
+
+Sleep I<n> seconds between checks (default 1; 0 is ok).
+
+=item * B<--verbose>
+
+Add more messages (repeatable).
+
+=item * B<--version>
+
+Display version info and exit.
+
+=back
+
+
+
+=head1 Related commands
+
+C<watch> watchDir is a lot like 'watch -d -n 2 ls -lt --full-time', except:
+
+=over
+
+=item * it outputs a log of changes, rather than highlighting in one list
+
+=item * it is way better if you're watching a big listing as a whole
+
+=item * it counts changed files
+
+=item * it specifically notes changes, additions, and deletions as such
+
+=back
+
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

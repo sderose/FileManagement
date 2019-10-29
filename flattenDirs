@@ -1,0 +1,234 @@
+#!/usr/bin/perl -w
+#
+# 2009-10-06: Written by Steven J. DeRose.
+# 2011-05-25 sjd: Require -f. Clean up perldoc.
+# 2015-03-26 sjd: Add --pull, --separator, --dry-run, --move, --outdir.
+#
+# To do:
+#     Option to remove the empty directories?
+#     Option to only include a certain number of levels?
+#     Handle collisions better.
+#     Allow selecting an output directory other than cwd.
+#
+
+use strict;
+use Getopt::Long;
+
+use sjdUtils;
+use alogging;
+
+our $VERSION_DATE = "2015-03-26";
+
+my $dryRun       = 0;
+my $move         = 0;
+my $outDir       = "";
+my $pull         = 1;
+my $quiet        = 0;
+my $separator    = "_";
+my $verbose      = 0;
+
+
+###############################################################################
+#
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "dry-run|test!"           => \$dryRun,
+    "h|help"                  => sub { system "perldoc $0"; exit; },
+    "move|mv!"                => \$move,
+    "outDir|saveDir=s"        => \$outDir,
+    "pull!"                   => \$pull,
+    "q|quiet!"                => \$quiet,
+    "separator=s"             => \$separator,
+    "v|verbose+"              => \$verbose,
+    "version"                 => sub {
+        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+    }
+    );
+
+($result) || die "Bad options.\n";
+
+
+my $lnum   = 0;
+my $moved  = 0;
+my $nDirs  = 0;
+my $nFiles = 0;
+my $nFails = 0;
+
+
+###############################################################################
+# Traversal
+#
+sub doDir {
+    my ($dirPath, $pullPart) = @_;
+    opendir(my $dh, $dirPath);
+    while (my $ch = readdir($dh)) {
+        if ($ch eq "." || $ch eq ".." || $ch eq ".DS_Store") { next; }
+        my $oldPath = "$dirPath/$ch";
+        if (-d "$oldPath") {
+            $nDirs += 1;
+            hMsg(1, "Descending into dir '$oldPath'");
+            MsgPush();
+            doDir("$oldPath", "$pullPart$ch$separator");
+            MsgPop();
+        }
+        else {
+            $nFiles += 1;
+            #vMsg(2, "OLD: $dirPath / $ch");
+            my $newName = $ch;
+            if ($pull) { $newName = "$pullPart$ch"; }
+            my $newPath = ($outDir) ? "$outDir/$newName" : $newName;
+            #vMsg(2, "NEW:  $newPath");
+            if (-e '$newPath') {
+                vMsg(0, "File already exists: '$newPath'");
+                $nFails += 1;
+                next;
+            }
+            my $cmd = (($move) ? "mv":"cp") . " '$oldPath' '$newPath'";
+            if ($dryRun || $verbose) {
+                vMsg(0, "'$oldPath' to '$newPath'");
+            }
+            if (!$dryRun) {
+                system "$cmd";
+                if ($@) {
+                    vMsg(0, "Move failed: $cmd");
+                    $nFails += 1;
+                }
+            }
+            $moved++;
+        }
+    }
+    closedir($dh);
+}
+
+
+
+###############################################################################
+# Main
+#
+doDir(".", "");
+
+if (!$quiet) {
+    warn "Done. $moved items " . ($move ? "moved":"copied") .
+        ". $nDirs directories, $nFiles files, $nFails failed.\n";
+    ($dryRun) && vMsg(0, "    (DRY RUN ONLY)");
+}
+exit;
+
+
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+flattenDirs
+
+Copies (or I<--move>) all descendants of the current directory,
+into a single destination directory (. or as specified via I<--saveDir>).
+
+Preserves their former path information by joining the directory names
+with '_' (see I<--separator>) and prefixing that to
+the file name (unless you specify I<--nopull>).
+
+The originals are left untouched unless you specify I<--move>, in which case
+they are indeed moved to the destination directory
+
+For example, if your current directory has a subdirectory F<FOO>, with
+subdirectory F<BAR>, with file F<Baz>, and you run:
+
+    flattenDirs --move FOO
+
+then afterwards the current directory will (directly) contain F<FOO_BAR_Baz>,
+which is the file formerely known as F<Baz>.
+The directories F<FOO> and F<BAR> will still be around, but empty.
+
+B<Warning>: There is no easy way to undo such a move.
+Of course, if you didn't specify I<--move>, the copy operation
+can be "undone" by removing the new files.
+Also see the C<splitBigDir> command, which can distribute files into
+subdirectories based on their names.
+
+
+
+=head1 Options
+
+(prefix 'no' to negate where applicable)
+
+=over
+
+=item * B<--dry-run> OR B<--test>
+
+Display a list of what moved would be done, but don't actually do them.
+
+=item * B<--move> OR B<--mv>
+
+=item * B<--pull>
+
+Prefix the names of ancestor directories to each filename when it moves up.
+This will be just those ancestor directories that the file will no longer be in.
+This option is on by default; to turn it off use I<--nopull>.
+
+B<Note>: If the I<--separator> character (q.v.) is present in any of the
+directory names that are prefixed by I<--pull>, it remains there, which may
+or may not be what you want.  See also I<--separator>.
+
+=item * B<--quiet> OR B<-q>
+
+Suppress most messages.
+
+=item * B<--separator> I<s>
+
+What to use to separate directory components prefixed to the filename
+(see I<--pull>). Default: "_".
+
+=item * B<--verbose> OR B<-v>
+
+Add more messages (repeatable).
+
+=item * B<--version>
+
+Show version/license info and exit.
+
+=back
+
+
+
+=head1 Known bugs and limitations
+
+There is no easy way to undo this potentially large change to your file system.
+You may want to try I<--dry-run> first.
+
+Requiring I<-f> before doing anything may be overly cautious.
+
+
+
+=head1 Related commands
+
+C<find> can do similar operations, and has much stronger features for selecting
+particular descendant files to move. However, the equivalent of I<--pull>
+is difficult to accomplish (at best).
+To get essentially the effect of I<flattendDirs --nopull>, you can do:
+
+    find . -exec mv {} $PWD;
+
+C<renameFiles>, C<groupfiles>, C<lowerExtension>
+
+C<splitBigDir> organizes files from one directory, into multiple subdirectories,
+for example based on the first few characters of their names.
+
+C<disaggregate> organizes record of a CSV or other "table"-like file into
+multiple separate files,
+for example based on the values of a certain field, record numbers, etc.
+
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

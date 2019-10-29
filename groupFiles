@@ -1,0 +1,304 @@
+#!/usr/bin/perl -w
+#
+# Organize a folder full of files into subfolders by similarity of names.
+#
+# ?? -- written by Steven J. DeRose.
+# 2011-05-06 sjd: clean up. Getopt. Support organizing by hyphenations.
+# 2018-09-25: Generalize. Better messaging. Add --copyTo, --onlyExtension,
+#     --singletons.
+#
+# To do:
+#    Port to Python and use PowerWalk
+#    Add --dry-run option.
+#
+use strict;
+use Getopt::Long;
+use File::Copy;
+
+our $VERSION_DATE = "2018-09-25";
+
+my $cleanExtensions = 0;
+my $cleanNames    = 0;
+my $copyTo        = '';
+my $dryRun        = 0;
+my $ignoreCase    = 0;
+my $numerics      = '';
+my $onlyExtension = '';
+my $quiet         = 0;
+my $recursive     = 0;
+my $serials       = 1;
+my $singletons    = 1;
+my $verbose       = 0;
+
+sub vMsg {
+    my ($level, $msg) = @_;
+    ($verbose >= $level) && warn($msg . "\n");
+}
+
+sub doRename {
+    my ($fr, $to) = @_;
+    my $suffix = sjdUtils::availableFileNum($to);
+    if ($suffix) {
+        $to = $to . $suffix;   # FIX to insert before extension
+    }
+    rename($fr, $to);
+    return $to;
+}
+
+###############################################################################
+#
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "cleanNames!"             => \$cleanNames,
+    "copyTo!"                 => \$copyTo,
+    "cleanExtensions!"        => \$cleanExtensions,
+    "dryRun|test!"            => \$dryRun,
+    "h|help"                  => sub { system "perldoc $0"; exit; },
+    "i|ignoreCase!"           => \$ignoreCase,
+    "numerics=s"              => \$numerics,
+    "onlyExtension=s"         => \$onlyExtension,
+    "q|quiet!"                => \$quiet,
+    "recursive!"              => \$recursive,
+    "singletons!"             => \$singletons,
+    "serials!"                => \$serials,
+    "v|verbose+"              => \$verbose,
+    "version"                 => sub {
+        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+    }
+    );
+
+($result) || die "Bad options.\n";
+
+($dryRun) && die
+    "--dryRun is not yet supported.\n";
+($recursive) && die
+    "--recursive is not yet supported.\n";
+(!$numerics || -d $numerics) || die
+    "--numerics directory '$numerics' not found.\n";
+
+
+###############################################################################
+#
+my %extensionMap  = (
+    "jpeg"    => "jpg",
+    "html"    => "htm",
+    "text"    => "txt",
+    "tiff"    => "tif",
+);
+my $extFail       = 0;
+my $extSucc       = 0;
+my $charSucc      = 0;
+my $nNumerics     = 0;
+my $nSerials      = 0;
+
+# Determine the list of files to work on.
+#
+my $fileArgs = '';
+foreach my $f (@ARGV) {
+    $f =~ s/'/\\'/g;
+    $fileArgs .= "'$f'";
+}
+my @files = @ARGV;
+vMsg(1, "Number of files: " . scalar(@files));
+
+
+if ($cleanExtensions) {
+    foreach my $x (@files) {
+        $x =~ m/\.([^.\+])$/;
+        my $ext = ($1) ? $1:"";
+        my $extKey = lc($ext);
+        if (defined $extensionMap{$extKey}) {
+            (my $newName = $x) =~ s/\.$ext$/.$extensionMap{$ext}/;
+            if (-e $newName) {
+                vMsg(0,  "Could not rename '$x' to '$newName' -- already exists.\n");
+                $extFail++;
+            }
+            else {
+                my $cmd = "mv '$x' '$newName'";
+                system "$cmd" || vMsg(0,  "$cmd failed\n");
+                $extSucc++;
+            }
+        }
+    } # $x
+}
+
+if ($cleanNames) {
+    foreach my $x (@files) {
+        my $newName = $x;
+        $newName =~ s/[^-_.a-zA-Z0-9]+/_/g;
+        if ($x ne $newName) {
+            ($verbose) && vMsg(0,  "normalizing '$x' to '$newName'\n");
+            rename($x,$newName);
+            $charSucc++;
+        }
+    } # $c
+}
+
+if ($serials) {
+    # Find unique prefixes
+    my %prefixes = ();
+    foreach my $f (@files) {
+        (my $fpre = $f) =~ s/\d+\.\w+$//;
+        if ($fpre == '' || $fpre == $f) { next; }
+        if (!defined $prefixes{$fpre}) { $prefixes{$fpre} = []; }
+        else { push($prefixes{$fpre}, $f); }
+    }
+
+    foreach my $pre (keys(%prefixes)) {
+        if (!$singletons && scalar(@$pre)) { next; }
+        my $nfiles = scalar(@$pre);
+        vMsg(1, "Moving $nfiles files for '$pre*' to '_$pre/'");
+        if (-e "_$pre" == 0) {
+            mkdir("_$pre");
+        }
+        foreach my $f (@$pre) {
+            if ($copyTo) {
+                File::copy($f, "$copyTo/$pre/$f");
+            }
+            else {
+                rename($f, "$pre/$f");
+            }
+            $nSerials++;
+        } # $f
+    } # $pre
+}
+
+if ($numerics) {
+    vMsg(0, "Moving all-numeric files to '$numerics' dir.");
+    for my $f (@files) {
+        ($f =~ m/^\d+(\.\w+)?$/) || next;
+        if ($f =~ m/^\d+\.jpg$/) {
+            rename($f, "$numerics/$f");
+            $nNumerics++;
+        }
+    }
+}
+
+if (!$quiet) {
+    vMsg(0, "Done.");
+}
+exit;
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+groupFiles [options] file
+
+Normalize file names and move files into sub-folders based on
+common parts of their names, ignoring any final digits.
+
+This script does three main operations to help organize a big directory:
+
+=over
+
+=item Normalizes extensions such as jpg/jpeg/JPG/JPEG (I<--cleanExtensions>)
+
+=item Renames files to lose odd characters (I<--cleanNames>)
+
+=item Group files that have similar names (such as the same except for a
+number at the end), into subdirectories together (I<--serials>)
+
+=back
+
+I<--serials> (only) defaults to be in effect.
+
+For example:
+    groupFiles *.jpg
+
+would move 'Yosemite01.jpg', 'Yosemite12.jpg', 'Yosemite1024.jpg', and
+so on, into a subdirectory named 'Yosemite'.
+
+
+=head1 Options
+
+(prefix 'no' to negate where applicable)
+
+=over
+
+=item * B<--cleanExtensions>
+
+Standardize various extesions, such as html->htm, jpeg->jpg, etc. (default).
+
+=item * B<--cleanNames>
+
+Rename files to turn runs of unusual characters to "_".
+
+=item * B<--copyTo> I<path>
+
+Instead of moving files to subdirectories, copy them.
+
+=item * B<--ignoreCase> or B<-i>
+
+Disregard upper/lower case distinctions.
+
+=item * B<--numerics> I<path>
+
+Move files with digit-only names (they may also have extensions), into
+the directory at I<path>. There is no special handling for duplicates.
+
+=item * B<--onlyExtension> I<ext>
+
+Only do files with the given extension, even if others are listed (most
+likely via "*" or similar) on the command line.
+
+=item * B<--quiet> OR B<-q>
+Suppress most messages.
+
+=item * B<--serials>
+
+Group files that are the same except for a final serial number (before
+any extension). (default)
+
+For example, 'Yosemite01.jpg', 'Yosemite12.jpg', 'Yosemite1024.jpg' would
+all be moved into a subdirectory named 'Yosemite'.
+
+=item * B<--singletons>
+
+If set (the default), I<--serials> will still create a subdirectory and move
+the file, even if the resulting subdirectory will only end up with a single
+file in it. For example, if there's a "McKinley003.txt" but not other
+files named "McKinley" plus a number.
+
+=item * B<--verbose>
+
+Add more messages (repeatable).
+
+=item * B<--version>
+
+Show version info and exit.
+
+=back
+
+
+=head1 Known Bugs and Limitations
+
+This is only really meant for handling files in a single source directory
+at a time. It's not smart about moving in files with duplicate names and/or
+contents.
+
+
+=head1 Related commands
+
+C<find> can do similar work a bit more manually:
+
+    find . -regex '.*Yosemite[0-9]*\.jpg' -exec 'mv {} Yosemite/' \\;
+
+C<renameFiles> does regex renaming (the *nix C<rename> command is similar).
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut
+

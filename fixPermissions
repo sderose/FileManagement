@@ -1,0 +1,107 @@
+#!/usr/bin/perl -w
+#
+# fixPermission
+#
+# 2007-??: Written by Steven J. DeRose.
+# 2010-09-12, 2012-10-05 sjd: Cleanup.
+#
+# To do:
+# Have it check "file" command, too.
+#
+
+use strict;
+use Getopt::Long;
+
+our $VERSION_DATE = "2012-10-105";
+
+
+###############################################################################
+# Options
+#
+my $quiet   = 0;
+my $verbose = 0;
+
+my @ext = qw/xml nxml sgm sgml gml xhtm xhtml html htm dtd ent txt doc/;
+my @xext = qw/pl sh/;
+
+
+###############################################################################
+# Process options
+#
+my %getoptHash = (
+	"h|help|?"          => sub { system "perldoc $0"; exit; },
+	"q|quiet!"          => \$quiet,
+	"v|verbose+"        => \$verbose,
+    "version"           => sub {
+		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+	},
+	);
+
+Getopt::Long::Configure ("ignore_case");
+GetOptions(%getoptHash) || die("Bad options.\n");
+
+
+###############################################################################
+###############################################################################
+# Main
+#
+($quiet) || print "Making these extensions non-executable:"
+	. join(" ",@ext) . ".\n";
+
+foreach my $e (@ext) {
+	if (-e glob("*.$e")) {
+		system "chmod -x *.$e";
+	}
+}
+
+($quiet) || print "Done.\n";
+
+exit;
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+fixPermissions [files]
+
+Check file extensions and make appropriate files non-executable. This is useful
+because when mounting Windoze filesystems from Linux, permissions sometimes get
+toasted.
+
+
+=head1 Options
+
+=over
+
+=item * B<--quiet> OR B<-q>
+Suppress most messages.
+
+=item * B<--verbose> OR B<-v>
+Add more detailed messages.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=back
+
+=head1 Known bugs and limitations
+
+Should also use the C<file> command, so it can handle extensionless files.
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

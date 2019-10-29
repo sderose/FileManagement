@@ -1,0 +1,136 @@
+#!/usr/bin/perl -w
+#
+# lscruft
+#
+# 2008-02-04: Written by Steven J. DeRose.
+# 2010-09-12 sjd: Cleanup. Fix -r to use 'find'.
+# 2010-10-27 sjd: Add -rm. Always use find, never ls. Support paths.
+# 2012-09-15 sjd: Print msg if no files found to remove.
+# 2014-11-20: Don't treat .log files as cruft.
+#
+# To do:
+#
+#
+use strict;
+use Getopt::Long;
+
+our $VERSION_DATE = "2014-11-20";
+
+my $fileArgs  = " .#* *#* *~* *.bak *.bck *.tmp *.obs";
+my $quiet     = 0;
+my $recursive = 0;
+my $rm        = 0;
+my $verbose   = 0;
+
+
+###############################################################################
+# Process options
+#
+my %getoptHash = (
+	"h|help|?"          => sub { system "perldoc $0"; exit; },
+	"q|quiet!"          => \$quiet,
+    "r|recursive!"      => \$recursive,
+    "rm!"               => \$rm,
+    "showlist!"         => sub {
+        print "Filenames considered cruft:\n    $fileArgs\n";
+        exit;
+    },
+	"v|verbose+"        => \$verbose,
+    "version"           => sub {
+		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+	}
+	);
+
+Getopt::Long::Configure ("ignore_case");
+(GetOptions(%getoptHash)) || die "Bad options.\n";
+
+
+###############################################################################
+# Turn the simple filename regex list into 'find' arguments.
+#
+$fileArgs =~ s/ /" -or -name "/g;
+$fileArgs =~ s/^" -or//;
+$fileArgs .= '"';
+
+my $path = (scalar @ARGV) ? join(" ",@ARGV) : ".";
+
+my $cmd = "find $path";
+if (!$recursive) {
+    $cmd .= " -maxdepth 1";
+}
+$cmd .= " $fileArgs";
+
+($verbose) && warn "Running: $cmd\n";
+my $cruft = `$cmd 2>/dev/null`;
+print $cruft;
+
+if ($rm) {
+    $cruft =~ s/\n/ /g;
+    if ($cruft) {
+        system "rm $cruft";
+        print "Files removed.\n";
+    }
+    else {
+        print "No files found to remove.\n";
+    }
+}
+
+exit;
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+lscruft [options] [paths]
+
+List backup files, temporary files, etc. in the place(s) specified.
+Optionally remove them.
+
+
+
+=head1 Options
+
+=over
+
+=item * B<--quiet> OR B<-q>
+Suppress most messages.
+
+=item * B<-r>
+
+Recurse into subdirectories.
+
+=item * B<--rm>
+
+Remove the files that are found.
+
+=item * B<--showList>
+
+Just display a list of the filename patterns the script looks for.
+
+=item * B<--verbose> OR B<-v>
+Add more detailed messages.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=back
+
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut

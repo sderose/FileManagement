@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# lowerExtension: Force extensions to lower-case
+#
+# <2012-03-01: Written by Steven J. DeRose.
+# 
+# To do:
+#     Make into an option on 'renameFiles'.
+#
+if [ "$1" == "-h" ]; then
+    echo "Force extensions of the listed files, to lower-case."
+    exit
+fi
+
+for x in $*; do
+   set e = $x:e
+   set r = $x:r
+   set elower = `echo $e | tr '[:upper:]' '[:lower:]'`
+   set newname = $r.$elower
+   echo $x "-->" $newname
+   mv $x $newname
+end

@@ -1,0 +1,299 @@
+#!/usr/bin/perl -w
+#
+# splitBigDir: move a bunch of files to subdirs of somewhere, sorting by first n
+#    characters of the filenames.
+#
+# 2009-09-09: Written by Steven J. DeRose.
+# 2009-09-17 sjd: Add Normalize.
+# 2012-07-10 sjd: Clean up.
+# 2017-02-03: Improve doc. Add --levelSep, --extension, --keyExpr.
+#
+# To do:
+#     Add way to split by regex, rather than just character count.
+#     Support spitting into directories by file extension of C<type>.
+#     Maybe support git-like split by bytes of checksum?
+#     Split by first 2 hex digits of file checksum?
+#
+use strict;
+use Getopt::Long;
+use Unicode::Normalize;
+
+our $VERSION_DATE = "2017-01-03";
+
+my $extension     = 0;
+my $ignoreCase    = 1;
+my $ignoreNonWord = 0;
+my $keyExpr       = '';
+my $levelSep      = '';
+my $nPrefix       = 1;
+my $out           = "";
+my $quiet         = 0;
+my $tickInterval  = 1000;
+my $unorm         = 0;
+my $verbose       = 0;
+
+
+###############################################################################
+#
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "extension!"              => \$extension,
+    "h|help"                  => sub { system "perldoc $0"; exit; },
+    "ignoreCase!"             => \$ignoreCase,
+    "ignoreNonWord!"          => \$ignoreNonWord,
+    "keyExpr=s"               => \$keyExpr,
+    "levelSep=s"              => \$levelSep,
+    "n|nPrefix=i"             => \$nPrefix,
+    "outputDir=s"             => \$out,
+    "q!"                      => \$quiet,
+    "tick=i"                  => \$tickInterval,
+    "unorm!"                  => \$unorm,
+    "v+"                      => \$verbose,
+    "version"                 => sub {
+        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+    }
+    );
+
+($result) || die "Bad options.\n";
+
+$out =~ s/\/$//;
+my $keyExprC = '';
+if ($keyExpr) {
+    $keyExprC = qr/$keyExpr/;
+}
+
+
+###############################################################################
+# Set implied options, validate option values...
+#
+($nPrefix>0 || $levelSep || $keyExpr || $extension) || die
+    "No separation method specified.\n";
+#my $pad = "_" x $nPrefix;
+my $fileCount = 0;
+my $renameFail = 0;
+
+sub getPrefix {
+    my ($fname) = @_;
+    my $rc = "_other";
+    if ($extension) {
+        if (index($fname, '.')) { $rc =~ s/.*\.//; }
+    }
+    elsif ($levelSep) {
+        my $ind = index($fname, $levelSep);
+        if ($ind > 0) { $rc = substr($fname, 0, $ind-1); }
+    }
+    elsif ($nPrefix) {
+        if (length($fname) >= $nPrefix) { $rc = substr($fname,0,$nPrefix); }
+    }
+    elsif ($keyExpr) {
+        if ($fname =~ m/($keyExprC)/) { $rc = $1; }
+    }
+    else {
+        die "Couldn't handle splitting method.\n";
+    }
+    alogging::vMsg(1, "Prefix is '$rc' for file '$fname'.\n");
+    return $rc;
+}
+
+
+###############################################################################
+# Main
+#
+while (my $originalDir = shift) {
+    ($originalDir && -d $originalDir) || die "Can't find source dir.\n";
+    ($quiet) || warn "\nStarting dir '$originalDir'\n";
+
+    if (!$out) { $out = $originalDir . "-split"; }
+    system "mkdir -p $out";
+
+    opendir(ORIG, $originalDir) || die
+        "Couldn't open source dir $originalDir.\n";
+    # binmode(ORIG, ":encoding(utf8)");
+    while (my $fname = readdir(ORIG)) {
+        if ($fname eq "." || $fname eq "..") { next; }
+        $fileCount++;
+        if ($fileCount % $tickInterval == 0) {
+            warn "Processed $fileCount files.\n";
+        }
+        my $prefix = getPrefix($fname);
+        if ($unorm) {
+            $prefix = NFD($prefix);
+            $prefix =~ s/\pM//g;
+        }
+        if ($ignoreNonWord) { $prefix =~ s/\W//g; }
+        if ($ignoreCase) { $prefix = lc($prefix); }
+        (-d "$out/$prefix") || system "mkdir -p '$out/$prefix'";
+        $fname =~ s/'/\\'/g;
+        (-e "$originalDir/$fname") || warn "Can't find orig.\n";
+        ("$originalDir" eq "$out/$prefix") && next;
+
+        # http://perlingresprogramming.blogspot.com/2008/04/opening-files-with-unicode.html
+        # Perl readdir, rename, etc. can't deal w/ Unicode well.
+        #system "mv '$originalDir/$fname' '$out/$prefix/'";
+        if (!rename("$originalDir/$fname", "$out/$prefix/")) {
+            warn "Rename failed for '$originalDir/$fname'.\n";
+            $renameFail++;
+        }
+    }
+    close ORIG;
+}
+($quiet) || warn
+    "Done, $fileCount files moved to '$out/' ($renameFail failed).\n";
+
+exit;
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+#
+
+=pod
+
+=head1 Usage
+
+splitBigDir [options] dir
+
+Break up the files in 'dir' to several other directories.
+Useful when a directory is just way too big, or disorganized.
+
+By default, files are distributed into subdirectories based on the
+first letter of the files' names (the directories are created as
+needed). Additional options include:
+
+=over
+
+=item I<--nPrefix n> uses the first I<n> letters of filenames.
+
+=item I<--levelSep c> uses everythig up to the first occurrence of
+the character I<c>.
+
+=item I<--extension> uses the file extension.
+
+=item I<--keyExpr regex> uses the (first) match to the given regex.
+
+=back
+
+For example:
+    splitBigDir -out newDirs -nprefix 2 theDir
+
+This would sort out the files under C<theDir/>, putting
+all the ones starting with "AA" into ./newDirsAA/,
+all the ones starting with "AB" into ./newDirsAB/, and so on.
+
+Files that don't fit the criterion at all (too short, no match, etc.),
+go into a subdirectory named "_other".
+
+=head1 Options
+
+=over
+
+=item * B<--extension>
+
+Distribute files using their file extensions.
+For example,
+    splitBigDir --extension theDir
+
+would put "aardvark.txt" into subdirectory F<txt>,
+but "aardvark.png" into subdirectory F<png>,
+Files with no extension go into I<other>.
+
+=item * B<--ignorecase>
+
+Fold to lower case for names of target directories
+(default -- required on Mac OS X).
+
+=item * B<--ignoreNonword>
+
+Drop initial non-\w characters for target directory names.
+
+=item * B<--keyExpr regex>
+
+Distribute files using the (first) match to the given I<regex>.
+For example,
+    splitBigDir --keyExpr 'aard\w+' theDir
+
+would put file F<freds_zoo_aardwolf.txt> into subdirectory F<aardwolf>, but
+would put file F<freds_zoo_aardvark.txt> into subdirectory F<aardvark>.
+Files whose names do not match go into F<_other> (it might be nice to have
+an option to just leave them alone, but at least they're easy to move back).
+
+=item * B<--levelSep c>
+
+Distribute files using everything up to (but not including)
+the first occurrence of the character I<c>.
+For example,
+    splitBigDir --levelSep '_' theDir
+
+would put file F<groundhog_day.txt> into subdirectory F<groundhog>.
+Files whose names do not contain I<c> go into F<_other>.
+
+=item * B<--nprefix> I<n>
+
+Distribute files using the first I<n> characters of their names.
+For example,
+    splitBigDir --n 3 theDir
+
+would put file F<aardvark.txt> into subdirectory F<aar>.
+Files whose names are too short go into F<_other>.
+
+=item * B<-outputDir> I<path> OR B<-o> I<path>
+
+Directory under which to put the new dirs.
+Default: the source directory argument + "-split".
+
+=item * B<--quiet> OR B<-q>
+
+Suppress most messages.
+
+=item * B<--unorm>
+
+Strip accents from I<--nprefix> chars when constructing directory names
+(otherwise the 'mv' might fail).
+
+=item * B<--verbose> OR B<-v>
+
+Add more messages, and check integrity frequently.
+
+=item * B<--version>
+
+Show version/license info and exit.
+
+=back
+
+
+
+=head1 Known bugs and limitations
+
+Might be better to collapse digits, punctuation, case.
+Seems to choke on Unicode chars in filenames.
+
+Splitting options other than I<--nPrefix> are experimental.
+
+Add option to split by what the *nix C<type> commands says the file is,
+or by various features known to my C<renameFiles> command.
+
+
+=head1 Related commands
+
+My C<flattenDirs> -- moves descendants up into a directory, renaming them by
+prefixing their (former) directory names onto their names.
+This is more or less the opposite.
+
+My C<renameFiles> -- does very general file-renaming, but doesn't reorganize
+files across directories.
+
+Linux C<rename> -- Nice but less powerful file-renaming utility.
+
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version,
+see L<http://www.derose.net/steve/utilities/>.
+
+=cut
