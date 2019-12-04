@@ -1,4 +1,4 @@
-This repo contains utilities that are useful for managing files in croweded
+This repo contains utilities that are useful for managing files in crowded
 directory subtrees, as happens a lot in corpus linguistics.
 
 bigDirTimer (Python) -- test your filesystem(s) for how badly they slow down on
