@@ -2,345 +2,26 @@
 #
 # compareDirTrees.
 #
-# 2007-??: Written by Steven J. DeRose.
-# 2007-11-01 sjd: strict, Getopt, pmc_machine, --help.
-# 2010-09-12, 2012-10-05 sjd: Cleanup.
-# 2015-03-05: Add --content and non-diff checking. flagName().
-# 2016-04-07f: Add --include, --show, --diffOptions. Support >2 dirs.
-#     Make --exclude and --include repeatable. New merge algorithm.
-# 2019-03-22: Clean up. Fix --exclude.
-#
-# To do:
-# Offer comparison/display by size, time, permissions, attributes?
-# Add -r to scan regardless of placement in subtree.
-#
-#
 use strict;
 use Getopt::Long;
 use File::stat;
 use POSIX qw( strftime );
 use sjdUtils;
-use alogging;
 
-our $VERSION_DATE = "2018-03-22";
-
-my $all          = 0;
-my $color        = ($ENV{"USE_COLOR"} && -t STDOUT);
-my $colWidth     = 8;
-my $content      = 0;
-my $diffOptions  = ' -iEbB';
-my $dotFill      = 3;
-my @exclude      = ();
-my @include      = ();
-my $neat         = 0;
-my $quiet        = 0;
-my $show         = "plus";
-my $verbose      = 0;
-my $width        = 35;
-my $xslonly      = 0;
-
-# Process options
-#
-my %getoptHash = (
-	"all"               => \$all,
-	"color!"            => \$color,
-    "colWidth=o"        => \$colWidth,
-	"content!"          => \$content,
-    "diffOptions=s"     => \$diffOptions,
-    "dotFill=o"         => \$dotFill,
-	"exclude=s"         => \@exclude,
-	"include=s"         => \@include,
-	"h|help|?"          => sub { system "perldoc $0"; exit; },
-	"neat!"             => \$neat,
-	"q|quiet!"          => \$quiet,
-    "show=s"            => \$show,
-	"v|verbose+"        => \$verbose,
-    "version"           => sub {
-		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
-	},
-	"width=i"           => \$width,
-	"xslonly"           => \$xslonly,
-	);
-
-Getopt::Long::Configure ("ignore_case");
-GetOptions(%getoptHash) || die("Bad options.\n");
-
-sjdUtils::setColors($color);
-sjdUtils::setVerbose($verbose);
-
-if (!$all) {
-    my $dftExclude = '(CVS|~|#|\.bak|\.bck|\.pyc)$';
-    alogging::vMsg(1, "Defaulting --exclude for '$dftExclude'.");
-    push @exclude, $dftExclude;
-}
-
-for my $x (@exclude) {
-    my $x2 = sjdUtils::trim($x);
-    alogging::vMsg(1, "--exclude for '$x': '$x2'.");
-    (sjdUtils::trim($x) ne "") || die "Blank --exclude value.\n";
-}
-for my $x (@include) {
-    alogging::vMsg(1, "--include for '$x'.");
-    (sjdUtils::trim($x) ne "") || die "Blank --include value.\n";
-}
-
-binmode(STDOUT, ":encoding(utf-8)");
-
-my @dirs = ();
-while (@ARGV) {
-    my $dir = shift;
-    (-d $dir) || die "Directory $dir does not exist.\n";
-    push @dirs, $dir;
-}
-(scalar(@dirs) >= 2) || die "Not enough directories specified.\n";
+our %metadata = (
+    'title'        => "compareDirTrees",
+    'rightsHolder' => "Steven J. DeRose",
+    'creator'      => "http://viaf.org/viaf/50334488",
+    'type'         => "http://purl.org/dc/dcmitype/Software",
+    'language'     => "Perl 5.18",
+    'created'      => "2007",
+    'modified'     => "2020-05-05",
+    'publisher'    => "http://github.com/sderose",
+    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+);
+our $VERSION_DATE = $metadata{'modified'};
 
 
-###############################################################################
-#
-my $M = 60; my $H = 3600; my $D = 3600*24; my $Y = $D * 365.25;
-my $colorBad    = 'bold/white/red';
-my $colorGood   = 'bold/white/green';
-my $colorWarn   = '/yellow';
-my $colorHuh    = 'cyan';
-
-my $indentLevel = 1;
-my $xsLeft      = 0;
-my $xsRight     = 0;
-my $maxNameLengthSeen = 0;
-
-sub showPair {
-    my ($p1,$f1,$color1, $p2,$f2,$color2) = @_;
-    print(("  " x $indentLevel) .
-        colorize($color1,sjdUtils::rpad(flagName($p1,$f1),$width)) .
-        "    " . colorize($color2,flagName($p2,$f2)) . "\n");
-}
-
-sub flagName {
-    my ($p, $f) = @_;
-    # null-ish 0xD8, empty set 02205
-    if ($f eq "") { return(chr(0x2205)); }
-    my $f2 = $f;
-    if (-d "$p/$f") { return( "$f2/"); }
-    if (-x "$p/$f") { $f2 .= " ``"; }
-    if (-l "$p/$f") { $f2 .= " ->"; }
-    if (-z "$p/$f") { $f2 .= " 0"; }
-    if (-B "$p/$f") { $f2 .= " #"; }
-    if (!-f "$p/$f" && !-d "$p/$f") { $f2 .= " ?"; }
-    return($f2);
-}
-
-# Return ref to a sorted array of eligible filenames from a directory.
-sub listdir {
-    my ($path) = @_;
-    my @dlist = ();
-    my $h;
-    opendir($h, $path) || die "Cannot open directory '$path'.\n";
-    while (my $f = readdir($h)) {
-        if (substr($f,0,1) eq ".") { next; }
-        my $nuke = 0;
-        for my $x (@exclude) {
-            #warn "*** Checking file '$f' vs. exclusion '$x' ***\n";
-            if ($f =~ m/$x/) { $nuke = 1; }
-        }
-        if ($nuke) { next; }
-        if (scalar(@include)>0) {
-            my $found = 0;
-            for my $x (@include) {
-                if ($f =~ m/$x/) { $found = 1; last; }
-            }
-            if (!$found) { next; }
-        }
-        push @dlist, $f;
-        if (length($f) > $maxNameLengthSeen) {
-            $maxNameLengthSeen = length($f);
-        }
-    }
-    close($h);
-    @dlist = sort(@dlist);
-    return(\@dlist);
-}
-
-###############################################################################
-# Just compare what files are there, not the file contents.
-#
-BEGIN {
-    my $nDirs = 0;      # How many dirs to compare
-    my @dirLists = ();  # Refs to $nDirs sorted arrays of filenames
-    my @curPos = ();    # Index of next key in each dirList, -1 when done
-
-    sub findSmallest {
-        my $small = undef;
-        for (my $i=0; $i<$nDirs; $i++) {
-            next if ($curPos[$i] < 0);
-            if (!defined $small ||
-                $dirLists[$i]->[$curPos[$i]] lt $small) {
-                $small = $dirLists[$i]->[$curPos[$i]];
-            }
-        }
-        return($small); # undef if nobody left
-    }
-
-    # Compare just the filenames, not their content
-    #
-    sub doNonContent {
-        # Scan the requested directories and collect all their files
-        $nDirs = scalar(@dirs);
-        my $header = "";
-        for (my $i=0; $i<$nDirs; $i++) {
-            my $dirPath = $dirs[$i];
-            my $dl = listdir($dirPath);  # Shoudl be in alph order
-            push @dirLists, $dl;
-            push @curPos, 0;
-            $header .= makeCol('ul', sprintf("%4d", $i));
-            printf("Directory %3d: '%s' (%d items)\n",
-                $i, $dirPath, scalar(@{$dirLists[-1]}));
-        }
-
-        if ($width < 0) { $width = $maxNameLengthSeen; }
-        $header = "Filename" . (' ' x ($width-8)) . $header;
-        ($quiet) && print(
-            "    (omitting files that appear in all directories, because -q)\n");
-        print("\n" . sjdUtils::colorize('bold', $header) . "\n");
-
-        # Run a merge
-        my $lineNum = 0;
-        while (my $small = findSmallest()) {
-            $lineNum++;
-            alogging::vMsg(2, "Smallest key: '$small'.");
-            my $msg = sjdUtils::rpad($small, $width,
-                ($dotFill && ($lineNum % $dotFill)==0) ? '.':' ');
-            my $missing = 0;
-            my $path0 = "$dirs[0]/$small";
-            if (! -e $path0) { $path0 = ""; }
-            for (my $i=0; $i<$nDirs; $i++) {
-                if ($dirLists[$i]->[$curPos[$i]] eq $small) {
-                    $msg .= getDisplay($dirs[$i], $small, $path0);
-                    $curPos[$i]++;
-                    if ($curPos[$i] >= scalar(@{$dirLists[$i]})) {
-                        $curPos[$i] = -1;  # This dir is done
-                    }
-                }
-                else {
-                    $msg .= makeCol($colorBad, "NONE");
-                    $missing++;
-                }
-            }
-            if ($missing || !$quiet) { print("$msg\n"); }
-        } # while
-
-        sub makeCol {
-            my ($color, $text) = @_;
-            my $data = sjdUtils::lpad($text, $colWidth-1, ' ');
-            return(" " . sjdUtils::colorize($color, $data));
-        }
-        sub getDisplay {
-            my ($dir, $file, $path0) = @_;
-            my $path = "$dir/$file";
-            my $color = $colorGood;
-            my $flag  = '  +  ';
-
-            if ($show eq "size") {
-                $flag = -s $path;
-            }
-            elsif ($show eq "dsize") {
-                if (!$path0) { $flag = " N/A "; $color = $colorBad; }
-                else {
-                    if ($path eq $path0) { $flag = "  =  "; }
-                    my $ds = (-s $path0) - (-s $path);
-                    $flag = sprintf("%+5d", $ds);
-                    if ($ds) { $color = $colorWarn; }
-                }
-            }
-            elsif ($show eq "mtime") {
-                #my $tFormat = '%Y-%m-%d %H:%M:%S';
-                my $tFormat = '%m-%d';
-                $flag = (strftime($tFormat, localtime(stat($path)->[9])));
-            }
-            elsif ($show eq "dmtime") {
-                if (!$path0) { $flag = " N/A "; $color = $colorBad; }
-                else {
-                    if ($path eq $path0) { $flag = "  =  "; }
-                    my $dt = stat($path)->[9] - stat($path0)->[9];
-                    if ($dt) { $color = $colorWarn; }
-                    $flag = dispDuration($dt);
-                }
-            }
-            elsif ($show eq "diff") {
-                if (!$path0) { $flag = " N/A "; $color = $colorBad; }
-                else {
-                    if ($path eq $path0) { $flag = "  =  "; }
-                    my $cmd = "diff $diffOptions -q $path0 $path >/dev/null";
-                    my $rc = system($cmd);
-                    if ($rc) { $color = $colorWarn; $flag = 'DIFF'; }
-                    else { $flag = "SAME"; }
-                }
-            }
-            else {
-                # 'plus' just uses the default.
-            }
-            return(makeCol($color, $flag));
-        }
-    }
-    # Reduce a time-span to compact form
-    sub dispDuration {
-        my ($sec) = @_;
-        my $psec = abs($sec);
-        if ($psec < 3 * $M) { return(sprintf("%5.1fS", $sec)); }
-        if ($psec < 3 * $H) { return(sprintf("%5.1fM", $sec/$M)); }
-        if ($psec < 3 * $D) { return(sprintf("%5.1fH", $sec/$H)); }
-        if ($psec < 3 * $Y) { return(sprintf("%5.1fD", $sec/$D)); }
-        return                     (sprintf("%5.1fY", $sec/$Y));
-    }
-} # END
-
-
-###############################################################################
-sub doContent {
-    (scalar @dirs == 2) || die
-        "--content diffing requires exactly 2 directories.\n";
-    my $exclOps = "";
-    for my $x (@exclude) { $exclOps .= " -x '$x'"; }
-
-    my $cmd = "diff --recursive --ignore-space-change --brief $exclOps $dirs[0] $dirs[1]"
-        . " | grep -v 'Common subdirectories:'";
-
-    if ($neat) {
-        $cmd .= " | sed -e 's/: /:\#    /' -e 's/ and /\#  and /'"
-            . " | doubleSpace | tr '\#' '\012'";
-    }
-
-    if ($color) {
-        $cmd .= "| hilite"
-            . " -c $colorGood -e 'Only in $dirs[0].*\$'"
-            . " -c $colorWarn -e '^Files'"
-            . " -c $colorWarn -e ' and '"
-            . " -c $colorWarn -e ' differs\$'"
-            . " -c $colorBad  -e 'Only in $dirs[1].*\$'"
-            . " -c $colorHuh  -e 'CVS'";
-    }
-    if ($verbose) {
-        (my $pcmd = $cmd) =~ s/\|/\n    \|/g;
-        warn "Running: $pcmd\n";
-    }
-    system "$cmd";
-}
-
-
-###############################################################################
-###############################################################################
-# Main
-#
-if ($content) {
-    doContent();
-}
-else {
-    doNonContent();
-}
-
-exit;
-
-
-###############################################################################
 ###############################################################################
 #
 
@@ -375,7 +56,7 @@ from the first directory:
 
 =item * B<--all>
 
-Consider backup and CVS files, normally ignored.
+Consider backup and CVS files, normally ignored, and also dot-initial filenames.
 
 =item * B<--color>
 
@@ -385,18 +66,19 @@ STDOUT is going to a terminal.
 
 =item * B<--colWidth> I<n>
 
-How many columns to allow (including gutters) for each reporting column.
-Default: 6. See also I<--width>.
+How many columns to allow (excluding gutters) for each reporting column.
+Default: 6.
 
 =item * B<--content>
 
-Don't just compare what files are there, but also check contents
-(using C<diff>). This option is limited to 2 directories.
+Don't just compare what files are there and their sizes, but also check contents
+(using C<diff>). See also I<--useDiff>.
 
 =item * B<--diffOptions>
 
 What options to pass to the C<diff> command,
-for example when using I<--show diff>. Default: I<-iEbB>.
+for example when using I<--show diff>, I<--content>, or I<--useDiff>.
+Default: I<-iEbB>.
 
 =item * B<--dotfill> I<n>
 
@@ -410,10 +92,19 @@ match I<regex>. Use ^ and/or $ if you want those effects.
 Repeatable. See also I<--include> and I<--all>.
 A name that matches both I<--include> and I<--exclude>, is excluded.
 
-B<Note>: By default, some files are excluded, namely those matching
-    '(CVS|~|#|\.bak|\.bck)$'
+B<Note>: By default, some files are excluded, namely those whose
+names begin with "." (see I<--hidden>) and those matching
+    '(~|#|\.bak|\.bck|\.pyc)$'
 
 To include all files, set I<--all>.
+
+=item * B<--hidden>
+
+Also consider files whose names begin with a dot.
+
+=item * B<--ignoreCase> or B<-i>
+
+Ignore case when sorting filenames.
 
 =item * B<--include> I<regex>
 
@@ -426,11 +117,13 @@ A name that matches both I<--include> and I<--exclude>, is excluded.
 
 When using I<--content>, shorten up the lines coming back from C<diff>.
 
+=item * B<--diffsOnly>
+
+Show files only if they match across all dirs (by the set criteria).
+
 =item * B<--quiet> OR B<-q>
 
 Suppress most messages.
-In particular, when not using I<--content>, don't report anything for files that occur in *all*
-the directories.
 
 =item * B<--show> I<what>
 
@@ -450,6 +143,16 @@ corresponding file in the first-listed directory
 For 'dmtime', the length of time will be reported approximately, as a
 number of seconds, minutes, hours, days, or years, with one post-decimal digit.
 
+=item * B<timeFormat> I<s>
+
+    When showing file times, use this format (see I<strftime>).
+Default (chosen for compactness):
+    "%y%m%d %H%M%S"
+
+=item * B<--useDiff>
+
+Run a recursive I<diff> instead of doing our own comparison.
+
 =item * B<--verbose> OR B<-v>
 
 Add more detailed messages.
@@ -458,13 +161,6 @@ Add more detailed messages.
 
 Display version info and exit.
 
-=item * B<--width> I<n>
-
-How many columns to leave for filenames.
-If set to a negative value, the actual value will be the length of
-the longest filename encountered.
-Default: 35. See also I<--colWidth>.
-
 =back
 
 
@@ -472,20 +168,19 @@ Default: 35. See also I<--colWidth>.
 
 C<hilite> -- used to colorize the output.
 
-C<diff -rq> -- is what this script uses, but this script also:
+C<diff -rq> -- used at the bottom, but this script also:
 
-    * Colorizes and formats the output
-    * Ignores CVS directories and obvious backups
-    * May add other checks, such as permissions, groups, times, etc.
+C<rsync>
 
 
 =head1 Known bugs and limitations
 
-It's not clear what color should apply to files in non-first directories
-when there is no corresponding file in the first directory. At present,
-the red/green distinction means purely whether the file exists, I<except>
-with I<--show> options involving differences from the first dir, where
-files that exist when the first dir file doesn't, do show up red.
+Does not catch renamed files even if the name is similar (say, with a numeric
+suffix, "Copy 27 of", etc.), and/or the content identical.
+
+Does not do anything smart about MacOS aliases or *nix hard or sym links.
+
+Does not support remote directories, which it really ought to these days.
 
 I<--content> and I<--nocontent> are not as similar as they ought to be.
 For example, only I<--content> is actually recursive, but
@@ -494,8 +189,43 @@ only I<--nocontent> can compare more than 2 directories.
 I<--show dtime> is unfinished (and there are other I<--show> options
 that could usefully be added).
 
-There is no control over which colors I<--color> uses, short of changing
-declarations near the top of the code.
+Should be smarter about things like .git directories.
+
+
+=head1 History
+
+=over
+
+=item 2007-??: Written by Steven J. DeRose.
+
+=item 2007-11-01 sjd: strict, Getopt, pmc_machine, --help.
+
+=item 2010-09-12, 2012-10-05 sjd: Cleanup.
+
+=item 2015-03-05: Add --content and non-diff checking. flagName().
+
+=item 2016-04-07f: Add --include, --show, --diffOptions. Support >2 dirs.
+Make --exclude and --include repeatable. New merge algorithm.
+
+=item 2019-03-22: Clean up. Fix --exclude.
+
+=item 2020-05-05: New layout. Cleaner output. Better logic.
+Add --ignoreCase, --hiddenFiles. Drop --width, move filename to end.
+
+=back
+
+
+=head1 To do
+
+=over
+
+=item Offer comparison/display by size, time, permissions, attributes?
+
+=item Add -r to scan regardless of placement in subtree.
+
+=item
+
+=back
 
 
 =head1 Ownership
@@ -507,3 +237,438 @@ this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
 For the most recent version, see L<http://www.derose.net/steve/utilities/>.
 
 =cut
+
+
+my $all          = 0;
+my $color        = ($ENV{"USE_COLOR"} && -t STDOUT);
+my $colWidth     = 6;
+my $content      = 0;
+my $diffsOnly    = 0;
+my $diffOptions  = '-iEbB';
+my $dotFill      = 3;
+my @exclude      = ();
+my $hiddenFiles  = 1;
+my $ignoreCase   = 0;
+my @include      = ();
+my $neat         = 0;
+my $quiet        = 0;
+my $show         = "plus";
+my $timeFormat   = "%y%m%d %H%M%S";
+my $useDiff      = 0;
+my $verbose      = 0;
+my $xslonly      = 0;
+
+# Process options
+#
+my %getoptHash = (
+	"all!"              => \$all,
+	"color!"            => \$color,
+    "colWidth=o"        => \$colWidth,
+	"content!"          => \$content,
+	"diffsOnly!"        => \$diffsOnly,
+    "diffOptions=s"     => \$diffOptions,
+    "dotFill=o"         => \$dotFill,
+	"exclude=s"         => \@exclude,
+	"hiddenFiles!"      => \$hiddenFiles,
+	"i|ignoreCase!"     => \$ignoreCase,
+	"include=s"         => \@include,
+	"h|help|?"          => sub { system "perldoc $0"; exit; },
+	"neat!"             => \$neat,
+	"q|quiet!"          => \$quiet,
+    "show=s"            => \$show,
+    "timeFormat=s"      => \$timeFormat,
+	"v|verbose+"        => \$verbose,
+    "version"           => sub {
+		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+	},
+	"xslonly"           => \$xslonly,
+	);
+
+Getopt::Long::Configure ("ignore_case");
+GetOptions(%getoptHash) || die("Bad options.\n");
+
+sjdUtils::setColors($color);
+sjdUtils::setVerbose($verbose);
+
+if (!$all) {
+    my $dftExclude = '(~|#|\.bak|\.bck|\.pyc)$';
+    ($verbose) && warn("Defaulting --exclude for '$dftExclude'.\n");
+    push @exclude, $dftExclude;
+}
+
+for my $x (@exclude) {
+    my $x2 = sjdUtils::trim($x);
+    ($verbose) && warn("--exclude for '$x': '$x2'.\n");
+    (sjdUtils::trim($x) ne "") || die "Blank --exclude value.\n";
+}
+for my $x (@include) {
+    ($verbose) && warn("--include for '$x'.\n");
+    (sjdUtils::trim($x) ne "") || die "Blank --include value.\n";
+}
+
+binmode(STDOUT, ":encoding(utf-8)");
+
+my @dirs = ();
+while (@ARGV) {
+    my $dir = shift;
+    (-d $dir) || die "Directory $dir does not exist.\n";
+    push @dirs, $dir;
+}
+my $nDirs = scalar(@dirs);
+($nDirs >= 2) || die "Not enough directories specified.\n";
+
+
+###############################################################################
+#
+my $M = 60; my $H = 3600; my $D = 3600*24; my $Y = $D * 365.25;
+my $colorBad    = 'bold/white/red';
+my $colorGood   = 'bold/white/green';
+my $colorWarn   = '/yellow';
+my $colorHuh    = 'cyan';
+
+my $indentLevel = 1;
+my $xsLeft      = 0;
+my $xsRight     = 0;
+my $maxNameLengthSeen = 0;
+
+
+###############################################################################
+# Run through the given descendant dirs of each main dir (from the cmd line),
+# and fetch the file-list for each.
+# Return the array of those hashes, and the sorted union of all the filenames.
+#
+sub getdirHashes {
+    my ($subPath) = @_;
+    my @dirHashes = ();
+    my %unionFilenames = ();
+
+    for (my $i=0; $i<$nDirs; $i++) {
+        my $dirPath = $dirs[$i] . "/" . $subPath;
+        my $dl = listdir($dirPath);
+        for my $fn (keys %$dl) {
+            $unionFilenames{$fn} += 1;
+           # warn "    -> $fn\n";
+        }
+        push @dirHashes, $dl;
+        printf("Directory %3d (%4d items): '%s'\n",
+            $i, scalar keys %{$dl}, $dirPath);
+    }
+    my @sortedFilenames = ($ignoreCase) ?
+        sort { "\L$a" cmp "\L$b" } keys %unionFilenames :
+        sort keys %unionFilenames;
+
+    if ($verbose) {
+        my %dl0 = %{$dirHashes[0]};
+        my %dl1 = %{$dirHashes[1]};
+        #warn("\nDirlist0: " . join(", ", sort(keys(%dl0))) . "\n");
+        #warn("\nDirlist1: " . join(", ", sort(keys(%dl1))) . "\n");
+    }
+    return ( \@dirHashes, \@sortedFilenames );
+}
+
+# Return ref to an hash of eligible filenames from a directory.
+#
+sub listdir {
+    my ($path) = @_;
+    my %dlist = ();
+    my $h;
+    opendir($h, $path) || die "Cannot open directory '$path'.\n";
+    while (my $f = readdir($h)) {
+        if ($f eq '.' || $f eq '..') { next; }
+        if (substr($f,0,1) eq "." && !$hiddenFiles) { next; }
+        my $nuke = 0;
+        for my $x (@exclude) {
+            if ($f =~ m/$x/) { $nuke = 1; last; }
+        }
+        if ($nuke) { next; }
+        if (scalar(@include)>0) {
+            my $found = 0;
+            for my $x (@include) {
+                if ($f =~ m/$x/) { $found = 1; last; }
+            }
+            if (!$found) { next; }
+        }
+        $dlist{$f} = 1;
+        if (length($f) > $maxNameLengthSeen) {
+            $maxNameLengthSeen = length($f);
+        }
+    }
+    close($h);
+    return(\%dlist);
+}
+
+
+###############################################################################
+#
+sub makeHeaderLine {
+    my $header = "";
+    for (my $i=0; $i<$nDirs; $i++) {
+        $header .= makeCol('ul', sprintf("%d", $i));
+    }
+    $header .= " Filename";
+    $header = sjdUtils::colorize('bold', $header) . "\n";
+    return $header;
+}
+
+sub makeCol {
+    my ($color, $text) = @_;
+    my $data = sjdUtils::cpad($text, $colWidth);
+    my $final = sjdUtils::colorize($color, $data);
+    return $final;
+}
+
+sub makeTimeCol {
+    my ($epochTime) = @_;
+    return strftime($timeFormat, localtime($epochTime));
+}
+
+# Reduce a time-span to compact form
+sub makeDurationCol {
+    my ($sec) = @_;
+    my $psec = abs($sec);
+    if ($psec < 3 * $M) { return(sprintf("%5.1fS", $sec)); }
+    if ($psec < 3 * $H) { return(sprintf("%5.1fM", $sec/$M)); }
+    if ($psec < 3 * $D) { return(sprintf("%5.1fH", $sec/$H)); }
+    if ($psec < 3 * $Y) { return(sprintf("%5.1fD", $sec/$D)); }
+    return                     (sprintf("%5.1fY", $sec/$Y));
+}
+
+# Generate the right short descr and color for a file.
+#
+sub getDisplay {
+    my ($path0, $stat0, $path, $stat) = @_;
+    my $color = $colorGood;
+    my $flag  = '  +  ';
+
+    if ($path0 eq $path) {
+        $flag = "==";
+    }
+    elsif (! -e $path) {
+        $flag = "NONE";
+    }
+    if ($show eq "size") {
+        $flag = -s $path;
+    }
+    elsif ($show eq "dsize") {
+        if (!$path0) { $flag = " N/A "; $color = $colorBad; }
+        else {
+            if ($path eq $path0) { $flag = "  =  "; }
+            my $ds = (-s $path0) - (-s $path);
+            $flag = sprintf("%+5d", $ds);
+            if ($ds) { $color = $colorWarn; }
+        }
+    }
+    elsif ($show eq "mtime") {
+        #my $tFormat = '%Y-%m-%d %H:%M:%S';
+        my $tFormat = '%m-%d';
+        $flag = (strftime($tFormat, localtime(stat($path)->[9])));
+    }
+    elsif ($show eq "dmtime") {
+        if (!$path0) { $flag = " N/A "; $color = $colorBad; }
+        else {
+            if ($path eq $path0) { $flag = "  =  "; }
+            my $dt = stat($path)->[9] - stat($path0)->[9];
+            if ($dt) { $color = $colorWarn; }
+            $flag = makeDurationCol($dt);
+        }
+    }
+    elsif ($show eq "diff") {
+        if (!$path0) { $flag = " N/A "; $color = $colorBad; }
+        else {
+            if ($path eq $path0) { $flag = "  =  "; }
+            my $cmd = "diff $diffOptions -q $path0 $path >/dev/null";
+            my $rc = system($cmd);
+            if ($rc) { $color = $colorWarn; $flag = 'DIFF'; }
+            else { $flag = "SAME"; }
+        }
+    }
+    else {
+        # 'plus' just uses the default.
+    }
+    return(makeCol($color, $flag));
+}  # getDisplay
+
+sub differs {
+    my ($path0, $stat0P, $path, $statP) = @_;
+    my @stat0 = @{$stat0P};
+    my @stat = @{$statP};
+
+    #print("differs() arg count: " . scalar(@_) . "\n");
+    #print("differs() stat0 is  " . @stat0 . ", size " . scalar(@stat0) . "\n");
+    #printStat($stat0P);
+
+    if ($stat[ 2] != $stat0[ 2]) { return 2;  }  # mode     file mode
+    if ($stat[ 7] != $stat0[ 7]) { return 7;  }  # size     size in bytes
+    if ($stat[ 9] != $stat0[ 9]) { return 9;  }  # mtime    modify time
+    if ($content) {
+        if (`diff -q '$path0' '$path'`) { return 99; }
+    }
+    #if ($stat[ 0] != $stat0[ 0]) { return 0;  }  # dev      device #
+    #if ($stat[ 1] != $stat0[ 1]) { return 1;  }  # ino      inode #
+    #if ($stat[ 3] != $stat0[ 3]) { return 3;  }  # nlink    # hard links
+    #if ($stat[ 4] != $stat0[ 4]) { return 4;  }  # uid      owner ID #
+    #if ($stat[ 5] != $stat0[ 5]) { return 5;  }  # gid      group ID #
+    #if ($stat[ 6] != $stat0[ 6]) { return 6;  }  # rdev     device id(special)
+    #if ($stat[ 8] != $stat0[ 8]) { return 8;  }  # atime    access time
+    #if ($stat[10] != $stat0[10]) { return 10; }  # ctime    inode change time
+    #if ($stat[11] != $stat0[11]) { return 11; }  # blksize  preferred
+    #if ($stat[12] != $stat0[12]) { return 12; }  # blocks   blocks allocated
+    return(0);
+}
+
+sub printStat {
+    my ($statP) = @_;
+    my @stat = @{$statP};
+    my @names = (
+        "dev      device #",
+        "ino      inode #",
+        "mode     file mode",
+        "nlink    # hard links",
+        "uid      owner ID #",
+        "gid      group ID #",
+        "rdev     device id (special)",
+        "size     size in bytes",
+        "atime    access time",
+        "mtime    modify time",
+        "ctime    inode change time",
+        "blksize  preferred",
+        "blocks   blocks allocated",
+    );
+
+    my $m = '';
+    for (my $i=0; $i<scalar(@names); $i++) {
+        $m .= sprintf("    %2d %-32s %12d\n", $i, $names[$i], $stat[$i]);
+    }
+    print $m;
+    return $m;
+}
+
+
+##############################################################################
+# Just compare what files are there, not the file contents.
+#
+BEGIN {
+    # Compare just the filenames, not their content
+    #
+    sub doTop {
+        ($quiet) && print(
+            "    (omitting files that appear in all dirs, because -q)\n");
+
+        # Scan the requested $nDirs directories and collect all their files.
+        doOneDir('');
+    }
+
+    sub doOneDir {
+        my ($subPath) = @_;
+
+        print("\n");
+        my ($dirHashesP, $allFilenamesP) = getdirHashes($subPath);
+        my @dirHashes = @{$dirHashesP};
+        my @allFilenames = @{$allFilenamesP};
+        #warn ("dirHashes is list of " . ref($dirHashes[0]) . "\n");
+        my $header = makeHeaderLine();
+        print(sjdUtils::colorize('bold', $header) . "\n");
+
+        # Run through the union list of filenames alphabetically
+        my @subDirs = ();
+        for my $curFilename (@allFilenames) {
+            #($verbose) && warn "File '$curFilename'\n";
+
+            # Get info on the first one we can find
+            my $firstDirNum = "";
+            my $firstPath = "";
+            my @firstStat;
+            for (my $i=0; $i<$nDirs; $i++) {
+                #warn("    Dir #$i: " . $dirs[$i] . "\n");
+                if (defined $dirHashes[$i]->{$curFilename}) {
+                    $firstDirNum = $i;
+                    $firstPath = $dirs[$i] . '/' . $curFilename;
+                    (-e "$firstPath")|| warn("    MISSING: '$firstPath'\n");
+                    @firstStat = @{stat($firstPath)};
+                    #print("firstStat size " . scalar(@firstStat) . "\n");
+                    last;
+                }
+            }
+            #($verbose) && warn "First found in dir $firstDirNum: $firstPath\n";
+            if (-d "$firstPath") {
+                push @subDirs, "$firstPath";
+            }
+
+            # Compare all the rest
+            my @flags = ();
+            my $nMissing = 0;
+            my $nDiff = 0;
+            for (my $i=0; $i<$nDirs; $i++) {
+                if ($i == $firstDirNum) {
+                    push(@flags, makeCol($colorGood, '=='));
+                }
+                elsif (!defined $dirHashes[$i]->{$curFilename}) {
+                    $nMissing++;
+                    push(@flags, makeCol($colorBad, 'NONE'));
+                }
+                else {
+                    my $curPath = $dirs[$i] . '/' . $curFilename;
+                    (-e "$curPath") || warn("    MISSING: '$curPath'\n");
+                    my @curStat = @{stat($curPath)};
+                    my $toShow = getDisplay(
+                        $firstPath, \@firstStat, $curPath, \@curStat);
+                    my $isDifferent = differs(
+                        $firstPath, \@firstStat, $curPath, \@curStat);
+                    if (!$isDifferent) { $nDiff++; }
+                    push(@flags, $toShow);
+                }
+            } # for nDirs
+            my $msg = join(' ', @flags) . ' ' . $curFilename . "\n";
+            if ($nMissing || $nDiff || !$diffsOnly) { print($msg); }
+        } # for $curFilename
+
+        for my $sd (@subDirs) {
+            doOneDir($sd);
+        }
+    } # doOneDir
+
+} # END
+
+
+###############################################################################
+#
+sub doContent {
+    (scalar @dirs == 2) || die
+        "--content diffing requires exactly 2 directories.\n";
+    my $exclOps = "";
+    for my $x (@exclude) { $exclOps .= " -x '$x'"; }
+
+    my $cmd = "diff --recursive --ignore-space-change --brief $exclOps $dirs[0] $dirs[1]"
+        . " | grep -v 'Common subdirectories:'";
+
+    if ($neat) {
+        $cmd .= " | sed -e 's/: /:\#    /' -e 's/ and /\#  and /'"
+            . " | doubleSpace | tr '\#' '\012'";
+    }
+
+    if ($color) {
+        $cmd .= "| hilite"
+            . " -c $colorGood -e 'Only in $dirs[0].*\$'"
+            . " -c $colorWarn -e '^Files'"
+            . " -c $colorWarn -e ' and '"
+            . " -c $colorWarn -e ' differs\$'"
+            . " -c $colorBad  -e 'Only in $dirs[1].*\$'"
+            . " -c $colorHuh  -e 'CVS'";
+    }
+    if ($verbose) {
+        (my $pcmd = $cmd) =~ s/\|/\n    \|/g;
+        warn "Running: $pcmd\n";
+    }
+    system "$cmd";
+}
+
+
+###############################################################################
+# Main
+#
+if ($useDiff) {
+    doContent();
+} else {
+    doTop();
+}
+exit;

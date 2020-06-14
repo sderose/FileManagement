@@ -395,6 +395,8 @@ BEGIN {
 #        Carbon/Reference/MetadataAttributesRef/Reference/
 #        CommonAttrs.html#//apple_ref/doc/uid/TP40001694-SW1
 #
+# Now kept in separate file: macOsxSpotLightKeys.xsv
+#
 sub setupMacOsxSpotLightKeys {
 }
 

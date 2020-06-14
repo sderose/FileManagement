@@ -3,39 +3,63 @@
 # setEmailFileTime.py -- set the file-system timestamps on an email file
 # to match the MIME header "Date:" field.
 #
-# 2019-03-04: Written. Copyright by Steven J. DeRose.
-# Creative Commons Attribution-Share-alike 3.0 unported license.
-# See http://creativecommons.org/licenses/by-sa/3.0/.
-#
-# To do:
-#
 from __future__ import print_function
-import sys, os
+import sys
 import argparse
-#import re
-#import string
-#import math
+import re
 import subprocess
 import codecs
 from datetime import datetime
 
 import PowerWalk
 
-#from collections import defaultdict
-
-#from sjdUtils import sjdUtils
 from alogging import ALogger
 
 __metadata__ = {
-    'creator'      : "Steven J. DeRose",
-    'cre_date'     : "2019-03-04",
+    'title'        : "setEmailFileTime.py",
+    'rightsHolder' : "Steven J. DeRose",
+    'creator'      : "http://viaf.org/viaf/50334488",
+    'type'         : "http://purl.org/dc/dcmitype/Software",
     'language'     : "Python 3.7",
-    'version_date' : "2019-03-04",
+    'created'      : "2019-03-04",
+    'modified'     : "2020-03-04",
+    'publisher'    : "http://github.com/sderose",
+    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
-__version__ = __metadata__['version_date']
+__version__ = __metadata__['modified']
 
-#su = sjdUtils()
 lg = ALogger(1)
+
+descr = """
+=head1 Description
+
+Set the file-system timestamps on an email file
+to match the MIME header "Date:" field.
+
+    touch -mt yyyymmddhhmm [file]
+
+should also work.
+
+=head1 Related Commands
+
+stat, ls -lU, etc.
+
+=head1 Known bugs and Limitations
+
+=head1 Licensing
+
+Copyright 2019-03-04 by Steven J. DeRose. This script is licensed under a
+Creative Commons Attribution-Share-alike 3.0 unported license.
+See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
+
+=History=
+
+* 2019-03-04: Written by Steven J. DeRose.
+
+* 2020-03-04: Lint, new layout.
+
+=head1 Options
+"""
 
 ###############################################################################
 #
@@ -66,31 +90,6 @@ def doOneFile(path, fh):
 #
 if __name__ == "__main__":
     def processOptions():
-        descr = """
-=head1 Description
-
-Set the file-system timestamps on an email file
-to match the MIME header "Date:" field.
-
-touch -mt yyyymmddhhmm [file]
-
-should work.
-
-=head1 Related Commands
-
-stat, ls -lU, etc.
-
-=head1 Known bugs and Limitations
-
-=head1 Licensing
-
-Copyright 2019-03-04 by Steven J. DeRose. This script is licensed under a
-Creative Commons Attribution-Share-alike 3.0 unported license.
-See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
-
-=head1 Options
-"""
-
         try:
             from MarkupHelpFormatter import MarkupHelpFormatter
             formatter = MarkupHelpFormatter
