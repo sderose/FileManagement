@@ -2,61 +2,6 @@
 #
 # renamefiles; Use Perl s/// to rename multiple files.
 #
-# 2006-12-18: Written by Steven J. DeRose.
-# 2007-01-23: Tweak doc. Add -p, -x
-# 2007-12-03 sjd: strict.
-# 2009-06-24 sjd: Debug....
-# 2009-08-20 sjd: Debug....
-# 2010-09-12 sjd: Cleanup, Getopt.
-# 2011-05-25 sjd: More cleanup. Don't skip first file listed. Add --dirs.
-# 2012-02-06 sjd: Move regex to option (only). Allow non-Latin \w. Add --test.
-#     Add doRename() and change from system 'mv' to Perl rename(). sjdUtils.
-#     Put serializers before extension! Add --pull to pack ancestor dir
-#     name(s) onto front of filenames.
-# 2012-04-10 sjd: Add --force, --recurse, --ancestor, --lc.
-# 2013-01-09 sjd: Clean up. Add --camelize. OS stuff like "Copy N of ...".
-#     Add --dates, --addExtension, --toEnd, --copies.
-# 2013-10-15: --pull w/o --expr. Add --ignoreCase, --sep. --copies earlier.
-#     Use vMsg(). Clean up path vs. name distinction.
-# 2013-12-21: Add --pullURI.
-# 2014-01-09ff: Fix --dates, --pullURI. Add --moddates.
-# 2014-03-27: Add --ePad.
-# 2014-05-09ff: Add --unescapeURI, -x. Count/report extension changes.
-# 2014-08-22: Fix recursion. Separate splitPath, joinPath.
-# 2014-12-15: Add --bactrianize.
-# 2015-02-25ff: Fix bugs that prevented backreferences with -e,
-#     and RHS like "11-4" becoming "7" due to eval. Add --dot, fix --dates.
-# 2015-08-04: Remember to include Encode. Use strftime() for month names.
-#     Change --moddate to --addStat <statName>.
-# 2017-01-31: Add --unroman to convert Roman to Arabic numerals.
-# 2018-01-26: Add conflict check immediately before doRename() acts.
-# 2018-04-12: Missing return for -expr. Add -v messages. Fix --addStat.
-# 2018-08-09: Finish --extChanges. Add --uc. Split out variousChanges().
-# 2018-10-16: Use 'file' command with --addExtension "!".
-# 2019-10-29: Clean up expr parsing logic. Add --dropExtension, --onlyExt.
-#     Start --kmdAdd, kmdList.
-#
-# To do:
-#     --clean should also do --addExtension 'txt' (for non-dirs)
-#     Option to operate *only* on directories
-#     Check for .git and be able to do git mv instead of mv!
-#     Allow localized date formats and month names.
-#     Unicode issues, esp nbsp with --dates.
-#     Perhaps offer formats a la strftime().
-#     Add times and datetimes to -addstat.
-#     Options to set properties on files, like Mac OS label? (see list below)
-#         http://superuser.com/questions/168927
-#             com.apple.metadata:_kMDItemUserTags
-#     Feature to increment, or make contiguous, numeric portions of filenames?
-#     Option to make --camelize and --bactrianize use (e.g.) '_' instead of ' '
-#     Make --bactrianize not put space after hyphens
-#     To vs _to_ vs 2?
-#     Extract PDF titles, see https://stackoverflow.com/questions/44598758/
-#         or 'cermine'.
-#     Add a way to reference Mac fs metadata in --expr RHS.
-#     Rename to md5 checksum of the file?
-#     Way to add kmd metadata via
-#
 use strict;
 use Getopt::Long;
 #use File::stat; -- broken, but not needed anyway.
@@ -65,8 +10,590 @@ use Encode;
 use sjdUtils;
 use alogging;
 
-our $VERSION_DATE = "2019-10-23";
+our %metadata = (
+    'title'        => ".pm",
+    'rightsHolder' => "Steven J. DeRose",
+    'creator'      => "http://viaf.org/viaf/50334488",
+    'type'         => "http://purl.org/dc/dcmitype/Software",
+    'language'     => "Perl 5.18",
+    'created'      => "2006-12-18",
+    'modified'     => "2020-06-26",
+    'publisher'    => "http://github.com/sderose",
+    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+);
+our $VERSION_DATE = $metadata{'modified'};
 
+
+=pod
+
+=head1 Usage
+
+renameFiles [options] [regex] [files]
+
+Applies a regex expression to rename a file(s), and can do various systematic
+changes such as imposing or removing camel-case, normalizing date strings,
+padding sequence numbers, or inserting the values of various file attributes
+(date, owner id, or even the source URI when available) into the name.
+
+For example:
+
+    renamefiles --expr 's/myFile\$/stevesFile/' *.htm
+
+would rename all .htm files in the current directory whose names
+contain "myFile", to contain "stevesFile" in place of the first
+(or only) occurrence of "myFile",
+keeping the rest of the name the same.
+
+By default, changes do not affect extensions (but see I<--extChanges>).
+Both regular files and directories can be renamed (but see I<--no-dirs>).
+Various options can:
+
+=over
+
+=item * normalize dates in names and move them to the front (I<--dates>),
+
+=item * insert ancestor directory names into the filename (I<--pull>),
+
+=item * insert names extracted from the URI from which a file was downloaded
+(I<--pullURI>, MacOS only),
+
+=item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
+
+=item * insert serial numbers to avoid conflicts (I<--resolve>, I<--pad>),
+
+=item * fiddle with extensions (I<--addExtension>, I<--extChanges>, I<--onlyExt>, I<-x>),
+
+=item * prepend file access, creation, or modification dates, etc. (I<--addStat>),
+
+=item * handle conventions for naming duplicates and backups (I<--copies>),
+
+=item * Fix URI-style %XX special-character codes (I<--unescapeURI>),
+
+=item * etc.
+
+=back
+
+B<Note>: These changes apply to each filename, not the path leading to it,
+nor to extensions, nor to directories (unless you set the corresponding options).
+
+
+=head2 Order of changes
+
+Renaming actions happen in the order:
+copies, pull, pullURI, kmdAdd, unescapeURI, lc, uc, bactrianize,
+camelize, addStat, dates, expr, clean.
+
+
+=head1 Options
+
+(prefix "no" to negate where applicable)
+
+=over
+
+=item * B<--addExtension> I<ext>
+
+Add an extension to files that don't already have one.
+Use I<ext> as the extension (don't specify the "."), except that if I<ext> is
+set to "!", use the *nix C<file> command to figure out what the file is, and
+provide the appropriate extension from an internal list. C<file> is not
+complete, nor is the internal list. For example, a Java source file (at
+least on my version of Mac OS) comes back merely as "ASCII text", which the
+list will map to extension "txt".
+See also I<--extChanges>.
+
+=item * B<--addStat> I<n>
+
+Prefix a piece of file-system information (from C<stat>) to the filename.
+For example, specify I<mtime> or I<9> to insert the modification date
+of the file (see the following list).
+Times will be converted to dates in yyyy-mm-dd form
+(time and datetime will likely be added as well).
+See also I<--dates>, which can be used to normalize date formats in filenames.
+
+The fields of I<stat> can be specified by number or by the short names here:
+
+  0 dev      device number of filesystem
+  1 ino      inode number
+  2 mode     file mode  (type and permissions)
+  3 nlink    number of (hard) links to the file
+  4 uid      numeric user ID of file's owner
+  5 gid      numeric group ID of file's owner
+  6 rdev     the device identifier (special files only)
+  7 size     total size of file, in bytes
+  8 adate    last access time in seconds since the epoch
+  9 mdate    last modify time in seconds since the epoch
+ 10 cdate    inode change time in seconds since the epoch (*)
+ 11 blksize  preferred I/O size in bytes for interacting with the
+file (may vary from file to file)
+ 12 blocks   actual number of system-specific blocks allocated
+on disk (blocks are often, but not always, 512 bytes each)
+
+=item * B<--ancestor>
+
+As the first step I<when resolving name conflicts>,
+prefix the name of the parent directory, plus the
+I<--separator> character (default "_"), to the filename.
+See also I<--pull> and I<--pullURI> (which do a similar operation
+regardless of whether there is any name conflict).
+
+=item * B<--bactrianize> OR B<--camelToSpace>
+
+Insert a space before each non-initial capital letter in names (except where
+there already is such a space).
+For example, "TodaysNewsHeadlines" becomes "Todays News Headlines".
+B<Note>: A Bactrian camel has two humps with a gap between; this option
+inserts a "gap". This does not do anything special for names like "DeRose".
+See also I<--camelize>.
+
+=item * B<--camelize>
+
+Remove whitespace runs from names, but capitalize the character following each.
+For example, "Todays news headlines" becomes "TodaysNewsHeadlines".
+If you also specify I<--lc>, I<--lc> will be done first.
+See also I<--bactrianize>.
+
+=item * B<--clean>
+
+An alternative to I<--expr>, that automatically sets up a regex to change
+any unusual characters into '_'.
+"Unusual" means characters that are not among C<[-.\w_\\]>.
+
+=item * B<--copies>
+
+Scan for various OS conventions for duplicated files, such as
+"Copy 4 of foo", "foo - Copy (4)", "foo (another copy)", etc.
+Where found, replace them with a trailing I<--separator>
+character and number (left zero-padded if you specify I<--pad>).
+Experimental.
+
+=item * B<--dates>
+
+Notice simple dates embedded in names, change to yyyy-mm-dd form
+(see ISO 8601), and move
+them to the beginning of the filenames. See also I<--addStat>.
+
+The formats recognized include:
+    02/28/1492
+    Feb. 28, 1492
+    28 Feb 92
+    1492-02-28
+    14920228
+
+All matches must begin and end at word boundaries (regex "\\b").
+Month names must be English, but are recognized spelled out in full, or
+abbreviated to 3 characters (or "Sept") with an optional following ".".
+
+=item * B<--dateyears>
+
+This option is similar to I<--dates>, but recognizes 4-digit years beginning
+with "1" or "2", and merely moves them to the front (a 4-digit year by itself
+is a valid ISO 8601 data representation). It will I<not> move
+them if followed by a hyphen or digit.
+
+=item * B<--dirs>
+
+Rename directories just like anything else (default; use I<--no-dirs> to turn off).
+Compatible with, but not the same as, I<--recursive>.
+There is no setting (yet) to operate I<only> on directories.
+
+=item * B<--dot>
+
+Include hidden files (that is, files whose names begin with ".").
+
+=item * B<--ePad> I<num>
+
+With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
+The pad character used can be controlled via I<--ePadChar>.
+
+This can be useful, among other things, for normalizing the length of
+embedded numbers.
+The padding is applied to the right hand side as a whole:
+
+    renameFiles -epad 6 -e 's/([\d+])/$1/' *.foo
+
+This would, for example, rename F<zork37> to F<zork000037>.
+
+See also I<--pad>, which affects numbers appended to avoid conflicts
+while renaming.
+
+=item * B<--ePadChar> I<c>
+
+The character to use when padding right-hand sides with I<--ePad>. Default: "0".
+
+With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
+
+=item * B<--force>
+
+Overwrite conflicting output files with prejudice. Experimental.
+Is not intended to overwrite output directories.
+
+=item * B<--extChanges>
+
+Apply any I<--expr> changes to full filenames, including any file extensions,
+instead of to the basename excluding the extension.
+Experimental. See also I<--onlyExt>.
+
+=item * B<--expr> I<s/from/to> OR B<-e> I<s/from/to>
+
+Do the specified (Perl-style) regex change on filenames
+(all matches will be changed, not just the first).
+This change does not affect any filename extension, unless you
+also specify I<extChanges>.
+See also I<--ignoreCase>.
+
+=item * B<--ignoreCase> or I<-i>
+
+Add the "i" option to the regex change specified by I<--expr>,
+so the change ignores case distinctions.
+
+=item * B<--kmdAdd> I<itemName>
+
+Append to the filename, the specified item extracted from MacOS file-system
+metadata for the file (when available). Such items can be accessed by the
+shell command <mdfind>, and have names beginning C<kMDItem> (that prefix may
+be omitted when using this option). This option should be, but is not, repeatable.
+However, you can run C<renameFiles> multiple times to add one item at a time.
+
+The available items can be listed by using the I<--kmdList> option.
+
+=item * B<--kmdList>
+
+List all available items that can be specified for the I<--kmdadd>.
+
+=item * B<--lc>
+
+Force filenames entirely to lower-case.
+This does not affect extensions.
+
+=item * B<--onlyExt>
+Apply any I<--expr> changes to file extensions only (not to the
+basename, nor to the full name including the extension.
+Experimental. See also I<--extChanges>.
+
+=item * B<--pad> I<num>
+
+With I<--resolve>, left-pad the number to a minimum of I<num> digits.
+In case of name conflicts, padded numbers will be tried,
+from 0 up to 10**I<num>.
+If no filename in that range is available, the rename fails.
+
+<Note>: See also I<--ePad>, which can be used to pad the "to" size of a
+I<--expr> change to a certain size, and thus can be used to pad internal
+numbers within filenames.
+
+
+=item * B<--pull> I<n>
+
+Add the names of the I<n> containing directories into the filename proper,
+separated by the I<--separator> character (default "_").
+See also I<--ancestor> and I<--pullURI>.
+For example, with I<--pull 2> a file at
+
+    stuff/dax/ezri/pix/12.jpg
+
+would become
+
+    stuff/dax/ezri/pix/ezri_pix_12.jpg
+
+=item * B<--pullURI> I<n>
+
+Extract the URI from which the file was downloaded (Mac only,
+using the C<xattrs> command).
+Then add the names of the last I<n> directories from the URI (assuming
+it's a directory-style URI) into the filename proper
+(see also I<--ancestor> and I<--pull>, and the C<whereFrom> command).
+The directory names will be separated by the I<--separator> value
+(since leaving the "/" would typically be at least inconvenient).
+
+=item * B<--quiet> OR B<-q>
+Suppress most messages.
+
+=item * B<--recursive> OR B<-r>
+
+Runs through subdirectories, too. Experimental. See also I<--dirs>.
+
+=item * B<--resolve>
+
+If a rename leads to a conflict, suffix a serial-number. See also I<--pad>.
+Default.
+
+=item * B<--separator> I<s>
+
+Use I<s> (default "_") in place of any characters to be removed
+by I<--clean>, and to separate directory names prepended to
+the filename by I<--ancestor>, I<--pull>, etc.
+
+=item * B<--test> OR B<--dry-run>
+
+Run through and show what would be done, but don't actually rename anything.
+B<Note>: This is not a perfect test, since actual renaming of early files
+might produce conflicts later (which will not be noticed with I<--test>).
+
+=item * B<--uc>
+
+Force filenames entirely to upper-case.
+This does not affect extensions.
+
+=item * B<--unescapeURI>
+
+Expand %xx special characters (such as used in URIs).
+This functionality is also available by itself, with the
+separate command C<unescapeURI>.
+
+=item * B<--unroman>
+
+Find roman numerals within filenames and convert them to Arabic numerals
+(subject also to I<--pad>).
+Roman numerals are defined (too loosely) as sequences of [ivxlcm], with
+out an adjacent letter on either side (enforced using regex \\b).
+A single match must be in consistent case, but either case is ok.
+Experimental. Requires installing C<Roman> modules
+(L<http://search.cpan.org/~chorny/Roman/lib/Roman.pm>).
+
+=item * B<--verbose> OR B<-v>
+Provide more detailed messages. Repeatable.
+In particular, show what each filename changes to as it progresses through the
+selected optional changes.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=item * B<-x> OR B<--normalizeExtensions>
+
+Normalize a variety of extensions to 3-letter lower-case form
+(use I<--help-x> to display a list).
+See also I<--addExtension> and I<--extChanges>.
+
+=back
+
+
+=head1 Known bugs and limitations
+
+Unicode filenames are not thoroughly tested (and handling may depend on how
+your locale is set).
+
+Serial numbers with I<--resolve> may be placed after a file extension;
+the fix is little tested.
+
+There is no option to change the set of allowed characters with I<--clean>.
+
+There is no option to change the set of extension mappings used by I<-x>.
+
+Regexes may include a C</options> portion, but it is not used.
+
+May not yet do enough conflict resolution for case-insensitive file systems
+(it just checks I<-e> before renaming, which might work).
+
+Does not know about some backup conventions, such as foo~, #foo#, or
+C<emacs>'s ability to put backups into a separate directory:
+
+    (setq backup-directory-alist `(("." . "~/.saves")))
+
+I<--pull> doesn't do anything smart if there are
+embedded "//", "/./", or "/../" in any paths.
+
+It would be nice to be able to pull user- and group-names,
+image and/or file-system metadata, etc. into filenames. On Mac OS, you can
+get file-system metadata with commands like:
+
+    mdls [files]
+    mdls -name kMDItemWhereFroms [files]
+
+Date formats should be more flexible, controllable, and localizable.
+
+There should be an option to remove the matched date, not just copy it to
+the front.
+
+
+=head2 Security implications
+
+Because regex changes (see I<-e>) can include back- and variable-references
+on the right-hand side ($1, \1, etc.), the changes are carried out using an
+I<eval>(). This could lead to injection vulnerabilities.
+
+
+=head1 Related commands
+
+=head2 *nix commands
+
+The *nix C<rename> command is similar, and commonly available on Linux
+(but not on BSD and Mac OSX).
+However, it can only do shell wildcards (not full regular expressions).
+Some Linuces have a C<rename> that uses Perl regexes.
+However, the usual C<rename>s lack features such as
+I<--ancestor>, I<--bactrianize>, I<--camelize>, I<--clean>, I<--dates>,
+I<--moddates>, I<--resolve>, I<--pad>, I<--pull>, and I<-x>.
+
+Simple batch renames can also be done with the C<bash for> command:
+
+    for x in abc*; do
+        y=`echo "$x" | sed 's/foo/bar/g'`
+        echo "Renaming file '$x' to '$y'"
+        mv $x $y
+    done
+
+On Mac OS X you can get a file's source URI (if applicable) via:
+
+    xattr -p com.apple.metadata:kMDItemWhereFroms [file] | xxd -r -p
+
+or
+
+    mdls -name kMDItemWhereFroms [file]
+
+
+=head2 SJD commands
+
+C<whereFrom> -- Has a I<--pull> option that does renaming like
+the I<--pullURI> option here (by default it just displays the source URI).
+C<whereFrom> can also re-organize files into directory trees based on the paths
+in their source URIs.
+
+C<flattenDirs> -- Move all descendants of the current directory up into the
+current directory, prefixing the intermediate directory names to the filenames
+(separated by "_") instead of "/").
+
+C<groupfiles> -- Normalize file names and move files into sub-folders
+based on common parts of their names, ignoring any final digits.
+
+C<lowerExtension> -- Force file extensions to lower case.
+
+C<splitBigDir> -- Group files into several other directories, based on the
+first letter(s) of the files' names (or a few other things).
+
+C<renameOSISfiles> -- Specialty renaming for Biblical text in per-book files,
+to standardize and sequence-number the filenames.
+
+=head2 Other commands
+
+C<File Buddy> is a very nice Mac OS X utility that lets you do a wide range of
+things with groups of files, including some renaming, from a nice GUI. See
+L<http://www.skytag.com/filebuddy/en/index.html> if interested.
+
+
+=head1 History
+
+=over
+
+=item * 2006-12-18: Written by Steven J. DeRose.
+
+=item * 2007-01-23: Tweak doc. Add -p, -x
+
+=item * 2007-12-03 sjd: strict.
+
+=item * 2009-06-24 sjd: Debug....
+
+=item * 2009-08-20 sjd: Debug....
+
+=item * 2010-09-12 sjd: Cleanup, Getopt.
+
+=item * 2011-05-25 sjd: More cleanup. Don't skip first file listed. Add --dirs.
+
+=item * 2012-02-06 sjd: Move regex to option. Allow non-Latin \w,  --test.
+Add doRename() and change from system 'mv' to Perl rename(). sjdUtils.
+Put serializers before extension! Add --pull to pack ancestor dir
+name(s) onto front of filenames.
+
+=item * 2012-04-10 sjd: Add --force, --recurse, --ancestor, --lc.
+
+=item * 2013-01-09 sjd: Clean up. Add --camelize. OS stuff like "Copy N of ...".
+Add --dates, --addExtension, --toEnd, --copies.
+
+=item * 2013-10-15: --pull w/o --expr. Add --ignoreCase, --sep.
+--copies earlier. Use vMsg(). Clean up path vs. name distinction.
+
+=item * 2013-12-21: Add --pullURI.
+
+=item * 2014-01-09ff: Fix --dates, --pullURI. Add --moddates.
+
+=item * 2014-03-27: Add --ePad.
+
+=item * 2014-05-09ff: Add --unescapeURI, -x. Count/report extension changes.
+
+=item * 2014-08-22: Fix recursion. Separate splitPath, joinPath.
+
+=item * 2014-12-15: Add --bactrianize.
+
+=item * 2015-02-25ff: Fix bugs that prevented backreferences with -e,
+and RHS like "11-4" becoming "7" due to eval. Add --dot, fix --dates.
+
+=item * 2015-08-04: Remember to include Encode. Use strftime() for month names.
+Change --moddate to --addStat <statName>.
+
+=item * 2017-01-31: Add --unroman to convert Roman to Arabic numerals.
+
+=item * 2018-01-26: Add conflict check immediately before doRename() acts.
+
+=item * 2018-04-12: Missing return for -expr. Add -v messages. Fix --addStat.
+
+=item * 2018-08-09: Finish --extChanges. Add --uc. Split out variousChanges().
+
+=item * 2018-10-16: Use 'file' command with --addExtension "!".
+
+=item * 2019-10-29: Clean up expr parsing logic. Add --dropExtension, --onlyExt.
+Start --kmdAdd, kmdList.
+
+=item * 2020-06-26: New layout. Add I<--dateYears>.
+
+=back
+
+
+=head1 To do
+
+=over
+
+=item --clean should also do --addExtension 'txt' (for non-dirs)
+
+=item Option to operate *only* on directories
+
+=item Check for .git and be able to do git mv instead of mv!
+
+=item Allow localized date formats and month names.
+
+=item Unicode issues, esp nbsp with --dates.
+
+=item Perhaps offer formats a la strftime().
+
+=item Add times and datetimes to -addstat.
+
+=item Options to set properties on files, like Mac OS label? (see list below)
+http://superuser.com/questions/168927
+com.apple.metadata:_kMDItemUserTags
+
+=item Feature to increment, or make contiguous, numeric portions of filenames?
+
+=item Option to make --camelize and --bactrianize use (e.g.) '_' instead of ' '
+
+=item Make --bactrianize not put space after hyphens
+
+=item To vs _to_ vs 2?
+
+=item Extract PDF titles. See
+L<https://stackoverflow.com/questions/44598758> or 'cermine'.
+
+=item Add a way to reference Mac fs metadata in --expr RHS.
+
+=item Rename to md5 checksum of the file?
+
+=item Way to add kmd metadata via
+
+=back
+
+
+=head1 Rights
+
+Copyright 2006-12-18 by Steven J. DeRose. This work is licensed under a
+Creative Commons Attribution-Share Alike 3.0 Unported License.
+For further information on this license, see
+L<https://creativecommons.org/licenses/by-sa/3.0>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities> or
+L<https://github.com/sderose>.
+
+=cut
+
+
+###############################################################################
 # Get month names from locale (see http://perldoc.perl.org/perllocale.html
 # and man(7) strftime (days of week are %a %A)
 #
@@ -82,12 +609,13 @@ for (my $i=0; $i<12; $i++) {
 my $monthExpr = join("|", keys(%months));
 # Allow for no-break space U+00A0, which is NOT included in \s!
 my $nbsp = chr(0xA0);
+
 my $date1expr = qr/\b([01]\d)([0-3]\d)(\d\d\d\d)\b\s*/;
-my $date2expr = qr/($monthExpr)[\s\xA0]*(\d+)[,\s\xA0][\s\xA0]*(\d\d\d\d)\b\s*/;
+my $date2expr = qr/\b($monthExpr)[\s\xA0]*(\d+)[,\s\xA0][\s\xA0]*(\d\d\d\d)\b\s*/;
 #my $date2expr = qr/($monthExpr)[\s\u00A0]*(\d+)[,\s\u00A0][\s\u00a0]*(\d\d\d\d)\b\s*/;
-my $date3expr = qr/(\d+ )($monthExpr)\.? (\d{2,4})\b\s*/;
-my $date4expr = qr/([12]\d\d\d)-([01]\d)-([0123]\d)\b\s*/;
-my $date5expr = qr/([12]\d\d\d)([01]\d)([0123]\d)\b\s*/;
+my $date3expr = qr/\b(\d+ )($monthExpr)\.? (\d{2,4})\b\s*/;
+my $date4expr = qr/\b([12]\d\d\d)-([01]\d)-([0123]\d)\b\s*/;
+my $date5expr = qr/\b([12]\d\d\d)([01]\d)([0123]\d)\b\s*/;
 
 # Names on indexes of the fields of a file stat block.
 # Strings user can use to specify what to add with --addStat
@@ -212,6 +740,7 @@ my $cleanChars      = "-.\\w";
 my $color           = ($ENV{USE_COLOR} && -t STDERR) ? 1:0;
 my $copies          = 0;
 my $dates           = 0;
+my $dateYears       = 0;
 my $dirs            = 1;
 my $dot             = 0;
 my $dropExtension   = 0;
@@ -257,6 +786,7 @@ my %getOptHash = (
     "color!"         => \$color,
     "copies!"        => \$copies,
     "dates!"         => \$dates,
+    "dateYears!"     => \$dateYears,
     "dirs!"          => \$dirs,
     "dot!"           => \$dot,
     "dropExtension!" => \$dropExtension,
@@ -359,7 +889,7 @@ elsif ($expr) {
         vMsg(0, "-expr /options are not yet supported.");
     vMsg(1, "Changing:\n  /$frExpr/$toExpr/");
 }
-elsif (!$pull && !$pullURI && !$kmdAdd && !$dates && !$addStat &&
+elsif (!$pull && !$pullURI && !$kmdAdd && !$dates && !$dateYears && !$addStat &&
        !$x && !$bactrianize && !$camelize && !$unescapeURI) {
     vMsg(0, "Did you specify an action?");
 }
@@ -664,6 +1194,16 @@ sub variousChanges {
         $name2 = fixDates($name2);
     }
 
+    if ($dateYears) {
+        vMsg(2, "dateYears for '$name2'.");
+        if ($name2 =~ s/([^-0-9])([12]\d\d\d)([^-0-9]|$)/$1$3/) {
+            my $date = $2;
+            if ($toEnd) { $name2 = insertBeforeExtension($name2, $date); }
+            else { $name2 = "$date $name2"; }
+            $name2 =~ s/\s+$//;
+        }
+    }
+
     if ($expr) {
         if ($onlyExt) {
             vMsg(2, "changing ext '$frExpr' to '$toExpr', fromC = /$frC/.");
@@ -860,10 +1400,10 @@ sub doOsStuff {
 sub fixDates {
     my ($name, $toEnd) = @_;
     vMsg(1, "FixDate for: '$name',\n    e2: $date2expr.");
-    for (my $i=0; $i<length($name); $i++) {
-        my $c = substr($name, $i, 0);
-        printf("    %3d: 0x%02x  '%s'\n", $i, ord($c), $c);
-    }
+    #for (my $i=0; $i<length($name); $i++) {
+    #    my $c = substr($name, $i, 1);
+    #    printf("    %3d: 0x%02x  '%s'\n", $i, ord($c), $c);
+    #}
 
     my $outFormat = "%04d-%02d-%02d";
     my $date = "";
@@ -973,447 +1513,3 @@ sub makeExtensionMap {
 %suffixes = (
     [ "with very long lines"       , ""     ],
 );
-
-
-###############################################################################
-###############################################################################
-#
-
-=pod
-
-=head1 Usage
-
-renameFiles [options] [regex] [files]
-
-Applies a regex expression to rename a file(s), and can do various systematic
-changes such as imposing or removing camel-case, normalizing date strings,
-padding sequence numbers, or inserting the values of various file attributes
-(date, owner id, or even the source URI when available) into the name.
-
-For example:
-
-    renamefiles --expr 's/myFile\$/stevesFile/' *.htm
-
-would rename all .htm files in the current directory whose names contain "myFile",
-to contain "stevesFile" in place of the first (or only) occurrence of "myFile",
-keeping the rest of the name the same.
-
-By default, does not affect extensions or directories. Various options can:
-
-=over
-
-=item * normalize dates in names and move them to the front (I<--dates>),
-
-=item * insert ancestor directory names into the filename (I<--pull>),
-
-=item * insert names extracted from the URI from which a file was downloaded
-(I<--pullURI>, MacOS only),
-
-=item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
-
-=item * insert serial numbers to avoid conflicts (I<--resolve>, I<--pad>),
-
-=item * fiddle with extensions (I<--addExtension>, I<--extChanges>, I<--onlyExt>, I<-x>),
-
-=item * prepend file access, creation, or modification dates, etc. (I<--addStat>),
-
-=item * handle conventions for naming duplicates and backups (I<--copies>),
-
-=item * Fix URI-style %XX special-character codes (I<--unescapeURI>),
-
-=item * etc.
-
-=back
-
-B<Note>: These changes apply to each filename, not the path leading to it,
-nor to extensions, nor to directories (unless you set the corresponding options).
-
-
-=head2 Order of changes
-
-Renaming actions happen in the order:
-copies, pull, pullURI, kmdAdd, unescapeURI, lc, uc, bactrianize,
-camelize, addStat, dates, expr, clean.
-
-
-=head1 Options
-
-(prefix "no" to negate where applicable)
-
-=over
-
-=item * B<--addExtension> I<ext>
-
-Add an extension to files that don't already have one.
-Use I<ext> as the extension (don't specify the "."), except that if I<ext> is
-set to "!", use the *nix C<file> command to figure out what the file is, and
-provide the appropriate extension from an internal list. C<file> is not
-complete, nor is the internal list. For example, a Java source file (at
-least on my version of Mac OS) comes back merely as "ASCII text", which the
-list will map to extension "txt".
-See also I<--extChanges>.
-
-=item * B<--addStat> I<n>
-
-Prefix a piece of file-system information (from C<stat>) to the filename.
-For example, specify I<mtime> or I<9> to insert the modification date
-of the file (see the following list).
-Times will be converted to dates in yyyy-mm-dd form
-(time and datetime will likely be added as well).
-See also I<--dates>, which can be used to normalize date formats in filenames.
-
-The fields of I<stat> can be specified by number or by the short names here:
-
-  0 dev      device number of filesystem
-  1 ino      inode number
-  2 mode     file mode  (type and permissions)
-  3 nlink    number of (hard) links to the file
-  4 uid      numeric user ID of file's owner
-  5 gid      numeric group ID of file's owner
-  6 rdev     the device identifier (special files only)
-  7 size     total size of file, in bytes
-  8 adate    last access time in seconds since the epoch
-  9 mdate    last modify time in seconds since the epoch
- 10 cdate    inode change time in seconds since the epoch (*)
- 11 blksize  preferred I/O size in bytes for interacting with the
-file (may vary from file to file)
- 12 blocks   actual number of system-specific blocks allocated
-on disk (blocks are often, but not always, 512 bytes each)
-
-=item * B<--ancestor>
-
-As the first step I<when resolving name conflicts>,
-prefix the name of the parent directory, plus the
-I<--separator> character (default "_"), to the filename.
-See also I<--pull> and I<--pullURI> (which do a similar operation
-regardless of whether there is any name conflict).
-
-=item * B<--bactrianize> OR B<--camelToSpace>
-
-Insert a space before each non-initial capital letter in names (except where
-there already is such a space).
-For example, "TodaysNewsHeadlines" becomes "Todays News Headlines".
-B<Note>: A Bactrian camel has two humps with a gap between; this option
-inserts a "gap". This does not do anything special for names like "DeRose".
-See also I<--camelize>.
-
-=item * B<--camelize>
-
-Remove whitespace runs from names, but capitalize the character following each.
-For example, "Todays news headlines" becomes "TodaysNewsHeadlines".
-If you also specify I<--lc>, I<--lc> will be done first.
-See also I<--bactrianize>.
-
-=item * B<--clean>
-
-An alternative to I<--expr>, that automatically sets up a regex to change
-any unusual characters into '_'.
-"Unusual" means characters that are not among C<[-.\w_\\]>.
-
-=item * B<--copies>
-
-Scan for various OS conventions for duplicated files, such as
-"Copy 4 of foo", "foo - Copy (4)", "foo (another copy)", etc.
-Where found, replace them with a trailing I<--separator>
-character and number (left zero-padded if you specify I<--pad>).
-Experimental.
-
-=item * B<--dates>
-
-Notice simple dates embedded in names, change to yyyy-mm-dd form, and move
-them to the beginning of the filenames. See also I<--addStat>.
-
-The formats recognized include:
-    02/28/1492
-    Feb. 28, 1492
-    28 Feb 92
-    1492-02-28
-
-Month names must be English, but are recognized spelled out in full, or
-abbreviated to 3 characters (or "Sept") with an optional following ".".
-
-=item * B<--dirs>
-
-Rename directories just like anything else (default; use I<--no-dirs> to turn off).
-Compatible with, but not the same as, I<--recursive>.
-There is no setting (yet) to operate I<only> on directories.
-
-=item * B<--dot>
-
-Include hidden files (that is, files whose names begin with ".").
-
-=item * B<--ePad> I<num>
-
-With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
-The pad character used can be controlled via I<--ePadChar>.
-
-This can be useful, among other things, for normalizing the length of
-embedded numbers.
-The padding is applied to the right hand side as a whole:
-
-    renameFiles -epad 6 -e 's/([\d+])/$1/' *.foo
-
-This would, for example, rename F<zork37> to F<zork000037>.
-
-See also I<--pad>, which affects numbers appended to avoid conflicts
-while renaming.
-
-=item * B<--ePadChar> I<c>
-
-The character to use when padding right-hand sides with I<--ePad>. Default: "0".
-
-With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
-
-=item * B<--force>
-
-Overwrite conflicting output files with prejudice. Experimental.
-Is not intended to overwrite output directories.
-
-=item * B<--extChanges>
-Apply any I<--expr> changes to full filenames, including any file extensions,
-instead of to the basename excluding the extension.
-Experimental. See also I<--onlyExt>.
-
-=item * B<--expr> I<s/from/to> OR B<-e> I<s/from/to>
-
-Do the specified (Perl-style) regex change on filenames
-(all matches will be changed, not just the first).
-This change does not affect any filename extension, unless you
-also specify I<extChanges>.
-See also I<--ignoreCase>.
-
-=item * B<--ignoreCase> or I<-i>
-
-Add the "i" option to the regex change specified by I<--expr>,
-so the change ignores case distinctions.
-
-=item * B<--kmdAdd> I<itemName>
-
-Append to the filename, the specified item extracted from MacOS file-system
-metadata for the file (when available). Such items can be accessed by the
-shell command <mdfind>, and have names beginning C<kMDItem> (that prefix may
-be omitted when using this option). This option should be, but is not, repeatable.
-However, you can run C<renameFiles> multiple times to add one item at a time.
-
-The available items can be listed by using the I<--kmdList> option.
-
-=item * B<--kmdList>
-
-List all available items that can be specified for the I<--kmdadd>.
-
-=item * B<--lc>
-
-Force filenames entirely to lower-case.
-This does not affect extensions.
-
-=item * B<--onlyExt>
-Apply any I<--expr> changes to file extensions only (not to the
-basename, nor to the full name including the extension.
-Experimental. See also I<--extChanges>.
-
-=item * B<--pad> I<num>
-
-With I<--resolve>, left-pad the number to a minimum of I<num> digits.
-In case of name conflicts, padded numbers will be tried,
-from 0 up to 10**I<num>.
-If no filename in that range is available, the rename fails.
-
-<Note>: See also I<--ePad>, which can be used to pad the "to" size of a
-I<--expr> change to a certain size, and thus can be used to pad internal
-numbers within filenames.
-
-
-=item * B<--pull> I<n>
-
-Add the names of the I<n> containing directories into the filename proper,
-separated by the I<--separator> character (default "_").
-See also I<--ancestor> and I<--pullURI>.
-For example, with I<--pull 2> a file at
-
-    stuff/dax/ezri/pix/12.jpg
-
-would become
-
-    stuff/dax/ezri/pix/ezri_pix_12.jpg
-
-=item * B<--pullURI> I<n>
-
-Extract the URI from which the file was downloaded (Mac only,
-using the C<xattrs> command).
-Then add the names of the last I<n> directories from the URI (assuming
-it's a directory-style URI) into the filename proper
-(see also I<--ancestor> and I<--pull>, and the C<whereFrom> command).
-The directory names will be separated by the I<--separator> value
-(since leaving the "/" would typically be at least inconvenient).
-
-=item * B<--quiet> OR B<-q>
-Suppress most messages.
-
-=item * B<--recursive> OR B<-r>
-
-Runs through subdirectories, too. Experimental. See also I<--dirs>.
-
-=item * B<--resolve>
-
-If a rename leads to a conflict, suffix a serial-number. See also I<--pad>.
-Default.
-
-=item * B<--separator> I<s>
-
-Use I<s> (default "_") in place of any characters to be removed
-by I<--clean>, and to separate directory names prepended to
-the filename by I<--ancestor>, I<--pull>, etc.
-
-=item * B<--test> OR B<--dry-run>
-
-Run through and show what would be done, but don't actually rename anything.
-B<Note>: This is not a perfect test, since actual renaming of early files
-might produce conflicts later (which will not be noticed with I<--test>).
-
-=item * B<--uc>
-
-Force filenames entirely to upper-case.
-This does not affect extensions.
-
-=item * B<--unescapeURI>
-
-Expand %xx special characters (such as used in URIs).
-This functionality is also available by itself, with the
-separate command C<unescapeURI>.
-
-=item * B<--unroman>
-
-Find roman numerals within filenames and convert them to Arabic numerals
-(subject also to I<--pad>).
-Roman numerals are defined (too loosely) as sequences of [ivxlcm], with
-out an adjacent letter on either side (enforced using regex \\b).
-A single match must be in consistent case, but either case is ok.
-Experimental. Requires installing C<Roman> modules
-(L<http://search.cpan.org/~chorny/Roman/lib/Roman.pm>).
-
-=item * B<--verbose> OR B<-v>
-Provide more detailed messages. Repeatable.
-In particular, show what each filename changes to as it progresses through the
-selected optional changes.
-
-=item * B<--version>
-
-Display version info and exit.
-
-=item * B<-x> OR B<--normalizeExtensions>
-
-Normalize a variety of extensions to 3-letter lower-case form
-(use I<--help-x> to display a list).
-See also I<--addExtension> and I<--extChanges>.
-
-=back
-
-
-
-=head1 Known bugs and limitations
-
-Unicode filenames are not thoroughly tested (and handling may depend on how
-your locale is set).
-
-Serial numbers with I<--resolve> may be placed after a file extension;
-the fix is little tested.
-
-There is no option to change the set of allowed characters with I<--clean>.
-
-There is no option to change the set of extension mappings used by I<-x>.
-
-Regexes may include a C</options> portion, but it is not used.
-
-May not yet do enough conflict resolution for case-insensitive file systems
-(it just checks I<-e> before renaming, which might work).
-
-Does not know about some backup conventions, such as foo~, #foo#, or
-C<emacs>'s ability to put backups into a separate directory:
-
-    (setq backup-directory-alist `(("." . "~/.saves")))
-
-I<--pull> doesn't do anything smart if there are
-embedded "//", "/./", or "/../" in any paths.
-
-It would be nice to be able to pull user- and group-names,
-image and/or file-system metadata, etc. into filenames. On Mac OS, you can
-get file-system metadata with commands like:
-
-    mdls [files]
-    mdls -name kMDItemWhereFroms [files]
-
-
-=head2 Security implications
-
-Because regex changes (see I<-e>) can include back- and variable-references
-on the right-hand side ($1, \1, etc.), the changes are carried out using an
-I<eval>(). This could lead to injection vulnerabilities.
-
-
-=head1 Related commands
-
-=head2 *nix commands
-
-The *nix C<rename> command is similar, and commonly available on Linux
-(but not on BSD and Mac OSX).
-However, it can only do shell wildcards (not full regular expressions).
-Some Linuces have a C<rename> that uses Perl regexes.
-However, the usual C<rename>s lack features such as
-I<--ancestor>, I<--bactrianize>, I<--camelize>, I<--clean>, I<--dates>,
-I<--moddates>, I<--resolve>, I<--pad>, I<--pull>, and I<-x>.
-
-Simple batch renames can also be done with the C<bash for> command:
-
-    for x in abc*; do
-        y=`echo "$x" | sed 's/foo/bar/g'`
-        echo "Renaming file '$x' to '$y'"
-        mv $x $y
-    done
-
-On Mac OS X you can get a file's source URI (if applicable) via:
-
-    xattr -p com.apple.metadata:kMDItemWhereFroms [file] | xxd -r -p
-
-or
-
-    mdls -name kMDItemWhereFroms [file]
-
-
-=head2 SJD commands
-
-C<whereFrom> -- Has a I<--pull> option that does renaming like
-the I<--pullURI> option here (by default it just displays the source URI).
-C<whereFrom> can also re-organize files into directory trees based on the paths
-in their source URIs.
-
-C<flattenDirs> -- Move all descendants of the current directory up into the current
-directory, prefixing the intermediate directory names to the filenames
-(separated by "_") instead of "/").
-
-C<groupfiles> -- Normalize file names and move files into sub-folders based on common
-parts of their names, ignoring any final digits.
-
-C<lowerExtension> -- Force file extensions to lower case.
-
-C<splitBigDir> -- Group files into several other directories, based on the
-first letter(s) of the files' names (or a few other things).
-
-C<renameOSISfiles> -- Specialty renaming for Biblical text in per-book files,
-to standardize and sequence-number the filenames.
-
-=head2 Other commands
-
-C<File Buddy> is a very nice Mac OS X utility that lets you do a wide range of
-things with groups of files, including some renaming, from a nice GUI. See
-L<http://www.skytag.com/filebuddy/en/index.html> if interested.
-
-
-=head1 Permissions
-
-This work by Steven J. DeRose is licensed under a Creative Commons
-Attribution-Share Alike 3.0 Unported License. For further information on
-this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
-
-For the most recent version, see L<http://www.derose.net/steve/utilities/>.
-
-=cut

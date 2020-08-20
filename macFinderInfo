@@ -1,47 +1,109 @@
 #!/usr/bin/perl -w
 #
-# 2011-04-05: Written by Steven J. DeRose, sderose@acm.org.
-# 2018-09-20: Handles paths containing spaces etc.
-#
-# http://www.filibeto.org/unix/macos/lib/dev/documentation/Carbon/Reference/Finder_Interface/finder_interface.pdf
-# (Extended)FolderInfo, D(X)Info, (Extended)FileInfo, F(X)Info
-# (Extended )Finder Flags...
-#
-# Re. creation date, which some *nix file systems don't have:
-#     https://unix.stackexchange.com/questions/91197/
-#     stat -c '%w
-#
-# To do:
-#     Option to get *all* xattr data, and/or to check kMDItemWhereFroms (see xattr -l,
-#         but chop trailing nulls, decode dates, etc.
+# 2011-04-05: macFinderInfo. Written by Steven J. DeRose.
 #
 use strict;
 use Getopt::Long;
+use Encode;
+#use alogging;
+use XmlTuples;
 
-use alogging;
+our %metadata = (
+    'title'        => "macFinderInfo",
+    'rightsHolder' => "Steven J. DeRose",
+    'creator'      => "http://viaf.org/viaf/50334488",
+    'type'         => "http://purl.org/dc/dcmitype/Software",
+    'language'     => "Perl 5.18",
+    'created'      => "2011-04-05",
+    'modified'     => "2020-07-13",
+    'publisher'    => "http://github.com/sderose",
+    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+);
+our $VERSION_DATE = $metadata{'modified'};
 
-my $version = "2018-09-20";
+use Cwd 'abs_path';
+(my $thisPath = abs_path($0)) =~ s|/[^/]*$||;
 
-my $quiet         = 0;
-my $verbose       = 0;
+=pod
 
+=head1 Usage
 
-###############################################################################
-#
-Getopt::Long::Configure ("ignore_case");
-my $result = GetOptions(
-    "h|help"                  => sub { system "perldoc $0"; exit; },
-    "q!"                      => \$quiet,
-    "v+"                      => \$verbose,
-    "version"                 => sub {
-        die "Version of $version, by Steven J. DeRose.\n";
-    }
-    );
+finderInfo [options] files
 
-($result) || die "Bad options.\n";
+Extract and diplay the 'finderInfo' for a given file, mostly using C<xattr>.
 
 
-###############################################################################
+=head1 Options
+
+(prefix 'no' to negate where applicable)
+
+=over
+
+=item * B<--listKeys>
+
+Show a list of common information items. For more details, see C<spotlite> or
+L[https://developer.apple.com/documentation/coreservices/file_metadata/mditem/file_system_metadata_attribute_keys].
+
+=item * B<--quiet> OR B<-q>
+
+Suppress most messages.
+
+=item * B<--toHex>
+
+Try to make hex values more readable.
+
+=item * B<--verbose> OR B<-v>
+
+Add more messages (repeatable).
+
+=item * B<--version>
+
+Show version info and exit.
+
+=back
+
+
+=head1 Known Bugs and Limitations
+
+
+=head1 Related Commands and Files
+
+F<macOsxSpotlightKeys.xsv>, C<XmlTuples.pm>.
+C<whereFrom>, C<pdfinfo>, C<file>, C<xattr>.
+
+
+=head1 To do
+
+Option to get *all* xattr data, and/or to check kMDItemWhereFroms (see xattr -l,
+but chop trailing nulls, decode dates, etc.
+
+Do something smarter with (Unicode?) strings.
+
+
+=head1 History
+
+2011-04-05: Written by Steven J. DeRose, sderose@acm.org.
+
+2018-09-20: Handles paths containing spaces etc.
+
+2020-07-13: New layout.
+
+2020-08-11": FIx decoding/display of utf-8 value, ";"-delimited list values.
+
+
+=head1 Ownership
+
+Copyright 2011-04-05 by Steven J. DeRose. This work is licensed under a
+Creative Commons Attribution-Share Alike 3.0 Unported License.
+For further information on this license, see
+L<https://creativecommons.org/licenses/by-sa/3.0>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities> or
+L<https://github.com/sderose>.
+
+=cut
+
+
 ###############################################################################
 #
 my %finderFlags = (
@@ -114,7 +176,9 @@ my %cAliasFile = (
     cIconFamily => 'ifam',
     );
 
+# These appear as 'com.apple.metadata:'...
 my %others = (
+    kMDItemDownloadedDate => 1,
     kMDItemWhereFroms => 1,
 );
 
@@ -122,13 +186,41 @@ my $fmt = "  %-16s = '%s'\n";
 
 
 ###############################################################################
+# Options
+#
+my $quiet         = 0;
+my $keyFile       = "$thisPath/macOsxSpotLightKeys.xsv";
+my $listKeys      = 0;
+my $toHex         = 0;
+my $verbose       = 0;
+
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "h|help"                  => sub { system "perldoc $0"; exit; },
+    "listKeys!"               => \$listKeys,
+    "q!"                      => \$quiet,
+    "toHex!"                  => \$toHex,
+    "v+"                      => \$verbose,
+    "version"                 => sub {
+        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+    }
+    );
+
+($result) || die "Bad options.\n";
+
+
 ###############################################################################
 # Main
 #
+if ($listKeys) {
+    listKeys();
+    exit;
+}
+
 (scalar(@ARGV)) || die "No file(s) specified.\n";
 
 while (my $file = shift) {
-    ($verbose) && warn "*** Starting file '$file'\n";
+    (!$quiet) && warn "\n*** Starting file '$file'\n";
     doOneFile($file);
 }
 
@@ -136,29 +228,80 @@ exit;
 
 
 ###############################################################################
-###############################################################################
 #
+sub listKeys {
+    my $foo = new XmlTuples();
+    $foo->open($keyFile) || die
+        "Couldn't open list of Spotlight keys from '$keyFile'.\n"; # FIX
+    my $keysRef = $foo->getAllAsHash("Key"); # FIX
+
+    warn("\nKey names start with 'kMDItem' (not shown below). Key file: \n");
+    warn("  $keyFile\n");
+    for my $k (sort(keys(%{$keysRef}))) {
+        (my $shortKey = $k) =~ s/^kMDItem//;
+        warn(sprintf("%-24s", $shortKey) .
+            " " . $keysRef->{$k}->{"Typ"} .
+            "\n" . wrap($keysRef->{$k}->{"Dsc"}, 4));
+    }
+    warn("Total keys known: " . scalar(keys(%{$keysRef})) . ".\n");
+}
+
+
+sub wrap {
+    my ($s, $indent, $width, $breakChar) = @_;
+    if (!$width)     { $width = $ENV{COLUMNS} || 80; }
+    if ($indent)     { $width -= $indent; }
+    if (!$breakChar) { $breakChar = " "; }
+
+    my $istring = " " x ($indent || 0);
+    my $buf = "";
+    for my $line (split(/[\r\n]+/, $s)) {
+        while ($line ne "") {
+            if (length($line) < $width) {
+                $buf .= $istring . $line . "\n";
+                $line = ''; last;
+            }
+            my $lastShadow = rindex($line, $breakChar, $width);
+            if ($lastShadow < 0) {  # no place to break
+                $buf .= $istring . substr($line, 0, $width) . "\n";
+                $line = (length($line) > $width) ?
+                    substr($line, $width) : $line = '';
+            }
+            else {
+                $buf .= $istring . substr($line, 0, $lastShadow) . "\n";
+                $line = substr($line, $lastShadow+1);
+            }
+        }
+    }
+    return($buf);
+} # wrap
+
+
 sub doOneFile {
     my ($file) = @_;
     my @attrNames = `xattr '$file'`;
 
     for my $name (@attrNames) {
-	chomp $name;
-	my $cmd = "xattr -p $name '$file'";
-	my $val = `$cmd`;
-	print "\nName: '$name'\n";
-	if (" $val" =~ m/^(\s[0-9A-F][0-9A-F])+\s*$/s) {
-	    print "Str: '" . x2str($val) . "'\n";
-	}
-	else {
-	    print "Raw: [\n$val\n]\n";
-	}
+        chomp $name;
+        my $cmd = "xattr -p $name '$file'";
+        my $val = `$cmd`;
+        print "  '$name'\n";
+        if ($val =~ m/;.*;/) {
+            print "    =(array?): [\n";
+            chomp $val;
+            my @entries = split /;/, $val;
+            print "      " . join(";\n      ", @entries) . "\n    ]\n";
+        }
+        elsif (" $val" =~ m/^(\s[0-9A-F][0-9A-F])+\s*$/s) {
+            print "    =(string): '" . x2str($val) . "'\n";
+        }
+        else {
+            print "    =(raw): ###$val###\n";
+        }
     }
 }
 
 
-
-###############################################################################
 ###############################################################################
 #
 BEGIN {
@@ -181,9 +324,12 @@ BEGIN {
 sub x2str { # Doesn't handle utf8 or ucs2
     my ($s) = @_;
     my $buf = "";
-    while ($s =~ m/\s*([0-9a-f][0-9a-f])/ig) {
-	my $c = chr(hex("0x".$1));
-        $buf .= $c;
+    Encode::decode('utf8', $s);
+    if ($toHex) {
+        while ($s =~ m/\s*([0-9a-f][0-9a-f])/ig) {
+	        my $c = chr(hex("0x".$1));
+            $buf .= $c;
+        }
     }
     return($buf);
 }
@@ -192,59 +338,3 @@ sub x2int {
     my ($s) = @_;
     return(hex("0x".$s));
 }
-
-
-###############################################################################
-###############################################################################
-#
-
-=pod
-
-=head1 Usage
-
-finderInfo [options] files
-
-Extract and diplay the 'finderInfo' for a given file, mostly using C<xattr>.
-
-*** Should add kMDItemWhereFroms (URI of downloaded file).
-
-
-=head1 Options
-
-(prefix 'no' to negate where applicable)
-
-=over
-
-=item * B<--quiet> OR B<-q>
-Suppress most messages.
-
-=item * B<--verbose> OR B<-v>
-Add more messages (repeatable).
-
-=item * B<--version>
-
-Show version info and exit.
-
-=back
-
-
-=head1 Known Bugs and Limitations
-
-
-=head1 Related Commands and Files
-
-F<macOsxSpotlightKeys.xsv>
-C<whereFrom>
-C<pdfinfo>
-C<file>
-C<xattr>
-
-=head1 Ownership
-
-This work by Steven J. DeRose is licensed under a Creative Commons
-Attribution-Share Alike 3.0 Unported License. For further information on
-this license, see http://creativecommons.org/licenses/by-sa/3.0/.
-
-For the most recent version, see http://www.derose.net/steve/utilities/.
-
-=cut
