@@ -138,14 +138,11 @@ if __name__ == "__main__":
 
     def processOptions():
         try:
-            from MarkupHelpFormatter import MarkupHelpFormatter
-            formatter = MarkupHelpFormatter
+            from BlockFormatter import BlockFormatter
+            parser = argparse.ArgumentParser(
+                description=descr, formatter_class=BlockFormatter)
         except ImportError:
-            formatter = None
-        parser = argparse.ArgumentParser(
-            description=descr, formatter_class=formatter,
-            epilog="(see also 'perldoc "+sys.argv[0]+"')"
-        )
+            parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
             "--color",            action='store_true',
