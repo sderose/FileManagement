@@ -1,41 +1,28 @@
 #!/usr/bin/env python
 #
 # lstimes
-#
-# 2016-02-05: Written. Copyright by Steven J. DeRose.
-# 2016-02-05, 2019-10-29: Lint.
-#
-# To do:
-#     INTEGRATE WITH 'lss' and maybe 'lsoutline'.
+# 2016-02-05: Written by Steven J. DeRose.
 #
 from __future__ import print_function
 import sys, os, argparse
-#import re
 import stat
 import pwd
-#import grp
 
-from alogging import ALogger
-from MarkupHelpFormatter import MarkupHelpFormatter
-
-lg = ALogger()
-
-__version_date__ = "2019-10-29"
 __metadata__ = {
-    'creator'      : "Steven J. DeRose",
-    'cre_date'     : "2016-02-05",
-    'language'     : "Python 2.7.6",
-    'version_date' : "2016-02-05",
-    'src_date'     : "$LastChangedDate$",
-    'src_version'  : "$Revision$",
+    'title'        : "lstimes",
+    'rightsHolder' : "Steven J. DeRose",
+    'creator'      : "http://viaf.org/viaf/50334488",
+    'type'         : "http://purl.org/dc/dcmitype/Software",
+    'language'     : "Python 3.7",
+    'created'      : "2016-02-05",
+    'modified'     : "2020-08-23",
+    'publisher'    : "http://github.com/sderose",
+    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
+__version__ = __metadata__['modified']
 
-###############################################################################
-#
-def processOptions():
-    parser = argparse.ArgumentParser(
-        description="""
 
+descr="""
 =head1 Description
 
 Show lots more information about a file than ls does.
@@ -46,19 +33,44 @@ C<ls>, C<stat -x>, C<file>.
 
 =head1 Known bugs and Limitations
 
-=head1 Licensing
+=head1 History
 
-Copyright 2015 by Steven J. DeRose. This script is licensed under a
+* 2016-02-05: Written by Steven J. DeRose.
+* 2016-02-05, 2019-10-29: Lint.
+* 2020-08-23: layout, fix report format.
+
+=head1 To do
+
+* INTEGRATE WITH 'lss' and maybe 'lsoutline'.
+
+=Rights=
+
+Copyright 2016-02-05 by Steven J. DeRose. This work is licensed under a
 Creative Commons Attribution-Share-alike 3.0 unported license.
-See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
+For further information on this license, see
+[https://creativecommons.org/licenses/by-sa/3.0].
+
+For the most recent version, see [http://www.derose.net/steve/utilities]
+or [https://github.com/sderose].
 
 =head1 Options
-        """,
-        formatter_class=MarkupHelpFormatter
-    )
-    parser.add_argument(
-        "--color",  # Don't default. See below.
-        help='Colorize the output.')
+"""
+
+
+def warn(lvl, msg):
+    if (args.verbose >= lvl): sys.stderr.write(msg+"\n")
+
+
+###############################################################################
+#
+def processOptions():
+    try:
+        from BlockFormatter import BlockFormatter
+        parser = argparse.ArgumentParser(
+            description=descr, formatter_class=BlockFormatter)
+    except ImportError:
+        parser = argparse.ArgumentParser(description=descr)
+
     parser.add_argument(
         "--quiet", "-q",      action='store_true',
         help='Suppress most messages.')
@@ -66,7 +78,7 @@ See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
         "--verbose", "-v",    action='count',       default=0,
         help='Add more messages (repeatable).')
     parser.add_argument(
-        "--version", action='version', version=__version_date__,
+        "--version", action='version', version=__version__,
         help='Display version information, then exit.')
 
     parser.add_argument(
@@ -75,10 +87,6 @@ See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
         help='Path(s) to input file(s)')
 
     args0 = parser.parse_args()
-    lg.setVerbose(args0.verbose)
-    if (args0.color == None):
-        args0.color = ("USE_COLOR" in os.environ and sys.stderr.isatty())
-    lg.setColors(args0.color)
     return(args0)
 
 
@@ -87,17 +95,16 @@ See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
 def tryOneItem(path):
     """Try to open a file (or directory, if -r is set).
     """
-    lg.hMsg(1, "Starting item '%s'" % (path))
+    warn(1, "Starting item '%s'" % (path))
     recnum = 0
     if (not os.path.exists(path)):
-        lg.error("Couldn't find '%s'." % (path), stat="cantOpen")
+        sys.stderr.write("Couldn't find '%s'.\n" % (path), stat="cantOpen")
     elif (os.path.isdir(path)):
-        lg.bumpStat("totalDirs")
         if (args.recursive):
             for child in os.listdir(path):
                 recnum += tryOneItem(os.path.join(path,child))
         else:
-            lg.vMsg(0, "Skipping directory '%s'." % (path))
+            warn(0, "Skipping directory '%s'." % (path))
     else:
         doOneFile(path)
     return(recnum)
@@ -109,14 +116,12 @@ def getFileFlagChar(path):
     if (os.path.isdir(path)): return("/")
     return("")
 
-FMT = "%1s%9s%1s %3d %8s %6s %16s %16s %16s %s"
+FMT = "%9s%1s %3d %8s %6s %6s %16s %16s %16s %16s %1s %s"
 def printHeader():
-    fields = [ ]
-
     print(FMT %
-        ('dir', 'per', 'lnk', 'eh',
+        ('per', 'lnk', 'eh',
          'usr', 'grp', 'sz',  'ct',
-         'mt',  'at',  'nm',  'flag'))
+         'mt',  'at',  'nm',  'flag', 'dir'))
     return
 
 def doOneFile(path):
@@ -124,11 +129,11 @@ def doOneFile(path):
     """
     s = os.stat(path)  # follow_symlinks?
     mode = s.st_mode	# protection bits,
-    ino = s.st_ino	# inode number,
-    dev = s.st_dev	# device,
-    nl  = s.st_nlink	# number of hard links,
+    #ino = s.st_ino	# inode number,
+    #dev = s.st_dev	# device,
+    #nl  = s.st_nlink	# number of hard links,
     uid = s.st_uid	# user id of owner,
-    gid = s.st_gid	# group id of owner,
+    #gid = s.st_gid	# group id of owner,
     sz  = s.st_size	# size of file, in bytes,
     at  = s.st_atime	# time of most recent access,
     mt  = s.st_mtime	# time of most recent content modification,
@@ -147,24 +152,19 @@ def doOneFile(path):
     nm  = os.path.basename(path)
     flag = getFileFlagChar(path)
 
-    filemode = stat.filemode(mode)
+    filemode0 = stat.filemode(mode)
     print(FMT %
-        (dirName, filemode, lnk, eh, usr, grp, sz, ct, mt, at, nm, flag))
+        (filemode0, lnk, eh, usr, grp, sz, ct, mt, at, nm, flag, dirName))
 
-###############################################################################
+
 ###############################################################################
 # Main
 #
 args = processOptions()
 
 if (len(args.files) == 0):
-    lg.error("No files specified....")
+    warn(0, "No files specified....")
     sys.exit()
 
 for f in (args.files):
-    lg.bumpStat("totalFiles")
     doOneFile(f)
-
-if (not args.quiet):
-    lg.vMsg(0,"Done.")
-    lg.showStats()

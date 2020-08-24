@@ -1,43 +1,31 @@
 #!/usr/bin/env python
 #
 # bigDirTimer.py
-#
-# 2016-06-21: Written. Copyright by Steven J. DeRose.
-# Creative Commons Attribution-Share-alike 3.0 unported license.
-# See http://creativecommons.org/licenses/by-sa/3.0/.
-#
-# To do:
+# 2016-06-21: Written by Steven J. DeRose.
 #
 from __future__ import print_function
 import sys, os, argparse
 from time import time
 
-#import pudb
-#pudb.set_trace()
-
-#from sjdUtils import sjdUtils
 from alogging import ALogger
-from MarkupHelpFormatter import MarkupHelpFormatter
 
-#su = sjdUtils()
 lg = ALogger()
 
-__version__ = "2016-06-21"
 __metadata__ = {
-    'creator'      : "Steven J. DeRose",
-    'cre_date'     : "2016-06-21",
-    'language'     : "Python 2.7.6",
-    'version_date' : "2016-06-21",
-    'src_date'     : "$LastChangedDate$",
-    'src_version'  : "$Revision$",
+    'title'        : "bigDirTimer",
+    'rightsHolder' : "Steven J. DeRose",
+    'creator'      : "http://viaf.org/viaf/50334488",
+    'type'         : "http://purl.org/dc/dcmitype/Software",
+    'language'     : "Python 3.7",
+    'created'      : "2016-06-21",
+    'modified'     : "2020-08-23",
+    'publisher'    : "http://github.com/sderose",
+    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
+__version__ = __metadata__['modified']
 
-###############################################################################
-#
-def processOptions():
-    parser = argparse.ArgumentParser(
-        description="""
 
+descr = """
 =head1 Description
 
 Create a test directory, and fill it with more and more files
@@ -57,16 +45,29 @@ Other than requiring that the directory be newly created on startup,
 this script does nothing to avoid caching, garbage collection, optimization,
 or confounds from other processes.
 
-=head1 Licensing
+=Rights=
 
-Copyright 2015 by Steven J. DeRose. This script is licensed under a
+Copyright 2016-06-21 by Steven J. DeRose. This work is licensed under a
 Creative Commons Attribution-Share-alike 3.0 unported license.
-See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
+For further information on this license, see
+[https://creativecommons.org/licenses/by-sa/3.0].
+
+For the most recent version, see [http://www.derose.net/steve/utilities]
+or [https://github.com/sderose].
 
 =head1 Options
-        """,
-        formatter_class=MarkupHelpFormatter
-    )
+"""
+
+###############################################################################
+#
+def processOptions():
+    try:
+        from BlockFormatter import BlockFormatter
+        parser = argparse.ArgumentParser(
+            description=descr, formatter_class=BlockFormatter)
+    except ImportError:
+        parser = argparse.ArgumentParser(description=descr)
+
     parser.add_argument(
         "--access",           type=str, default='listdir',
         choices=[ 'listdir', 'openall', ],
@@ -109,7 +110,6 @@ See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
     return(args0)
 
 
-###############################################################################
 ###############################################################################
 # Main
 #
