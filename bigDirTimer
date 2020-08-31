@@ -6,6 +6,7 @@
 from __future__ import print_function
 import sys, os, argparse
 from time import time
+import shutil
 
 from alogging import ALogger
 
@@ -116,13 +117,14 @@ def processOptions():
 args = processOptions()
 
 if (not args.files):
-    args.files = [ 'bigDirTimerData' ]
+    args.files = [ '/tmp/bigDirTimerData' ]
 
 dirName = args.files[0]
 try:
     os.mkdir(dirName)
 except OSError as e:
     lg.fatal("Cannot create directory '%s':\n    %s" % (dirName, e))
+    sys.exit()
 
 nFiles = 1
 
@@ -156,5 +158,6 @@ while (nFiles<=args.max):
     nFiles *= 2
 
 if (not args.quiet):
-    print("Done. Remember to delete '%s' if desired." % (dirName))
+    print("Done. Deleting dir '%s'...." % (dirName))
+    shutil.rmtree(dirName)
     lg.showStats()
