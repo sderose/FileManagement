@@ -1,0 +1,655 @@
+#!/usr/bin/perl -w
+#
+# emultiple: Edit a set of related files in tiled windows.
+# 2007-06-06: Written by Steven J. DeRose.
+#
+use strict;
+use Getopt::Long;
+
+our %metadata = (
+    'title'        => "emultiple",
+    'rightsHolder' => "Steven J. DeRose",
+    'creator'      => "http://viaf.org/viaf/50334488",
+    'type'         => "http://purl.org/dc/dcmitype/Software",
+    'language'     => "Perl 5.18",
+    'created'      => "2007-06-06",
+    'modified'     => "2020-09-05",
+    'publisher'    => "http://github.com/sderose",
+    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+);
+our $VERSION_DATE = $metadata{'modified'};
+
+=pod
+
+=head1 Usage
+
+emultiple [options] [file...] [cvs-version-numbers]
+
+Try to edit several 'versions' of a given file, typically for comparison.
+These can be actual version-control-system version (such as from svn or git),
+or intermediate forms of a file as it passes through some dataflow (such as
+txt to HTML to tidy'd HTML to XML and on through XSLT; or whatever).
+
+The files are displayed in tiled windows.
+You can also scroll all the files to a line number or a found string (the
+latter is probably more useful, since line numbers are relatively transient).
+
+=head2 Note
+
+The script displays the process id for each editor it starts up.
+After opening them, it waits rather than exiting.
+You can type 'k' (and RETURN) to kill them all, or just RETURN to exit the
+script without killing the editor processes.
+This makes it easier to kill many editor windows, but be sure to save first
+if you have changes to save.
+You can make the script exit without the prompt and wait, with I<--quiet>.
+
+
+=head1 Options
+
+(ones without arguments can also be prefixed C<no-> to turn off):
+
+=over
+
+=item * B<--base>
+
+Base URI to prefix to I<--uri> values
+
+=item * B<--colors> I<'...'>
+
+Replace the default list of X colors to use.
+Else if environment variable \$EMULTIPLE_COLORS is set,
+those colors are used.
+
+=item * B<--cvs>
+
+Give one file and any number of cvs version numbers for it (untested).
+Those versions are retrieved from CVS and displayed.
+
+=item * B<--define>
+
+Edit, but print only the C<kill> command you would use to kill all the windows
+(showing all their process IDs).
+Thus, an alias can do C<emultiple> and also define such a command:
+
+    e() {
+        x=`emultiple -define ... \$*`
+        alias kmultiple=\"\$x\"
+    }
+
+On error, an C<echo> command is returned with a message.
+
+=item * B<--diff>
+
+Run C<diff> I<--bq> on successive file-pairs and report.
+
+=item * B<--dirlist> I<file directory...>
+
+Open the named file from each listed directory. If you have a workflow
+where version of "the same" file get put into a directory for each stage,
+you may want to define an alias or environment variable to fill in all those
+directories for you, then just give the specific filename each itme.
+
+=item * B<--editor> I<cmdName>
+
+Use the specified editor. Otherwise, uses your \$EDITOR,
+or defaults to C<emacs> if that's not set.
+
+=item * B<--even>
+
+If there is an odd number of files, don't center the middle one
+(useful if you're using two side-by-side monitors).
+
+=item * B<--find> I<str>
+
+Scroll to the first occurrence of I<str> in each file (cf. I<--line>).
+
+=item * B<--line> I<n>
+
+Open all files to line I<n> (conflicts with I<--find>).
+
+=item * B<--list>
+
+Open the files listed on the command line.
+
+=item * B<--noext> I<s>
+
+Exclude files with extension I<s> (don't give the '.'). Repeatable.
+
+=item * B<--norm>
+
+Run a normalizer on the files first (currently C<normalizeXML -i>).
+
+=item * B<--normopts> I<opts>
+
+Pass options to the specified normalizer.
+
+=item * B<--quiet> OR B<-q>
+
+Suppress most messages, including the 'kill' prompt at the end.
+
+=item * B<--test> OR B<--dry-run>
+
+Find and report files, but don't actually edit (implies I<-v>).
+
+=item * B<--topHalf>
+
+Only use the top 1/2 of the screen height.
+
+=item * B<--uri> I<uri>
+
+Attempt to retrieve from Web and show that, too. Repeatable.
+
+=item * B<--verbose>
+
+Add more detailed messages.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=item * B<-2> OR B<--two>
+
+Force 2 rows of wider windows. This will happen automatically
+if less than 60 columns per window would fit in one row.
+
+=back
+
+
+=head1 Geometry adjustments
+
+Doesn't know if you changed your editor fonts;
+you can tell it via these additional options
+(if not specified, will try to get information via C<xdpyinfo>):
+
+=over
+
+=item * B<--colpix 7>
+
+How many pixels wide is a character?
+
+=item * B<--rowpix 14>
+
+How many pixels high is a line?
+
+=item * B<--sideBorders 48>
+
+Pixels taken up by left+right borders?
+
+=item * B<--topBorders 80>
+
+Pixels taken up by window header
+
+=item * B<--topspace 50>
+
+How far down to place top of windows.
+
+=item * B<--dwidth n>
+
+Screen pixels X
+
+=item * B<--dheight n>
+
+Screen pixels Y
+
+=back
+
+
+=head1 Known bugs and limitations
+
+I<--html> is having some problems at the moment.
+
+Can't do more than 2 rows of windows.
+
+Does not erase F</tmp> files used with I<--norm>.
+
+
+=head1 Related Commands
+
+C<xdpyinfo> provides information about your display dimensions.
+
+Editors supported include emacs, bbedit, vim, and nedit.
+
+
+=head1 History
+
+  2007-06-06: Written by Steven J. DeRose.
+  2007-06-15 sjd: Add --dynamic, --html, --dlinks, multi-row.
+  2007-06-21 sjd: Add --rend.
+  2007-09-17 sjd: Add --index --list --article.
+  2007-09-19 sjd: Add --colors $EMULTIPLE_COLORS --dirlist --find --line --indent.
+  2007-10-22 sjd: Add --cvs, strict, shift.
+  2007-10-31 sjd: Getopt.
+  2007-11-13 sjd: Add --define, add sub fail(), fix --find. Support vi/vim.
+  2007-12-06 sjd: Test for -x normalizer. Avoid bxml duplicates.
+  2007-12-19 sjd: Change URI for --html.
+  2007-12-20 sjd: Call make-aid-map if needed. Add --topHalf.
+  2007-12-31 sjd: Fix bug finding indented files. Add --ingest.
+  2008-01-10 sjd: Add --noext option. Start --diff option.
+  2008-08-12 sjd: Clean up, remove site-dependencies.
+  2009-05-26 sjd: More fixing.
+  2012-09-12, 2013-12-20, 2015-02-10: Clean up. --nedit -> --editor.
+  2015-09-28: add bbedit support, try to get working again.
+
+
+=head1 To do
+
+  Make it use frames for emacs.
+  Make --define also put in commands to clean up /tmp files.
+  Option to get display dimensions from env variables.
+  Add more editors: TextWrangler, TextEdit, gedit, Coda, TextMate?
+  Can we kill the editors more easily by killing the process group?
+See http://perldoc.perl.org/perlipc.html
+
+
+=head1 Rights
+
+This work by Steven J. DeRose was first written for PubMedCentral at the
+US National Institutes of Health, and is therefore in the public domain.
+I (Steven J. DeRose) have made extensive changes since, which I
+hereby dedicate to the public domain.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities> or
+L<https://github.com/sderose>.
+
+=cut
+
+
+# Stuff for color
+#
+my $dftColorList = "/usr/X11/lib/X11/rgb.txt"; # Currently unused
+my $dftcolorstring = "bisque2 pink1 goldenrod1 LemonChiffon DarkSeaGreen1 "
+    . "PowderBlue LightSlateBlue grey50 Ivory";
+my $colorstring = (defined $ENV{EMULTIPLE_COLORS}) ? $ENV{EMULTIPLE_COLORS}:"";
+if ($colorstring eq "") {
+    $colorstring = $dftcolorstring;
+}
+my $dft_dheight = 800;
+my $dft_dwidth = 1200;
+
+# Stuff for normalizing
+#
+my $dft_normOpts = " -i --btags --noparam";
+my $normalizer = "normalizeXML";
+
+
+###############################################################################
+# Options
+#
+my $base        = "";       # base URI for use with curl
+my $cvs         = 0;        # Retrieve CVS revisions to show?
+my @cvsRevs     = ();       # List of which CVS revisions
+my $define      = "";       # Return needed 'kill' command so aliases can grab it
+my $diff        = 0;        # Run 'diff' on each file w/ next file?
+my $dheight     = 0;
+my $dwidth      = 0;
+my $editor      = $ENV{EDITOR} || "emacs";
+my $even        = 0;        # Force geometry as if even number of windows?
+my $find        = "";       # String to search for in all files.
+my $help        = 0;        # Show help?
+my $line        = 0;        # Open to this line number.
+my $listOfDirs  = 0;        # Use filename + list of dirs from command line?
+my $listOfFiles = 0;        # Use list of files from command line?
+my @noext       = ();       # List of extensions to exclude
+my $norm        = 0;        # Normalize the files before editing?
+my $normOpts    = $dft_normOpts;
+my $quiet       = 0;
+my $test        = 0;        # Actually launch editor?
+my $topHalf     = 0;
+my $twoRows     = 0;        # Force 2 rows?
+my @uri         = ();
+my $verbose     = 0;        # Extra messages?
+
+# Geometry options
+#
+my $colpix      = 7;        # How many pixels wide is a character?
+my $rowpix      = 14;       # How many pixels high is a line?
+my $sideBorders = 48;       # Pixels taken up by left+right borders?
+my $topBorders  = 80;       # Pixels taken up by window header
+my $topSpace    = 50;       # How far down to place top of windows.
+
+
+my %getoptHash = (
+    "2|two!"               => \$twoRows,
+    "base=s"               => \$base,
+    "colors=s"             => \$colorstring,
+    "colpix=i"             => \$colpix,
+    "cvs!"                 => \$cvs,
+    "define!"              => \$define,
+    "diff!"                => \$diff,
+    "dirlist!"             => \$listOfFiles,
+    "dheight=i"            => \$dheight,
+    "dwidth=i"             => \$dwidth,
+    "even!"                => \$even,
+    "find=s"               => \$find,
+    "h|help|?"             => sub { system "perldoc $0"; exit; },
+    "line=i"               => \$line,
+    "list!"                => \$listOfFiles,
+    "editor=s"             => \$editor,
+    "noext=s"              => \@noext,
+    "norm!"                => \$norm,
+    "normOpts=s"           => \$normOpts,
+    "q|quiet!"             => \$quiet,
+    "rowpix=i"             => \$rowpix,
+    "sideborders=i"        => \$sideBorders,
+    "test|dry-run|dryrun!" => \$test,
+    "top|topHalf!"         => \$topHalf,
+    "topborders=i"         => \$topBorders,
+    "topspace=i"           => \$topSpace,
+    "uri=s"                => \@uri,
+    "v|verbose+"           => \$verbose,
+    "version"            => sub {
+        fail("Version of $VERSION_DATE, by Steven J. DeRose.\n");
+    },
+    );
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(%getoptHash);
+
+
+###############################################################################
+# Option dependencies and validation
+#
+($result) || fail("Bad options.\n");
+
+if ($test)   { $verbose = 1; }
+
+($find ne "" && $line ne 0) &&
+    warn "-find ($find) conflicts with -line ($line).\n";
+
+if ($norm) {
+    (-x $normalizer) ||
+        die "Cannot find utility to implement -norm at '$normalizer'.\n";
+}
+
+my @colors = split(/\s+/,$colorstring);
+
+my $mainArg = $ARGV[0];
+
+
+###############################################################################
+# Locate all the files and make a list in @files.
+#
+my @files = ();
+
+# If they gave -aiid instead of a filename, go find a file.
+if (scalar @uri) {
+    fail("-uri is not yet implemented.\n");
+    #curl the HTMLs
+}
+elsif ($cvs) {                                       # CVS versions
+    my $baseFile = shift;
+    (-f $baseFile) || fail("Can't find CVS file '$baseFile'.\n");
+    (-d "CVS") || fail("This is not a CVS directory.\n");
+    my $tloc = "/tmp/emultiple" . int(rand(100000));
+    system "mkdir $tloc";
+    foreach my $r (@ARGV) {
+        my $fn = "$tloc/$baseFile" . "_$r";
+        ($verbose) && warn "Retrieving rev '$r' of file '$baseFile'.\n";
+        system "cvs update -p -r $r $baseFile >$fn"; # trap error?
+        push @files, $fn;
+    }
+}
+elsif ($listOfFiles) {                               # user's list of files
+    for my $f (@ARGV) {
+        if (! -f "$f") {
+            fail("Cannot find file '$f'.\n");
+        }
+        else {
+            push @files, "$f";
+        }
+    }
+}
+elsif ($listOfDirs) {                                # user's list of dirs
+    my $fname = shift;
+    ($fname =~ m|/|) &&
+        fail("First arg should be just a filename, not '$fname'.\n");
+    for my $d (@ARGV) {
+        if (! -d "$d") { warn "Cannot find directory '$d'.\n"; }
+        elsif (! -f "$d/$fname") { warn "Cannot find file '$d/$fname'.\n"; }
+        else { push @files, "$d/fname"; }
+    }
+}
+
+# Delete any files with extension the user specified -noext for
+if (scalar(@noext) > 0) {
+    ($verbose) && warn "Initially found " . (scalar(@files)) . " files.\n";
+    for (my $f=0; $f<scalar(@files); $f++) {
+        for (my $x=0; $x<scalar(@noext); $x++) {
+            if ($files[$f] =~ m/\.$noext[$x]$/) {
+                delete $files[$f];
+                last;
+            }
+        }
+    }
+}
+
+
+###############################################################################
+# Now @files should point to all the right files
+#
+($verbose) && warn "Checking existence for " . (scalar(@files)) . " files.\n";
+my @files2 = ();
+for my $f (@files) {
+    if (! -f "$f") {
+        warn "Cannot find file '$f'.\n";
+    }
+    else {
+        ($verbose) && warn "Found file '$f'.\n";
+        push @files2, "$f";
+    }
+}
+@files = @files2;
+
+if ($verbose) {
+    warn "Files to show (total " . scalar(@files) . "):\n"
+        . "    " . join("\n    ",@files) . "\n";
+}
+
+# Bail out if there's nothing to do
+(scalar @files <= 0) &&
+    fail("No files found to work on.\n");
+
+
+# Diff them if asked
+if ($diff) {
+    for (my $i=1; $i<scalar(@files); $i++) {
+        my $cmd = "diff -bq $files[$i-1] $files[$i]";
+        warn "\n\nRunning: $cmd\n";
+        my $rc = system "$cmd";
+        ($quiet) || warn "******* Diff returned $rc.\n";
+    }
+}
+
+
+###############################################################################
+# Figure out display characteristics and what size windows we can make.
+#
+my $nwindows = scalar @files;
+if ($even && $nwindows%2) { $nwindows++; }
+
+if ($dwidth > 0 && $dheight > 0) {
+    ($verbose) &&
+        warn "Display size set to $dwidth x $dheight.\n";
+}
+#elsif ($ENV{DISPLAY}) {
+#}
+else {
+    ($verbose) &&
+        warn "Trying to find display size via 'xdpyinfo'.\n";
+    my $info = `xdpyinfo | grep 'dimensions:'`;
+    chomp $info;
+    $info =~ m/.*dimensions:\s+([0-9]+)x([0-9]+)\spixels/;
+    if ($1 && $2) {
+        $dwidth = $1; $dheight = $2;
+        ($verbose ) &&
+            warn "Your display is $dwidth wide by $dheight high.\n";
+    }
+    else {
+       ($quiet) || warn "Couldn't get screen dimensions from xdpyinfo.\n";
+        $dwidth = $dwidth; $dheight = $dft_dheight;
+    }
+}
+$dheight -= 20; # allow a bit for windows footer or mac menubar
+
+# Figure geometry parameters, first assuming one row of windows
+my $windowXsize = int($dwidth / $nwindows + 0.5);
+my $windowYsize = $dheight - $topSpace;
+if ($topHalf) { $windowYsize /= 2; }
+my $windowCols = int(($windowXsize - $sideBorders) / ($colpix+0.0) + 0.5);
+my $windowRows = int(($windowYsize - $topBorders ) / ($rowpix+0.0) + 0.5);
+
+# Recalculate for two rows if needed or requested
+if ($twoRows || $windowCols < 60) {
+    my $perrow = int((1+ (scalar @files)) / 2);
+    $windowXsize = int($dwidth / $perrow + 0.5);
+    $windowYsize = int($windowYsize / 2);
+    $windowCols = int(($windowXsize - $sideBorders) / ($colpix+0.0) + 0.5);
+    $windowRows = int(($windowYsize - $topBorders ) / ($rowpix+0.0) + 0.5);
+    ($verbose) &&
+        warn "Can fit $windowCols columns per window with 2 rows.\n";
+}
+
+($verbose) && warn "    Pane x $windowXsize pixels, $windowCols columns; "
+    . "y $windowYsize pixels, $windowRows rows.\n\n";
+
+
+###############################################################################
+# Start editing the files in nicely-arranged windows.
+#
+my $vcmd = "";     # weird special-case for vim -O option.
+my @pids = ();     # list of forked process ids
+my $x = 0;         # left edge of current window
+my $y = $topSpace; # top edge of current window
+
+for (my $i=0; $i<scalar @files; $i++) {
+    my $f = $files[$i];
+    ($verbose) && warn "Editing '$f'.\n";
+
+    # Bail out if just testing
+    ($test) && next;
+
+    # Set up the calculated window geometry
+    my $geom = "-geometry $windowCols" . "x$windowRows" . "+$x+$y";
+
+    # Are we supposed to scroll somewhere? Append '+' option.
+    my $scrollOption = "";
+    if ($line) {
+        $scrollOption = "+$line";
+    }
+    elsif ($find) {
+        my $fcmd = "grep -n -m 1 '$find' $f 2>/dev/null | sed 's/:.*\$//'";
+        my $fline = `$fcmd`; chomp $fline;
+        $fline -= 0;
+        ($verbose) && warn "    Searched for '$find': got line '$fline'.\n";
+        if ($fline > 0) {
+            $scrollOption = "+$fline";
+        }
+    }
+
+    # Assemble the editor startup commands
+    my $ecmd = ""; my $bg = 0;
+    if ($editor eq "emacs") {
+        $ecmd = "emacs -title $f $geom -bg $colors[$i] $scrollOption $f";
+        $bg = 0;
+    }
+    elsif ($editor eq "nedit") {
+        $ecmd = "nedit -wrap $geom -background $colors[$i] $scrollOption $f";
+        $bg = 1;
+    }
+    elsif ($editor eq "vim") {
+        # vim lacks -geometry options, but has -O feature for side-by-side...
+        if ($i==0) {
+            $ecmd = "vim -O " . (scalar @files) . " $f";
+        }
+        $bg = 1;
+    }
+    elsif ($editor eq "bbedit") {
+    }
+    else {
+        warn "Sorry, don't know \$EDITOR '$ENV{EDITOR}'. Trying...\n";
+        $ecmd = "$ENV{EDITOR} $f";
+    }
+
+    if (my $pid = fork) { # parent process
+        push @pids, $pid;
+        ($verbose) && warn "    Forked process ID $pid: '$ecmd'\n";
+    }
+    else { # child process only
+        exec "$ecmd" . ($bg ? " &":"");
+    }
+
+    # Shift to next window position
+    $x += $windowXsize;
+    if ($x > $dwidth - 10) {
+        $x = 0;
+        $y += $windowYsize;  # Calculate to clear first row
+    }
+} # for each file to edit
+
+# Give user a handy way out of all the editor sessions
+my $kcmd = "kill -9 " . join(" ", @pids);
+if ($define) { # so user can alias or otherwise save it.
+    print "kill -9 $kcmd\n";
+}
+else {
+    my $killed = 0;
+    if (!$quiet) {
+        warn "Type 'k' (and RETURN) when ready to kill all the editor processes,"
+            . " or anything else to exit without killing them.\n";
+        my $buf = "";
+        read STDIN, $buf, 1;
+        if ($buf eq "k") {
+            system $kcmd;
+            $killed = 1;
+        }
+    }
+    ($killed) ||
+        warn "\nTo kill the emacs processes, use: $kcmd\n";
+}
+
+exit;
+
+
+###############################################################################
+# Fetch an HTML version, via curl.
+#
+sub tryForHtml {
+    my $file = $_[0];
+    my $filelistref = $_[1];
+    ($verbose) &&
+        warn "tryForHtml: incoming filelist has " . scalar(@$filelistref)
+        . " items.\n";
+
+    # Assemble the URI
+    my $addr = "";
+    my $uri = "$base$addr";
+
+    # Curl the file down from the server
+    my $thtml = "/tmp/aid" . "$addr" . "_$file.html";
+    ($verbose) && warn "Trying to curl HTML from '$uri'...\n";
+    system "curl --silent --output $thtml $uri" ||
+        warn "Could not curl HTML from $uri.\n";
+    if (-f $thtml) {
+        my $csize = (-s $thtml);
+        ($verbose) && warn "curl result for HTML: '$thtml' (size $csize).\n";
+        push @$filelistref, $thtml;
+    }
+    else {
+        warn "No file found at '$thtml' after curl for URI '$uri'.\n";
+        return;
+    }
+} # tryForHtml
+
+
+###############################################################################
+# Exit on failure. If user set -define, give appropriate value to be aliased.
+#
+sub fail {
+    if ($define) {
+        print "echo 'emultiple failed: $_[0], so nothing to kill.'";
+        exit;
+    }
+    else {
+        die $_[0];
+    }
+}
