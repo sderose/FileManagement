@@ -7,18 +7,12 @@ import sys
 import os
 import re
 import argparse
-#import string
 import subprocess
 import stat
 
 PY2 = sys.version_info[0] == 2
 PY3 = sys.version_info[0] == 3
-if PY2:
-    string_types = basestring
-else:
-    string_types = str
 
-from sjdUtils import sjdUtils
 from alogging import ALogger
 from PowerWalk import isHidden, isBackup, isGenerated
 
@@ -29,7 +23,7 @@ __metadata__ = {
     'type'         : "http://purl.org/dc/dcmitype/Software",
     'language'     : "Python 3.7",
     'created'      : "2014-06-27",
-    'modified'     : "2020-08-21",
+    'modified'     : "2020-09-23",
     'publisher'    : "http://github.com/sderose",
     'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
@@ -48,10 +42,17 @@ Similar to `diff -r`, but more informative and perhaps faster.
 There are options to compare size, data, md5 checksum, and actual content;
 and to show the first differing lines.
 
+
 =Known bugs and limitations=
 
 Doesn't do anything special for binary files.
 See https://stackoverflow.com/questions/1446549/
+
+
+=Related commands=
+
+`diff`.  My `findDuplicateFiles`.
+
 
 =History=
 
@@ -62,10 +63,11 @@ See https://stackoverflow.com/questions/1446549/
 * 2018-10-16: Cleanup and refactor. Add MarkupHelpFormatter, --diffq.
 * 2020-06-10: Switch to PowerWalk.isBackup. New layout.
 * 2020-08-21: Fix handling of binary files and EOF conditions.
+* 2020-09-23: Drop sjdUtils.
 
 =To do=
 
-* Sync w/ findDuplicateFiles, and move normalizations to sjdUtils.
+* Sync w/ `findDuplicateFiles`, and move normalizations to `sjdUtils`.
 * Complain about links, zeros.
 * Options: ignore blank lines, --ignore-file-name-case, ctime, atime
 * Options:  svn/git status, first diff line?
@@ -74,7 +76,8 @@ See https://stackoverflow.com/questions/1446549/
 * Add interactive i/f: pause on diff and:
   copy > or < (and warn if newer or larger) (w/ backup options)
   run diff and ask again
-* Integrate rest of PowerWalk?
+* Integrate rest of `PowerWalk`?
+
 
 =Rights=
 
@@ -86,6 +89,7 @@ this license, see [http://creativecommons.org/licenses/by-sa/3.0].
 For the most recent version, see [http://www.derose.net/steve/utilities] or
 [https://github.com/sderose].
 
+
 =Options=
 """
 
@@ -95,6 +99,16 @@ same = differ = ignored1 = ignored2 = comment1 = comment2 = 0
 
 ###############################################################################
 #
+def normalizeXmlSpace(s):  # From sjdUtils.py
+    """Reduce runs of space, tab, linefeed, and cr to a single space, and
+    strip the same characters off start and end of a string.
+    """
+    if (s is None): return("")
+    s = re.sub(r'\s+',' ', s)
+    s = re.sub(r'^ ','', s)
+    s = re.sub(r' $','', s)
+    return(s)
+
 def pcols(theFile, diffInfo, color1="off", width=0, sep=""):
     """Print a one-line report about a file-difference.
     @param diffInfo: A string of keywords indicating what the difference is:
@@ -106,8 +120,8 @@ def pcols(theFile, diffInfo, color1="off", width=0, sep=""):
     ind = "    " * int(lg.MsgGet())
     msg = ind + sep.ljust(args.prefixWidth)
     if (args.color):
-        msg += su.colorize(color1, theFile.ljust(args.nameWidth))
-        msg += su.colorize("red", diffInfo)
+        msg += lg.colorize(color1, theFile.ljust(args.nameWidth))
+        msg += lg.colorize("red", diffInfo)
     else:
         msg += theFile.ljust(args.nameWidth)
         msg += diffInfo
@@ -158,8 +172,8 @@ def firstMismatch(path1, path2):
         if (rec1=='' and rec2==''): break
 
         if (args.b):
-            rec1 = su.normalizeXmlSpace(rec1)
-            rec2 = su.normalizeXmlSpace(rec2)
+            rec1 = normalizeXmlSpace(rec1)
+            rec2 = normalizeXmlSpace(rec2)
         if (args.ignoreCase):
             rec1 = rec1.lower()
             rec2 = rec2.lower()
@@ -190,12 +204,16 @@ def ignorableLine(rec):
     return False
 
 def filteredListdir(dpath):
+    """Remove undesired files from an os.listdir() list.
+    """
     ld = set(os.listdir(dpath))
+    ld2 = []
     for f in ld:
-        if (not args.hidden and isHidden(f)): ld.remove(f)
-        if (not args.backups and isBackup(f)):ld.remove(f)
-        if (not args.generated and isGenerated(f)):ld.remove(f)
-    return ld
+        if (not args.hidden and isHidden(f)): continue
+        if (not args.backups and isBackup(f)): continue
+        if (not args.generated and isGenerated(f)): continue
+        ld2.append(f)
+    return ld2
 
 def compareDirs(path1, path2):
     """Compare two directories, by recursing.
@@ -211,10 +229,10 @@ def compareDirs(path1, path2):
     p2 = os.path.abspath(path2)
     d2 = filteredListdir(p2)
 
-    dUnion = sorted(list(d1.union(d2)))
+    dUnion = sorted(list(set(d1).union(set(d2))))
 
     print("\n***Comparing directories:")
-    pcols(p1, p2, color1="green")
+    print("    %s\n    %s" % (p1, p2))
     print()
 
     nSubsDifferent = 0
@@ -440,9 +458,11 @@ if __name__ == "__main__":
         args0 = parser.parse_args()
         return args0
 
+    ###########################################################################
+    # Main
+    #
     args = processOptions()
 
-    su = sjdUtils()
     lg = ALogger(1)
 
     if (args.all):
@@ -450,7 +470,7 @@ if __name__ == "__main__":
 
     if (not args.color):
         args.color = ("USE_COLOR" in os.environ and sys.stderr.isatty())
-    su.setColors(args.color)
+    lg.setColors(args.color)
 
     if (not (args.size or args.time or args.md5 or args.diff)):
         lg.vMsg(0, "No file comparisons specified (--size --time --md5 --diff)")
@@ -467,7 +487,9 @@ if __name__ == "__main__":
         lg.vMsg("Can't find environment variable COLUMNS -- export it?")
         wid = 80
 
-    if (len(args.dirs) != 2):
+    if (len(args.dirs) != 2 or
+        not os.path.isdir(args.dirs[0]) or
+        not os.path.isdir(args.dirs[1])):
         lg.fatal("Specify exactly 2 directories.")
 
     rc0 = compareDirs(args.dirs[0], args.dirs[1])

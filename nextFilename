@@ -1,105 +1,134 @@
 #!/usr/bin/env python
 #
 # nextFilename.py
-#
 # 2014-11-04: Written by Steven J. DeRose.
-# 2015-02-06: Add --available, --width. Rename incrementFilename->nextFilename
-# 2018-04-18: lint.
-#
-# To do:
-#     Option to skip gaps.
 #
 from __future__ import print_function
 import sys, os, re
 import argparse
 #import string
 
-from MarkupHelpFormatter import MarkupHelpFormatter
-from alogging import ALogger
+__metadata__ = {
+    'title'        : "nextFilename",
+    'rightsHolder' : "Steven J. DeRose",
+    'creator'      : "http://viaf.org/viaf/50334488",
+    'type'         : "http://purl.org/dc/dcmitype/Software",
+    'language'     : "Python 3.7",
+    'created'      : "2014-11-04",
+    'modified'     : "2020-09-15",
+    'publisher'    : "http://github.com/sderose",
+    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
+}
+__version__ = __metadata__['modified']
 
-lg = ALogger(1)
 
-__version__ = "2018-04-18"
-
-
-###############################################################################
-# Process options
-#
-def processOptions():
-    parser = argparse.ArgumentParser(
-        description="""
-=head1 Description
+descr = """
+=Description=
 
 Generate the "next" or "next available" filename relative to one provided,
 by using (or adding) serial numbers within the name. For example,
 
-    nextFilename.py myFile0205.txt
+    nextFilename myFile0205.txt
 
 would return "myFile0206.txt"
 
 For each path provided as an argument:
-    Separate the path, filename, and extension
-    If there are no digits in the basename:
-        Generate the number "1".
-    Otherwise:
-        Locate and extract the last string of digits
-        Increment it
-    Pad the number to at least as many digits as the original or I<--width>
-    Re-insert (or append) the number in the basename
-    Re-assemble path, filename, and extension
-    Print the result
+    Separate the path, basename, and extension
+    N = final digits from the basename (default to 1)
+    Repeat forever:
+        newName = path + basename + N + '.' + extension
+            (exact form is determined by various options, like I<--width>)
+        if newName does not exist: break
+        N = N + 1
 
-If I<--available> is specified, such names will be generated with larger
+Unless I<--notest> is specified, such names will be generated with larger
 and larger numeric values inserted, until a name (path) is generated that
 does not already exist.
 
 
-=head1 Related commands
+=Related commands=
 
 C<rename>, C<renameFiles>
 
 
-=head1 Known bugs and limitations
+=Known bugs and limitations=
 
 It is possible that files with higher numbers exist, for example if
 there are gaps in the sequence of extant filenames.
 
 Existence is tested for
 the literal filename, including the exact number of 0s inserted as padding.
-Thus, "file01" and "file000000001" are not considered the same.
+Thus, "file01" and "file000000001" are not considered the same. It would be
+better to automatically find all variants, and even auto-set `--width`.
 
 Knows nothing about OS conventions such as "Copy 12 of X", etc.
 
 It is worth mentioning that many file-systems get slow if a single directory
-contains more than about 1,000 files.
+contains more than about 1,000 files (see `bigDirTimer` to test yours).
 
 
-=head1 Licensing
+=History=
 
-Copyright 2014-2015, Steven J. DeRose.
-Licensed under a Creative Commons
-Attribution-Share Alike 3.0 Unported License. For further information on
-this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+  2014-11-04: Written by Steven J. DeRose.
+  2015-02-06: Add --available, --width. Rename incrementFilename->nextFilename
+  2018-04-18: lint.
+  2020-09-15: New layout. Default to test existence.
 
-=head1 Options
+=To do
 
-""",
-        formatter_class=MarkupHelpFormatter
-    )
+* Option to skip gaps.
+
+
+=Rights=
+
+Copyright 2014-11-04 by Steven J. DeRose. This work is licensed under a
+Creative Commons Attribution-Share-alike 3.0 unported license.
+For further information on this license, see
+[https://creativecommons.org/licenses/by-sa/3.0].
+
+For the most recent version, see [http://www.derose.net/steve/utilities]
+or [https://github.com/sderose].
+
+
+=Options=
+
+"""
+
+
+###############################################################################
+# Options
+#
+def processOptions():
+    try:
+        from BlockFormatter import BlockFormatter
+        parser = argparse.ArgumentParser(
+            description=descr, formatter_class=BlockFormatter)
+    except ImportError:
+        parser = argparse.ArgumentParser(description=descr)
+
     parser.add_argument(
-        "--available",       action='store_true',
-        help='Keep counting until a non-existent path is found.')
+        "--maxTries",        type=int, default=100,
+        help='Only make this many tries before giving up.')
+
+    parser.add_argument(
+        "--mustBeAvailable", action='store_true', default=True,
+        help='Return the next name that does NOT yet exist.')
+    parser.add_argument(
+        "--no-mustBeAvailable", "--notest", "--no-test",
+        action='store_false', dest='mustBeAvailable',
+        help='Return the next name whether or not it already exists.')
+
     parser.add_argument(
         "--quiet", "-q",     action='store_true',
         help='Suppress most messages.')
     parser.add_argument(
-        "--verbose", "-v",   action='count',       default=0,
+        "--verbose", "-v",   action='count', default=0,
         help='Add more messages (repeatable).')
     parser.add_argument(
-        '--version',         action='version',     version='Version of '+__version__,
+        '--version', action='version', version='Version of '+__version__,
         help='Display version information, then exit.')
     parser.add_argument(
-        "--width",           type=int,             default=4,
+        "--width",           type=int, default=4,
         help='Zero-pad numbers to be at least this wide. Default: 4.')
 
     parser.add_argument(
@@ -112,48 +141,52 @@ this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
 
 ###############################################################################
 #
-def getNewPath(orig):
+def getNewPath(orig, mustBeAvailable=True, maxTries=100):
+    """Split up the path, then try numbers as long as needed.
+    """
     dirs, basename = os.path.split(orig)
-    nam, ext = os.path.splitext(basename)
+    nam, ext = os.path.splitext(basename)  # (keeps the 'dot')
 
+    # Locate the last group of digits (if any)
     mat = re.match(r'(.*?)(\d+)(\D*)$', nam)
     if (mat):
         pre = mat.group(1)
         num = mat.group(2)
         post = mat.group(3)
-    else:
+    else:  # no digits
         pre = nam
         num = "0"
         post = ""
 
     thisWidth = args.width
-    if (len(num) > args.width): thisWidth = len(num)
+    if (len(num) > args.width):
+        thisWidth = len(num)
+        sys.stderr.write("Warning: --width raised to %d to accommodate '%s'." %
+            (thisWidth, num))
 
-    num = int(num) + 1
-    if (args.verbose):
-        sys.stderr.write("Dirs(%s) Pre(%s) Num(%d) Post(%s) Ext(%s).\n" %
-        (dirs, pre, num, post, ext))
+    newPath = ''
+    for i in range(maxTries):
+        newNum = int(num) + i + 1
+        if (args.verbose):
+            sys.stderr.write("Dirs(%s) Pre(%s) Num(%d) Post(%s) Ext(%s).\n" %
+            (dirs, pre, newNum, post, ext))
 
-    numPadded = str(num).rjust(thisWidth, '0')
-    newbasename = pre + numPadded + post + ext
-    if (args.available):
-        while (os.path.exists(os.path.join(dirs,newbasename))):
-            num += 1
-            numPadded = str(num).rjust(thisWidth, '0')
-            newbasename = pre + numPadded + post + ext
+        numPadded = str(newNum).rjust(thisWidth, '0')
+        newPath = dirs + "/" + pre + numPadded + post + ext
+        if (not mustBeAvailable): break
+        if (not os.path.exists(newPath)): break
 
-    newPath = os.path.join(dirs,newbasename)
     return(newPath)
 
 
-###############################################################################
 ###############################################################################
 # Main
 #
 if __name__ == '__main__':
     args = processOptions()
     for n in (range(len(args.names))):
-        newPath = getNewPath(args.names[n])
+        newPath = getNewPath(args.names[n],
+            mustBeAvailable=args.mustBeAvailable, maxTries=args.maxTries)
         if (args.verbose):
             print("%s\t%s" % (args.names[n], newPath))
         else:

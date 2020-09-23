@@ -1,11 +1,7 @@
 #!/usr/bin/env python
 #
 # lss: A clone of bash 'ls', but more flexible. I hope.
-#
 # 2015-03-19: Written. Copyright by Steven J. DeRose.
-# 2016-11-03, 2019-10-29: Lint.
-#
-# To do:
 #
 from __future__ import print_function
 import sys, os, argparse
@@ -18,13 +14,353 @@ import codecs
 
 from sjdUtils import sjdUtils
 from alogging import ALogger
-from MarkupHelpFormatter import MarkupHelpFormatter
 
 args = None
 su = sjdUtils()
 lg = ALogger()
 
-__version__ = "2016-11-03"
+__metadata__ = {
+    'title'        : "lss",
+    'rightsHolder' : "Steven J. DeRose",
+    'creator'      : "http://viaf.org/viaf/50334488",
+    'type'         : "http://purl.org/dc/dcmitype/Software",
+    'language'     : "Python 3.7",
+    'created'      : "2015-03-19",
+    'modified'     : "2020-09-22",
+    'publisher'    : "http://github.com/sderose",
+    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
+}
+__version__ = __metadata__['modified']
+
+
+descr = """
+=head1 Description
+
+A replacement for 'ls'; hopefully more flexible and less confusing.
+
+Unfinished. For now, it just collects and reports everything in site;
+no selection or layout.
+
+=head1 Capabilities
+
+=over
+
+=item * Choice of bare filenames, relative paths, or absolute.
+
+=item * Names for all the data items about files, allowing symmetrical
+operations on any/all of them.
+
+=item * Controllable selection, order, format, and width of items.
+
+=item * Output in multiple useful data representations
+
+=back
+
+=head1 Notes
+
+    cf lsoutline!
+
+    mnemonic types vs. flags
+        (including 'file' output)
+
+    Fields headers
+
+    Separate control of fields to show:
+        %name:width
+
+    Option to shorten to ~
+
+
+=head1 Mnemonic names of several kinds
+
+=head2 Named Fields (aka features):
+
+These are the properties known about any given file. They all have very short
+mnemonic names, which are used to refer to them in options. For example, you
+can specify whether (and where and how wide) each field is displayed; whether
+to include or exclude files with certain properties; and so on.
+
+=head3 Name
+
+=over
+
+=item * B<NX>
+
+The basename of the file, including the extension.
+
+=item * B<NAME>
+
+The basename of the file, B<not> including the extension.
+
+=item * B<EXT>
+
+The extension of the file
+
+=item * B<SUF>
+
+Any suffix, defined as any non-alphanumeric characters following the extension
+(if any). Most commonly, this is a backup-file indicator such as "~" or "#"
+
+=item * B<BAK> (1 or 0)
+
+Whether the file appears to be a backup file. This is
+determined by checking for a variety of naming conventions.
+
+    X~ #X# X.bak
+    Backup (n) of X
+    Backup of backup of X
+    Copy (n) of X
+    Copy of copyu of X
+    X backup
+
+=item * B<BNUM> (int)
+
+If the file appears to be a backup, a best guess at its generation number.
+For example, both "Backup 2 of X" and "Backup of backup of X" yield 2.
+
+=back
+
+=head3 Dates
+
+=over
+
+=item * B<CRE>
+
+The creation date of the file. See L<Dates>, below, for more information.
+
+=item * B<MOD>
+
+The modification date of the file. See L<Dates>, below, for more information.
+
+=item * B<ACC>
+
+The last-accessed date of the file. See L<Dates>, below, for more information.
+
+=back
+
+=head3 Permissions
+
+=over
+
+=item * B<UR UW UX GR GW GX OR OW OX> (1 or 0)
+
+Individual permission flags for each of user/group/other crossed
+with read, write, and execute.
+
+=item * B<PERM> (octal int)
+
+A numeric permission value, *nix-style.
+
+=item * B<USER>
+
+The user name of the owner of the file.
+
+=item * B<UNUM>
+
+The user number of the owner of the file.
+
+=item * B<GROUP>
+
+The group name applicable to the file.
+
+=item * B<GNUM>
+
+The group name applicable to the file.
+
+=back
+
+=head3 Type
+
+(This should also get additions for the data from C<file>)
+
+=over
+
+=item * B<TEXT> (1 or 0)
+
+Whether the file appears to be readable text.
+
+=item * B<BIN> (1 or 0)
+
+Whether the file appears to be "binary" (not TEXT).
+
+=item * B<LINK> (HARD, SOFT, ALIAS, or NONE)
+
+Whether the items is a link, and if so, what kind.
+Alias represents an OS-specific type that is not a hard or soft *nix link.
+It would be better to identify and distinguish at least Mac and Win forms.
+
+=back
+
+=head3 Other
+
+=over
+
+=item * B<SIZE> (int)
+
+=item * B<VER> (SVN, GIT, CVS, or NONE)
+
+Whether the file appears to be under a version-control system.
+Typically, this is indicated by a hidden file or directory in the same
+or an ancestor directory. Other values may be added.
+
+=item * B<REC> (NIX, MAC, or DOS)
+
+The record-separator type found in the file (if the file is TEXT).
+
+=item * B<HIDDEN> (1 or 0)
+
+True if the file is GUI-invisible or its name begins with ".".
+
+=item * B<TGT>
+
+The "real" file that this item points to, if this item is a link.
+
+=item * B<INODE> (int)
+
+=item * B<DEV>
+
+The device on which the file resides.
+
+=item * B<DFMT> (string)
+
+The format of the device on which the file resides.
+Typical values could be FAT, FAT32, EXT3, EXT4.
+
+=item * B<META>
+
+A named meta-data field for the file.
+This includes things like the source URI for a downloaded file;
+many properties of image files; etc.
+
+=item * MORE:
+
+NLINKS
+INODE protection mode
+setuid
+setgid
+sticky bit
+permission mask
+
+cf https://docs.python.org/2/library/stat.html
+nodump
+immutable
+append
+opaque
+nounlink
+compressed (and cf zip/bzip/etc.)
+archived
+snapshot
+?disk image
+
+What is 'ls --author'?
+
+
+=head2 Date and time formats
+
+See also C<man date>, which does formats via C<strftime>, which is a superset
+of L<ISO/IEC 9899:1990>, and available in Python (see
+L<https://docs.python.org/2/library/time.html#time.strftime>. May as well stick
+with the same thing.
+
+
+    1990-12-31 @ 23:15:02 CDT
+    raw seconds
+
+     %A    localized full weekday name.
+     %a    localized abbreviated weekday name.
+     %B    localized full month name.
+     %b    localized abbreviated month name.
+     %C    (year / 100); single digits are preceded by a blank
+     %c    localized time and date.
+     %D    is equivalent to ``%m/%d/%y''.
+     %d    the day of the month as a decimal number (01-31).
+     %E* %O* POSIX locale extensions.
+     %e    day of the month (1-31); single digits are preceded by a blank.
+     %F    is equivalent to ``%Y-%m-%d''.
+     %G    a year as a decimal number with century.
+     %g    the same year as in ``%G'', but without century (00-99).
+     %H    the hour (24-hour clock) as a decimal number (00-23).
+     %h    the same as %b.
+     %I    the hour (12-hour clock) as a decimal number (01-12).
+     %j    the day of the year as a decimal number (001-366).
+     %k    the hour (24-hour clock) as a decimal number (' 0'-'23')
+     %l    the hour (12-hour clock) as a decimal number (' 1'-'12')
+     %M    the minute as a decimal number (00-59).
+     %m    the month as a decimal number (01-12).
+     %n    a newline.
+     %O*   the same as %E*.
+     %p    localized (a.m.) or (p.m.)  as appropriate.
+     %R    is equivalent to ``%H:%M''.
+     %r    is equivalent to ``%I:%M:%S %p''.
+     %S    the second as a decimal number (00-60).
+     %s    the number of seconds since the Epoch, UTC (see mktime(3)).
+     %T    is equivalent to ``%H:%M:%S''.
+     %t    a tab.
+     %U    the week number of the year (start Sunday), 00-53.
+     %u    the weekday (Monday = 1)
+     %V    the week number of the year (start Monday), 01-53.
+     %v    is equivalent to ``%e-%b-%Y''.
+     %W    the week number of the year (start Monday), 00-53.
+     %w    the weekday (start Sunday) (0-6).
+     %X    localizedtime.
+     %x    localized date.
+     %Y    the year with century.
+     %y    the year without century, 00-99.
+     %Z    the time zone name.
+     %z    the time zone offset from UTC; +east, -west of UTC, hhmm (RFC 822)
+     %+    localized date and time (similar to date(1)).
+     %-*   GNU libc extension.  No padding when performing numerical outputs.
+     %_*   GNU libc extension.  Explicitly specify space for padding.
+     %0*   GNU libc extension.  Explicitly specify zero for padding.
+     %%    `%'.
+
+
+=head2 File "types"
+
+socket
+symlink
+regular file
+block device
+directory
+character device
+fifo
+whiteout
+
+
+=head2 META names
+
+
+=head1 Known bugs and Limitations
+
+Does not yet distinguish real vs. effective uid and gid.
+
+META needs a way to refer to both name and value, and a list of useful ones.
+
+
+=head1 History
+
+  2015-03-19: Written. Copyright by Steven J. DeRose.
+  2016-11-03, 2019-10-29: Lint.
+  2020-09-22: New layout, more lint.
+
+
+=head1 To do
+
+
+=Rights=
+
+Copyright 2015-03-19 by Steven J. DeRose. This work is licensed under a
+Creative Commons Attribution-Share-alike 3.0 unported license.
+For further information on this license, see
+[https://creativecommons.org/licenses/by-sa/3.0].
+
+For the most recent version, see [http://www.derose.net/steve/utilities]
+or [https://github.com/sderose].
+
+
+=head1 Options
+"""
+
 
 fieldInfo = {
 }
@@ -304,335 +640,17 @@ macFields = {
     'video',
 }
 
-###############################################################################
-#
-description = """
-=head1 Description
-
-A replacement for 'ls'; hopefully more flexible and less confusing.
-
-Unfinished. For now, it just collects and reports everything in site;
-no selection or layout.
-
-=head1 Capabilities
-
-=over
-
-=item * Choice of bare filenames, relative paths, or absolute.
-
-=item * Names for all the data items about files, allowing symmetrical
-operations on any/all of them.
-
-=item * Controllable selection, order, format, and width of items.
-
-=item * Output in multiple useful data representations
-
-=back
-
-=head1 Notes
-
-    cf lsoutline!
-
-    mnemonic types vs. flags
-        (including 'file' output)
-
-    Fields headers
-
-    Separate control of fields to show:
-        %name:width
-
-    Option to shorten to ~
-
-=for nobody ###################################################################
-
-=head1 Mnemonic names of several kinds
-
-=head2 Named Fields (aka features):
-
-These are the properties known about any given file. They all have very short
-mnemonic names, which are used to refer to them in options. For example, you
-can specify whether (and where and how wide) each field is displayed; whether
-to include or exclude files with certain properties; and so on.
-
-=head3 Name
-
-=over
-
-=item * B<NX>
-
-The basename of the file, including the extension.
-
-=item * B<NAME>
-
-The basename of the file, B<not> including the extension.
-
-=item * B<EXT>
-
-The extension of the file
-
-=item * B<SUF>
-
-Any suffix, defined as any non-alphanumeric characters following the extension
-(if any). Most commonly, this is a backup-file indicator such as "~" or "#"
-
-=item * B<BAK> (1 or 0)
-
-Whether the file appears to be a backup file. This is
-determined by checking for a variety of naming conventions.
-
-    X~ #X# X.bak
-    Backup (n) of X
-    Backup of backup of X
-    Copy (n) of X
-    Copy of copyu of X
-    X backup
-
-=item * B<BNUM> (int)
-
-If the file appears to be a backup, a best guess at its generation number.
-For example, both "Backup 2 of X" and "Backup of backup of X" yield 2.
-
-=back
-
-=head3 Dates
-
-=over
-
-=item * B<CRE>
-
-The creation date of the file. See L<Dates>, below, for more information.
-
-=item * B<MOD>
-
-The modification date of the file. See L<Dates>, below, for more information.
-
-=item * B<ACC>
-
-The last-accessed date of the file. See L<Dates>, below, for more information.
-
-=back
-
-=head3 Permissions
-
-=over
-
-=item * B<UR UW UX GR GW GX OR OW OX> (1 or 0)
-
-Individual permission flags for each of user/group/other crossed
-with read, write, and execute.
-
-=item * B<PERM> (octal int)
-
-A numeric permission value, *nix-style.
-
-=item * B<USER>
-
-The user name of the owner of the file.
-
-=item * B<UNUM>
-
-The user number of the owner of the file.
-
-=item * B<GROUP>
-
-The group name applicable to the file.
-
-=item * B<GNUM>
-
-The group name applicable to the file.
-
-=back
-
-=head3 Type
-
-(This should also get additions for the data from C<file>)
-
-=over
-
-=item * B<TEXT> (1 or 0)
-
-Whether the file appears to be readable text.
-
-=item * B<BIN> (1 or 0)
-
-Whether the file appears to be "binary" (not TEXT).
-
-=item * B<LINK> (HARD, SOFT, ALIAS, or NONE)
-
-Whether the items is a link, and if so, what kind.
-Alias represents an OS-specific type that is not a hard or soft *nix link.
-It would be better to identify and distinguish at least Mac and Win forms.
-
-=back
-
-=head3 Other
-
-=over
-
-=item * B<SIZE> (int)
-
-=item * B<VER> (SVN, GIT, CVS, or NONE)
-
-Whether the file appears to be under a version-control system.
-Typically, this is indicated by a hidden file or directory in the same
-or an ancestor directory. Other values may be added.
-
-=item * B<REC> (NIX, MAC, or DOS)
-
-The record-separator type found in the file (if the file is TEXT).
-
-=item * B<HIDDEN> (1 or 0)
-
-True if the file is GUI-invisible or its name begins with ".".
-
-=item * B<TGT>
-
-The "real" file that this item points to, if this item is a link.
-
-=item * B<INODE> (int)
-
-=item * B<DEV>
-
-The device on which the file resides.
-
-=item * B<DFMT> (string)
-
-The format of the device on which the file resides.
-Typical values could be FAT, FAT32, EXT3, EXT4.
-
-=item * B<META>
-
-A named meta-data field for the file.
-This includes things like the source URI for a downloaded file;
-many properties of image files; etc.
-
-=item * MORE:
-
-NLINKS
-INODE protection mode
-setuid
-setgid
-sticky bit
-permission mask
-
-cf https://docs.python.org/2/library/stat.html
-nodump
-immutable
-append
-opaque
-nounlink
-compressed (and cf zip/bzip/etc.)
-archived
-snapshot
-?disk image
-
-What is 'ls --author'?
-
-
-=for nobody ###################################################################
-
-=head2 Date and time formats
-
-See also C<man date>, which does formats via C<strftime>, which is a superset
-of L<ISO/IEC 9899:1990>, and available in Pythong (see
-L<https://docs.python.org/2/library/time.html#time.strftime>. May as well stick
-with the same thing.
-
-
-    1990-12-31 @ 23:15:02 CDT
-    raw seconds
-
-     %A    localized full weekday name.
-     %a    localized abbreviated weekday name.
-     %B    localized full month name.
-     %b    localized abbreviated month name.
-     %C    (year / 100); single digits are preceded by a blank
-     %c    localized time and date.
-     %D    is equivalent to ``%m/%d/%y''.
-     %d    the day of the month as a decimal number (01-31).
-     %E* %O* POSIX locale extensions.
-     %e    day of the month (1-31); single digits are preceded by a blank.
-     %F    is equivalent to ``%Y-%m-%d''.
-     %G    a year as a decimal number with century.
-     %g    the same year as in ``%G'', but without century (00-99).
-     %H    the hour (24-hour clock) as a decimal number (00-23).
-     %h    the same as %b.
-     %I    the hour (12-hour clock) as a decimal number (01-12).
-     %j    the day of the year as a decimal number (001-366).
-     %k    the hour (24-hour clock) as a decimal number (' 0'-'23')
-     %l    the hour (12-hour clock) as a decimal number (' 1'-'12')
-     %M    the minute as a decimal number (00-59).
-     %m    the month as a decimal number (01-12).
-     %n    a newline.
-     %O*   the same as %E*.
-     %p    localized (a.m.) or (p.m.)  as appropriate.
-     %R    is equivalent to ``%H:%M''.
-     %r    is equivalent to ``%I:%M:%S %p''.
-     %S    the second as a decimal number (00-60).
-     %s    the number of seconds since the Epoch, UTC (see mktime(3)).
-     %T    is equivalent to ``%H:%M:%S''.
-     %t    a tab.
-     %U    the week number of the year (start Sunday), 00-53.
-     %u    the weekday (Monday = 1)
-     %V    the week number of the year (start Monday), 01-53.
-     %v    is equivalent to ``%e-%b-%Y''.
-     %W    the week number of the year (start Monday), 00-53.
-     %w    the weekday (start Sunday) (0-6).
-     %X    localizedtime.
-     %x    localized date.
-     %Y    the year with century.
-     %y    the year without century, 00-99.
-     %Z    the time zone name.
-     %z    the time zone offset from UTC; +east, -west of UTC, hhmm (RFC 822)
-     %+    localized date and time (similar to date(1)).
-     %-*   GNU libc extension.  No padding when performing numerical outputs.
-     %_*   GNU libc extension.  Explicitly specify space for padding.
-     %0*   GNU libc extension.  Explicitly specify zero for padding.
-     %%    `%'.
-
-=for nobody ###################################################################
-
-=head2 File "types"
-
-socket
-symlink
-regular file
-block device
-directory
-character device
-fifo
-whiteout
-
-=for nobody ###################################################################
-
-=head2 META names
-
-=for nobody ###################################################################
-
-=head1 Known bugs and Limitations
-
-Does not yet distinguish real vs. effective uid and gid.
-
-META needs a way to refer to both name and value, and a list of useful ones.
-
-
-=head1 Licensing
-
-Copyright 2015 by Steven J. DeRose. This script is licensed under a
-Creative Commons Attribution-Share-alike 3.0 unported license.
-See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
-
-=head1 Options
-"""
-
 
 ###############################################################################
 #
 def processOptions():
-    "Parse command-line options and arguments."
-    x = sys.argv[0]
-    parser = argparse.ArgumentParser(description=description,
-        formatter_class=MarkupHelpFormatter)
+    #x = sys.argv[0]
+    try:
+        from BlockFormatter import BlockFormatter
+        parser = argparse.ArgumentParser(
+            description=descr, formatter_class=BlockFormatter)
+    except ImportError:
+        parser = argparse.ArgumentParser(description=descr)
 
     parser.add_argument(
         "--extension",        type=str, metavar='E', default="",
@@ -700,7 +718,7 @@ def processOptions():
     if (args0.color is None):
         args0.color = ("USE_COLOR" in os.environ and sys.stderr.isatty())
     lg.setColors(args0.color)
-    sys.argv = [x] + args0.files
+    #sys.argv = [x] + args0.files
     return(args0)
 
 
@@ -738,11 +756,6 @@ def doOneFile(path):
     for key in (statNames):
         displayName, value = getStatItem(st, key)
         lg.pline(displayName, value)
-    try:
-        fh = codecs.open(path, mode="r", encoding=args.iencoding)
-    except IOError as e:
-        lg.error("IOError: %s" % (e), stat="cantOpen")
-        return(0)
 
     ########################################
     # 'file' command information
@@ -760,14 +773,21 @@ def doOneFile(path):
     ########################################
     # Do we need to read the actual content?
     # Maybe to get countTags, countChars, vocab, etc.
-    recnum = readOneFile(path,fh)
-    fh.close()
+    recnum = 0
+    if (args.openEverything):
+        try:
+            fh = codecs.open(path, mode="r", encoding=args.iencoding)
+        except IOError as e:
+            lg.error("IOError: %s" % (e), stat="cantOpen")
+            return(0)
+        #recnum = fh.read()
+        fh.close()
     return recnum
 
 def isExcluded(path):
     """Filter out files we're not support to deal with
     """
-    filename, ext = os.path.splitext(path)
+    _, ext = os.path.splitext(path)
     if (args.extension != '' and ext != args.extension):
         lg.bumpStat("wrongExtension")
         return False
@@ -807,8 +827,6 @@ def getStatItem(st, item):
     return(None)
 
 
-
-###############################################################################
 ###############################################################################
 # Main
 #

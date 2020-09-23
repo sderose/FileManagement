@@ -68,6 +68,8 @@ Show version info and exit.
 
 =head1 Related Commands and Files
 
+PyPI package `xattr` gives direct access to get and set these attrs.
+
 F<macOsxSpotlightKeys.xsv>, C<XmlTuples.pm>.
 C<whereFrom>, C<pdfinfo>, C<file>, C<xattr>.
 
@@ -247,7 +249,7 @@ sub listKeys {
 }
 
 
-sub wrap {
+sub wrap {  # Now also available in sjdUtils.
     my ($s, $indent, $width, $breakChar) = @_;
     if (!$width)     { $width = $ENV{COLUMNS} || 80; }
     if ($indent)     { $width -= $indent; }
