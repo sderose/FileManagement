@@ -247,12 +247,12 @@ to show absolute path only for directories.
   2016-11-10: Split out doHeader() and doTrailer(). Quote graphviz tokens.
   2018-09-19: Fixed maxNItems misreporting.
   2018-10-16: Add links to HTML output.
-
+  2020-09-05: New layout, cleanup.
 
 =head1 To do
 
-  Port to Perl, integrate PowerWalk.
-  `Switch to ColorManager`.
+  Port to Perl, integrate PowerWalk (esp. for the options)
+  Switch to ColorManager.
   Integrate 'find' to arrange results as outline?
   Factor out outlining so can apply to anything fielded? See also `alignData`
 and `wrap`.
@@ -446,8 +446,9 @@ for $f (@flist) {
             print($ind . '<ul class="dir">' . "\n");
             $prevDepth++;
         }
-        printf('%s<li><a href="file://%s">%s</a></li>' . "\n", $ind,
-            sjdUtils::escapeXmlAttribute("$abshead$ptail"), sjdUtils::escapeXml($tail));
+        printf('%s<li><a href="file://%s">%s</a></li>' . "\n",
+            $ind, sjdUtils::escapeXmlAttribute("$abshead$ptail"),
+            sjdUtils::escapeXml($tail));
     }
     elsif ($graphviz) {
         print("    node [ color=$fileColor; ] '$ptail';\n");
@@ -602,6 +603,37 @@ sub doColor {
     return($head, $tail);
 }
 
+sub doColor2 {
+    my ($head, $tail) = @_;
+    $head =~ s/\//$cRed\/$cEnd/g;
+    (my $ext = $tail) =~ s/^.*\././;
+
+    # Our own special categories
+    if ($color && $funky &&
+        $tail =~ m/[^_.\w\d~\#]/) { # Funky chars
+        $tail = "$cRed$tail$cEnd/";
+    }
+    elsif ($f =~ m/[#~]\s*$/) {                         # Backups
+        $tail = "$cMagenta$tail$cEnd";
+    }
+    elsif ($tail =~ m/^\./) {                           # Backups
+        $tail = "$cCyan$tail$cEnd";
+    }
+    elsif (!-w $f) { $tail = "$cRed$tail$cEnd"; }       # R/O
+
+    # 'dircolors' categories
+    elsif (-x $f) { $tail = "$cGreen$tail$cEnd"; }      # EXEC
+    elsif (-d $f) {                                     # DIR
+        $tail = "$cBlue$tail$cEnd/";
+    }
+    elsif (defined $extensionColorMap{$ext}) {
+        $tail = $extensionColorMap{$ext} . $tail . $cEnd;
+    }
+    else          {
+        #$tail = "$cMagenta$tail$cEnd";
+    }
+    return($head, $tail);
+}
 
 # BASH color support for 'ls'. Assigns color codes to .extension and to:
 #     NORMAL FILE RESET DIR LINK MULTIHARDLINK

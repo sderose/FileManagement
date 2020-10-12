@@ -321,8 +321,8 @@ my $nDirs = scalar(@dirs);
 ###############################################################################
 #
 my $M = 60; my $H = 3600; my $D = 3600*24; my $Y = $D * 365.25;
-my $colorBad    = 'bold/white/red';
-my $colorGood   = 'bold/white/green';
+my $colorBad    = 'white/red/bold';
+my $colorGood   = 'white/green/bold';
 my $colorWarn   = '/yellow';
 my $colorHuh    = 'cyan';
 

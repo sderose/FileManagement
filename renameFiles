@@ -61,7 +61,7 @@ Various options can:
 
 =item * insert serial numbers to avoid conflicts (I<--resolve>, I<--pad>),
 
-=item * fiddle with extensions (I<--addExtension>, I<--extChanges>, I<--onlyExt>, I<-x>),
+=item * fiddle with extensions (I<--addExtension>, I<--extChanges>, I<--onlyExtensions>, I<-x>),
 
 =item * prepend file access, creation, or modification dates, etc. (I<--addStat>),
 
@@ -80,7 +80,7 @@ nor to extensions, nor to directories (unless you set the corresponding options)
 =head2 Order of changes
 
 Renaming actions happen in the order:
-copies, pull, pullURI, kmdAdd, unescapeURI, lc, uc, bactrianize,
+copies, pull, pullURI, xattrAdd, unescapeURI, lc, uc, bactrianize,
 camelize, addStat, dates, expr, clean.
 
 
@@ -227,18 +227,18 @@ With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
 Overwrite conflicting output files with prejudice. Experimental.
 Is not intended to overwrite output directories.
 
-=item * B<--extChanges>
+=item * B<--extChanges> OR B<--extensions>
 
 Apply any I<--expr> changes to full filenames, including any file extensions,
 instead of to the basename excluding the extension.
-Experimental. See also I<--onlyExt>.
+Experimental. See also I<--onlyExtensions>.
 
 =item * B<--expr> I<s/from/to> OR B<-e> I<s/from/to>
 
 Do the specified (Perl-style) regex change on filenames
 (all matches will be changed, not just the first).
 This change does not affect any filename extension, unless you
-also specify I<extChanges>.
+also specify I<--extChanges>.
 See also I<--ignoreCase>.
 
 =item * B<--ignoreCase> or I<-i>
@@ -246,26 +246,26 @@ See also I<--ignoreCase>.
 Add the "i" option to the regex change specified by I<--expr>,
 so the change ignores case distinctions.
 
-=item * B<--kmdAdd> I<itemName>
+=item * B<--xattrAdd> I<itemName>
 
 Append to the filename, the specified item extracted from MacOS file-system
 metadata for the file (when available). Such items can be accessed by the
-shell command <mdfind>, and have names beginning C<kMDItem> (that prefix may
+shell command <mdfind>, and have names beginning C<xattrItem> (that prefix may
 be omitted when using this option). This option should be, but is not, repeatable.
 However, you can run C<renameFiles> multiple times to add one item at a time.
 
-The available items can be listed by using the I<--kmdList> option.
+The available items can be listed by using the I<--xattrList> option.
 
-=item * B<--kmdList>
+=item * B<--xattrList>
 
-List all available items that can be specified for the I<--kmdadd>.
+List all available items that can be specified for the I<--xattradd>.
 
 =item * B<--lc>
 
 Force filenames entirely to lower-case.
 This does not affect extensions.
 
-=item * B<--onlyExt>
+=item * B<--onlyExtensions>
 Apply any I<--expr> changes to file extensions only (not to the
 basename, nor to the full name including the extension.
 Experimental. See also I<--extChanges>.
@@ -531,9 +531,12 @@ Change --moddate to --addStat <statName>.
 =item * 2018-10-16: Use 'file' command with --addExtension "!".
 
 =item * 2019-10-29: Clean up expr parsing logic. Add --dropExtension, --onlyExt.
-Start --kmdAdd, kmdList.
+Start --kmdAdd, --kmdList.
 
 =item * 2020-06-26: New layout. Add I<--dateYears>.
+
+=item * 2020-10-12: Rename --kmdXXX to --xattrXXX, --onlyExt to
+--onlyExtensions. Add --extensions synonym.
 
 =back
 
@@ -574,8 +577,6 @@ L<https://stackoverflow.com/questions/44598758> or 'cermine'.
 =item Add a way to reference Mac fs metadata in --expr RHS.
 
 =item Rename to md5 checksum of the file?
-
-=item Way to add kmd metadata via
 
 =back
 
@@ -655,7 +656,7 @@ my %statKeys = (
     'uid'        => 4,
 );
 
-# Mac filesystem metadata (all keys start with "kMDItem").
+# Mac filesystem xattr metadata (all keys start with "kMDItem").
 # See metadata attributes for a file with "mdls" command on Mac.
 # Planning to add a way to reference these in --expr RHS.
 #
@@ -728,6 +729,7 @@ my %macMeta = (
     "kMDItemScreenCaptureType"       => "selection",
 );
 
+###############################################################################
 # Options
 #
 my $addExtension    = "";
@@ -750,9 +752,9 @@ my $ePadChar        = "0";
 my $extChanges      = 0;
 my $force           = 0;
 my $ignoreCase      = 0;
-my $kmdAdd          = '';
+my $xattrAdd        = '';
 my $lc              = 0;
-my $onlyExt         = 0;
+my $onlyExtensions         = 0;
 my $padWidth        = 3;
 my $pull            = 0;
 my $quiet           = 0;
@@ -774,13 +776,11 @@ my %suffixes     = ();
 makeExtensionMap();
 
 
-###############################################################################
-#
 my %getOptHash = (
     "addExtension=s" => \$addExtension,
     "addStat=s"      => \$addStat,
     "ancestor!"      => \$ancestor,
-    "bactrianize|camelToSpace!"   => \$bactrianize,
+    "bactrianize|camelToSpace|camel2Space!"   => \$bactrianize,
     "camelize!"      => \$camelize,
     "clean!"         => \$clean,
     "color!"         => \$color,
@@ -794,7 +794,7 @@ my %getOptHash = (
     "e|expr=s"       => \$expr,
     "ePad=n"         => \$ePad,
     "ePadChar=s"     => \$ePadChar,
-    "extChanges!"    => \$extChanges,
+    "extChanges|extensions!" => \$extChanges,
     "force!"         => \$force,
     "h|help"         => sub { system "perldoc $0"; exit; },
     "help-x"         => sub {
@@ -806,9 +806,9 @@ my %getOptHash = (
         exit;
     },
     "i|ignoreCase!"  => \$ignoreCase,
-    "kmdAdd=s"       => \$kmdAdd,
-    "kmdList"        => sub {
-        warn "Item names for the --kmdAdd option (see also the 'mdfind' command:\n";
+    "xattrAdd=s"       => \$xattrAdd,
+    "xattrList"        => sub {
+        warn "Item names for the --xattrAdd option (see also the 'mdfind' command:\n";
         for my $k (sort keys %macMeta) {
             if (ref $macMeta{$k} eq ref) {
                 print ("        Omitted some...\n");
@@ -818,7 +818,7 @@ my %getOptHash = (
         exit;
     },
     "lc!"            => \$lc,
-    "onlyExt!"       => \$onlyExt,
+    "onlyExtensions!" => \$onlyExtensions,
     "pad=n"          => \$padWidth,
     "pull=n"         => \$pull,
     "pullURI=n"      => \$pullURI,
@@ -842,9 +842,6 @@ Getopt::Long::Configure ("ignore_case");
 GetOptions(%getOptHash) || die "Bad options.\n";
 
 
-###############################################################################
-# Process options
-#
 sjdUtils::setVerbose($verbose);
 sjdUtils::setColors($color);
 
@@ -861,8 +858,8 @@ if ($addStat && !defined $statKeys{$addStat}) {
 # The user's -e change expression (if any)
 $expr =~ s/^\s*s?//;
 my $xx         = "";
-my $frExpr         = "";
-my $toExpr         = "";
+my $frExpr     = "";
+my $toExpr     = "";
 my $op         = "";
 if ($clean) {
     if ($expr) {
@@ -874,8 +871,9 @@ if ($clean) {
 elsif ($expr) {
     my $delim = "\\" . substr($expr,0,1);
     my @tokens = split(/$delim/, $expr);
-    vMsg(1, sprintf("delim '%s', split regex '%s' to: #%s#].", $delim, $expr, join('#', @tokens)));
-    $xx = (scalar @tokens >= 1) ? $tokens[0] : "";   #  "s" for those that like it
+    vMsg(1, sprintf("delim '%s', split regex '%s' to: #%s#].",
+        $delim, $expr, join('#', @tokens)));
+    $xx = (scalar @tokens >= 1) ? $tokens[0] : "";   #  "s" optional
     $frExpr = (scalar @tokens >= 2) ? $tokens[1] : "";
     $toExpr = (scalar @tokens >= 3) ? $tokens[2] : "";
     $op = (scalar @tokens >= 4) ? $tokens[3] : "";
@@ -883,13 +881,14 @@ elsif ($expr) {
     vMsg(1, "Parsed -expr as: from '$frExpr', to '$toExpr', options '$op'.");
     ($frExpr eq "") &&
         die "Can't have nil 'from' value.\n";
-    ($frExpr =~ m/\\\.\w+/ && !$onlyExt && !$extChanges) &&
-        vMsg(0, "Warning: Your 'from' looks like an extension (see --extChanges option)");
+    ($frExpr =~ m/\\\.\w+/ && !$onlyExtensions && !$extChanges) &&
+        vMsg(0, "Warning: Your 'from' looks like an extension (see --extChanges and --onlyExtensions)");
     ($op && !$quiet) &&
         vMsg(0, "-expr /options are not yet supported.");
     vMsg(1, "Changing:\n  /$frExpr/$toExpr/");
 }
-elsif (!$pull && !$pullURI && !$kmdAdd && !$dates && !$dateYears && !$addStat &&
+elsif (!$pull && !$pullURI && !$xattrAdd &&
+       !$dates && !$dateYears && !$addStat &&
        !$x && !$bactrianize && !$camelize && !$unescapeURI) {
     vMsg(0, "Did you specify an action?");
 }
@@ -897,14 +896,13 @@ elsif (!$pull && !$pullURI && !$kmdAdd && !$dates && !$dateYears && !$addStat &&
 (scalar(@ARGV)>0) || die
     "Example: renameFiles -e 's/from/to' [files]\n";
 
-if ($kmdAdd) {
-    if ($kmdAdd !~ m/^kMDItem/) { $kmdAdd = "kMDItem" . $kmdAdd; }
-    (defined $macMeta{$kmdAdd}) || die
-        "MacOS mdfind metadata item not found for -kmdAdd: '$kmdAdd'.\n";
+if ($xattrAdd) {
+    if ($xattrAdd !~ m/^kMDItem/) { $xattrAdd = "kMDItem" . $xattrAdd; }
+    (defined $macMeta{$xattrAdd}) || die
+        "MacOS mdfind metadata item not found for -xattrAdd: '$xattrAdd'.\n";
 }
 
 
-###############################################################################
 ###############################################################################
 # Main
 #
@@ -934,7 +932,6 @@ foreach my $fullPath (@ARGV) {
 exit;
 
 
-###############################################################################
 ###############################################################################
 #
 # Separate path, name, and extension
@@ -1133,8 +1130,8 @@ sub variousChanges {
         }
     }
 
-    if ($kmdAdd) {
-        die "--kmdAdd is not yet finished.\n";
+    if ($xattrAdd) {
+        die "--xattrAdd is not yet finished.\n";
 
     }
 
@@ -1205,7 +1202,7 @@ sub variousChanges {
     }
 
     if ($expr) {
-        if ($onlyExt) {
+        if ($onlyExtensions) {
             vMsg(2, "changing ext '$frExpr' to '$toExpr', fromC = /$frC/.");
             $ext2 = applyRegex($ext2, $frC, $toExpr);
             vMsg(2, "--expr, changed EXTENSION '$ext' to '$ext2'.");
@@ -1361,7 +1358,7 @@ sub report {
     alogging::pline("Not found",         $notFoundCount);
     alogging::pline("No net change",     $unchanged);
     alogging::pline("Rename attempts",   $simpleCount+$resolveCount);
-    alogging::pline(sjdUtils::colorize("bold/green", "Simple renames"), $simpleCount);
+    alogging::pline(sjdUtils::colorize("green/bold", "Simple renames"), $simpleCount);
     alogging::pline("Extensions fixed",  $extFixes);
     alogging::pline("Name conflicts",    $conflictCount);
     alogging::pline("  Forced",          $forceCount);
