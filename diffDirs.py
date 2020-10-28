@@ -45,6 +45,8 @@ and to show the first differing lines.
 
 =Known bugs and limitations=
 
+Not smart about case differences in filenames on MacOSX.
+
 Doesn't do anything special for binary files.
 See https://stackoverflow.com/questions/1446549/
 
@@ -125,7 +127,7 @@ def pcols(theFile, diffInfo, color1="off", width=0, sep=""):
     else:
         msg += theFile.ljust(args.nameWidth)
         msg += diffInfo
-    print(msg)
+    lg.vMsg(0, msg)
 
 def stat2print(statValue):
     """Create a printable list of permissions flags, like 'ls -l' has.
@@ -189,12 +191,12 @@ def advanceFile(fh0, recnum):
         try:
             rec = fh0.readline()
         except UnicodeDecodeError as e:
-            print("Bad data at record %d: %s" % (recnum+nRecsRead, e))
+            lg.vMsg(0, "Bad data at record %d: %s" % (recnum+nRecsRead, e))
             return None, nRecsRead
         if (rec == ""): break
         nRecsRead += 1
-        if ((recnum+nRecsRead) % args.tickInterval == 0):
-            print("Record %6d..." % (recnum), end="\r")
+        if (args.tickInterval and (recnum+nRecsRead) % args.tickInterval == 0):
+            lg.vMsg(0, "Record %6d..." % (recnum))
         if (not ignorableLine(rec)): break
     return rec, nRecsRead
 
@@ -231,17 +233,18 @@ def compareDirs(path1, path2):
 
     dUnion = sorted(list(set(d1).union(set(d2))))
 
-    print("\n***Comparing directories:")
-    print("    %s\n    %s" % (p1, p2))
-    print()
+    lg.vMsg(0, "\n***Comparing directories:")
+    lg.vMsg(0, "    %s\n    %s\n" % (p1, p2))
 
     nSubsDifferent = 0
     for curName in dUnion:
         lg.vMsg(1, "Comparing '%s'." % (curName))
+        #print("Comparing '%s'." % (curName))
         file1 = os.path.join(path1, curName)
         file2 = os.path.join(path2, curName)
         if (not os.path.exists(file1)):
             lg.vMsg(1, "    Missing from dir 1: " + path1)
+            #print("    Missing from dir 1: " + path1)
             missing1 += 1
             nSubsDifferent += 1
         elif (not os.path.exists(file2)):
@@ -251,10 +254,10 @@ def compareDirs(path1, path2):
         elif (os.path.isdir(file1) and os.path.isdir(file2)):
             if (args.recursive):
                 lg.hMsg(2, "    Descending into %s/" % (curName))
-                lg.MsgPush()
+                #lg.MsgPush()
                 subDiffs = compareDirs(file1, file2)
                 if (subDiffs): nSubsDifferent += 1
-                lg.MsgPop()
+                #lg.MsgPop()
             else:
                 uncheckedDirs += 1
         elif (os.path.isdir(file1) or os.path.isdir(file2)):
@@ -321,7 +324,7 @@ def compareFiles(fp1, fp2):
             diffLine += " DIFF(line %d vs %d)" % (lineNum1,lineNum2)
             isDifferent = True
             if (args.showLines):
-                print("    < %s\n    > %s" % (rec1, rec2))
+                lg.vMsg(0, "    < %s\n    > %s" % (rec1, rec2))
     elif (args.diffq):
         cmd = "diff -q '%s' '%s'" % (fp1,fp2)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
@@ -337,8 +340,8 @@ def compareFiles(fp1, fp2):
         pcols(fp1, diffInfo='', sep="======")
         if (args.showDiffs):
             fmt = "        size %12d time %-12s md5 %-32s perm %s"
-            print(fmt % (size1, time1, md51, stat1))
-            print(fmt % (size2, time2, md52, stat2))
+            lg.vMsg(0, fmt % (size1, time1, md51, stat1))
+            lg.vMsg(0, fmt % (size2, time2, md52, stat2))
     elif (isDifferent):
         differ += 1
         sep = "!!!!!!"
@@ -346,8 +349,8 @@ def compareFiles(fp1, fp2):
         pcols(os.path.basename(fp1), diffLine, color1=color, sep=sep)
         if (args.showDiffs):
             fmt = "        size %10d, time %-20s, md5 %-32s, perm %s"
-            print(fmt % (size1, time1, md51, stat1))
-            print(fmt % (size2, time2, md52, stat2))
+            lg.vMsg(0, fmt % (size1, time1, md51, stat1))
+            lg.vMsg(0, fmt % (size2, time2, md52, stat2))
     else:
         sep = "======"
         color="green"
@@ -440,7 +443,7 @@ if __name__ == "__main__":
             "--size",              action='store_true', default=True,
             help='Compare file sizes.')
         parser.add_argument(
-            "--tickInterval",      type=int, default=1000,
+            "--tickInterval",      type=int, default=0,
             help='For long file comparison, show progress / n lines.')
         parser.add_argument(
             "--time",              action='store_true',
@@ -484,7 +487,7 @@ if __name__ == "__main__":
     if ("COLUMNS" in os.environ):
         wid = int(os.environ["COLUMNS"])
     else:
-        lg.vMsg("Can't find environment variable COLUMNS -- export it?")
+        lg.vMsg(0, "Can't find environment variable COLUMNS -- export it?")
         wid = 80
 
     if (len(args.dirs) != 2 or

@@ -57,6 +57,8 @@ Various options can:
 =item * insert names extracted from the URI from which a file was downloaded
 (I<--pullURI>, MacOS only),
 
+=item * insert content extracted from the file's contents (I<--pullContent>),
+
 =item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
 
 =item * insert serial numbers to avoid conflicts (I<--resolve>, I<--pad>),
@@ -133,7 +135,8 @@ on disk (blocks are often, but not always, 512 bytes each)
 As the first step I<when resolving name conflicts>,
 prefix the name of the parent directory, plus the
 I<--separator> character (default "_"), to the filename.
-See also I<--pull> and I<--pullURI> (which do a similar operation
+See also I<--pull>, I<--pullURI>, and I<--pullContent>
+(which do a similar operation
 regardless of whether there is any name conflict).
 
 =item * B<--bactrianize> OR B<--camelToSpace>
@@ -295,6 +298,19 @@ would become
 
     stuff/dax/ezri/pix/ezri_pix_12.jpg
 
+=item * B<--pullContent>
+
+Extract content from the beginning of the file, and put it into the name.
+The first record is read, and any HTML or XML tags are stripped out
+(for actual HTML or XML, it would be better to extract html/head/title or
+similar). Unusual characters are removed, spaces are changed to "_", and
+the result is truncated at 40 characters, then appended to the filename.
+
+=item * B<--pullNoEntities>
+
+If set, then I<--pullContent> will discard not only tags, but also entity
+and numeric character references.
+
 =item * B<--pullURI> I<n>
 
 Extract the URI from which the file was downloaded (Mac only,
@@ -370,6 +386,8 @@ See also I<--addExtension> and I<--extChanges>.
 
 =head1 Known bugs and limitations
 
+Changes with I<--extensions> put in 2 dots.
+
 Unicode filenames are not thoroughly tested (and handling may depend on how
 your locale is set).
 
@@ -383,7 +401,7 @@ There is no option to change the set of extension mappings used by I<-x>.
 Regexes may include a C</options> portion, but it is not used.
 
 May not yet do enough conflict resolution for case-insensitive file systems
-(it just checks I<-e> before renaming, which might work).
+(it just checks for file existence with Perl's I<-e> before renaming).
 
 Does not know about some backup conventions, such as foo~, #foo#, or
 C<emacs>'s ability to put backups into a separate directory:
@@ -395,14 +413,14 @@ embedded "//", "/./", or "/../" in any paths.
 
 It would be nice to be able to pull user- and group-names,
 image and/or file-system metadata, etc. into filenames. On Mac OS, you can
-get file-system metadata with commands like:
+get file-system metadata (xattrs) with commands like:
 
     mdls [files]
     mdls -name kMDItemWhereFroms [files]
 
 Date formats should be more flexible, controllable, and localizable.
 
-There should be an option to remove the matched date, not just copy it to
+There should be an option to remove a matched date, not just copy it to
 the front.
 
 
@@ -545,9 +563,9 @@ Start --kmdAdd, --kmdList.
 
 =over
 
-=item --clean should also do --addExtension 'txt' (for non-dirs)
+=item --clean should also do --addExtension 'txt' (for non-dirs).
 
-=item Option to operate *only* on directories
+=item Option to operate *only* on directories.
 
 =item Check for .git and be able to do git mv instead of mv!
 
@@ -757,11 +775,13 @@ my $lc              = 0;
 my $onlyExtensions         = 0;
 my $padWidth        = 3;
 my $pull            = 0;
+my $pullNoEntities  = 0;
+my $pullContent     = 0;
+my $pullURI         = 0;
 my $quiet           = 0;
 my $recursive       = 0;
 my $resolve         = 1;
 my $separator       = "_";
-my $pullURI         = 0;
 my $test            = 0;
 my $toEnd           = 0;
 my $uc              = 0;
@@ -777,27 +797,27 @@ makeExtensionMap();
 
 
 my %getOptHash = (
-    "addExtension=s" => \$addExtension,
-    "addStat=s"      => \$addStat,
-    "ancestor!"      => \$ancestor,
-    "bactrianize|camelToSpace|camel2Space!"   => \$bactrianize,
-    "camelize!"      => \$camelize,
-    "clean!"         => \$clean,
-    "color!"         => \$color,
-    "copies!"        => \$copies,
-    "dates!"         => \$dates,
-    "dateYears!"     => \$dateYears,
-    "dirs!"          => \$dirs,
-    "dot!"           => \$dot,
-    "dropExtension!" => \$dropExtension,
-    "dry-run|dryrun!"=> \$test,
-    "e|expr=s"       => \$expr,
-    "ePad=n"         => \$ePad,
-    "ePadChar=s"     => \$ePadChar,
+    "addExtension=s"   => \$addExtension,
+    "addStat=s"        => \$addStat,
+    "ancestor!"        => \$ancestor,
+    "bactrianize|camelToSpace|camel2Space!" => \$bactrianize,
+    "camelize!"        => \$camelize,
+    "clean!"           => \$clean,
+    "color!"           => \$color,
+    "copies!"          => \$copies,
+    "dates!"           => \$dates,
+    "dateYears!"       => \$dateYears,
+    "dirs!"            => \$dirs,
+    "dot!"             => \$dot,
+    "dropExtension!"   => \$dropExtension,
+    "dry-run|dryrun!"  => \$test,
+    "e|expr=s"         => \$expr,
+    "ePad=n"           => \$ePad,
+    "ePadChar=s"       => \$ePadChar,
     "extChanges|extensions!" => \$extChanges,
-    "force!"         => \$force,
-    "h|help"         => sub { system "perldoc $0"; exit; },
-    "help-x"         => sub {
+    "force!"           => \$force,
+    "h|help"           => sub { system "perldoc $0"; exit; },
+    "help-x"           => sub {
         warn "Extensions mapped by the -x option:\n";
         for my $x (sort keys %extensionMap) {
             my $m = sprintf "%8s -> %s\n", $x, $extensionMap{$x};
@@ -805,7 +825,7 @@ my %getOptHash = (
         }
         exit;
     },
-    "i|ignoreCase!"  => \$ignoreCase,
+    "i|ignoreCase!"    => \$ignoreCase,
     "xattrAdd=s"       => \$xattrAdd,
     "xattrList"        => sub {
         warn "Item names for the --xattrAdd option (see also the 'mdfind' command:\n";
@@ -817,22 +837,24 @@ my %getOptHash = (
         }
         exit;
     },
-    "lc!"            => \$lc,
-    "onlyExtensions!" => \$onlyExtensions,
-    "pad=n"          => \$padWidth,
-    "pull=n"         => \$pull,
-    "pullURI=n"      => \$pullURI,
-    "q|quiet!"       => \$quiet,
-    "r|recursive!"   => \$recursive,
-    "resolve!"       => \$resolve,
-    "separator=s"    => \$separator,
-    "test!"          => \$test,
-    "toEnd!"         => \$toEnd,
-    "uc!"            => \$uc,
-    "unescapeURI!"   => \$unescapeURI,
-    "unroman!"       => \$unroman,
-    "v|verbose+"     => \$verbose,
-    "version"        => sub {
+    "lc!"              => \$lc,
+    "onlyExtensions!"  => \$onlyExtensions,
+    "pad=n"            => \$padWidth,
+    "pull=n"           => \$pull,
+    "pullContent!"     => \$pullContent,
+    "pullNoEntities!"  => \$pullNoEntities,
+    "pullURI=n"        => \$pullURI,
+    "q|quiet!"         => \$quiet,
+    "r|recursive!"     => \$recursive,
+    "resolve!"         => \$resolve,
+    "separator=s"      => \$separator,
+    "test!"            => \$test,
+    "toEnd!"           => \$toEnd,
+    "uc!"              => \$uc,
+    "unescapeURI!"     => \$unescapeURI,
+    "unroman!"         => \$unroman,
+    "v|verbose+"       => \$verbose,
+    "version"          => sub {
         die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
     },
     "x|normalizeExtensions!" => \$x,
@@ -887,7 +909,7 @@ elsif ($expr) {
         vMsg(0, "-expr /options are not yet supported.");
     vMsg(1, "Changing:\n  /$frExpr/$toExpr/");
 }
-elsif (!$pull && !$pullURI && !$xattrAdd &&
+elsif (!$pull && !$pullURI && !$pullContent && !$xattrAdd &&
        !$dates && !$dateYears && !$addStat &&
        !$x && !$bactrianize && !$camelize && !$unescapeURI) {
     vMsg(0, "Did you specify an action?");
@@ -1109,6 +1131,18 @@ sub variousChanges {
         vMsg(1, ">pull  $pull: '$name2'");
     }
 
+    if ($pullContent) {
+        open(IFH, "<$fullPath");
+        my $rec1 = <IFH>;
+        close(IFH);
+        chomp $rec1;
+        $rec1 =~ s/<.*?>//g;
+        if ($pullNoEntities) { $rec1 =! s/&.*?;//g; }
+        $rec1 =~ s/[^\w.]+/_/g;
+        $rec1 =~ s/^\._?/_/;
+        $name2 = $name2 . "_" . $rec1;
+    }
+
     if ($pullURI > 0) {
         my $uri = getSourceURI($fullPath);
         if (!$uri) {
@@ -1300,6 +1334,7 @@ sub extensionJoin {
     return $name . "." . $ext;
 }
 
+
 ###############################################################################
 # Append serial numbers, possibly padded, until we find an unused one.
 # Maybe should also allow adding ancestor directories, or Mac image-file
@@ -1322,7 +1357,7 @@ sub findFreeFilename {
 
 
 ###############################################################################
-# Do an actual rename (or not, if testing)
+# Do an actual rename (or not, if testing).
 # *** Names passed here must include extension if any ***
 #
 sub doRename {
@@ -1472,7 +1507,7 @@ sub makeExtensionMap {
         );
 }
 
-# List of what *nix 'file' command says, and extension to apply
+# List of what *nix 'file' command says, and extension to apply.
 # Apply in order, due to cases like:
 #     timeDiff:           Python script text executable, ASCII text
 # 'file' doesn't seem to distinguish sql, java, properties, etc.
@@ -1508,5 +1543,5 @@ sub makeExtensionMap {
 );
 
 %suffixes = (
-    [ "with very long lines"       , ""     ],
+    [ "with very long lines"          , ""     ],
 );
