@@ -228,8 +228,7 @@ arguments ("wc -l" in this example).
 =head1 To do
 
   Port to Python, integrate PowerWalk (esp. for the options)
-  Switch to ColorManager and PowerWalk for the options.
-  Integrate 'find' to arrange results as outline?
+  Switch to ColorManager.
   Factor out outlining so can apply to anything fielded? See also `alignData`
 and `wrap`.
   Output format options (--graphviz, Vue, HTML, POD, Lynx), with links.
@@ -262,6 +261,7 @@ to show absolute path only for directories.
   2018-09-19: Fixed maxNItems misreporting.
   2018-10-16: Add links to HTML output.
   2020-09-05: New layout, cleanup.
+
 
 =head1 Rights
 

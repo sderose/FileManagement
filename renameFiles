@@ -451,6 +451,11 @@ Simple batch renames can also be done with the C<bash for> command:
         mv $x $y
     done
 
+In `zsh` as opposed to `bash`, you can use `zmv` to do clever renames like:
+
+    zmv '(*).jpeg' '$1.jpg'
+    zmv '(*)-backup.(*)' 'backups/$1.$2'
+
 On Mac OS X you can get a file's source URI (if applicable) via:
 
     xattr -p com.apple.metadata:kMDItemWhereFroms [file] | xxd -r -p
@@ -772,7 +777,7 @@ my $force           = 0;
 my $ignoreCase      = 0;
 my $xattrAdd        = '';
 my $lc              = 0;
-my $onlyExtensions         = 0;
+my $onlyExtensions  = 0;
 my $padWidth        = 3;
 my $pull            = 0;
 my $pullNoEntities  = 0;
