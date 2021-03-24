@@ -8,16 +8,15 @@ use Getopt::Long;
 
 use sigtrap qw(die INT QUIT); # give user a way out
 
-
 our %metadata = (
     'title'        => "watchDir",
-    'description'  => "See when files in a directory change.",
+    'description'  => "Do something when files in a directory change.",
     'rightsHolder' => "Steven J. DeRose",
     'creator'      => "http://viaf.org/viaf/50334488",
     'type'         => "http://purl.org/dc/dcmitype/Software",
     'language'     => "Perl 5.18",
     'created'      => "2006-10-16",
-    'modified'     => "2020-11-20",
+    'modified'     => "2020-12-21",
     'publisher'    => "http://github.com/sderose",
     'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -28,11 +27,20 @@ our $VERSION_DATE = $metadata{'modified'};
 
 =head1 Usage
 
-watchDir [path]
+    watchDir [path]
 
 Reports when files are added, deleted, or modified in the directory.
 This is done in a really simplistic way, and tied to a single directory.
 Use ^C (control-C) to exit.
+
+You can use C<--exec [cmd]> to run a command on each file each time it changes.
+For example, you can open an editor on each file as it changes, with:
+
+    watchDir --exec "$EDITOR" ~/myDir
+
+There is not yet a way to watch a single file in isolation, although
+you can watch the parent directory, which includes catching changes to all files
+within that directory.
 
 There are many similar commands, such as:
 
@@ -42,20 +50,30 @@ C<instruments>
 
 C<watch>
 
+
 =head1 Options
 
 =over
 
+=item * B<--exec> I<cmd>
+
+When a file changes, run I<cmd> on it.
+
 =item * B<-p>
 
-Check permissions, too (not implemented)
+Check for permission changes, too (not implemented).
 
 =item * B<--quiet> OR B<-q>
 Suppress most messages.
 
-=item * B<-n> I<n>
+=item * B<--sleep> I<n> OR B<-n> I<n>
 
 Sleep I<n> seconds between checks (default 1; 0 is ok).
+
+=item * B<--spinner>
+
+Show a cheesy spinning progress indicator. Default: on (use I<--no-spinner>
+to turn off).
 
 =item * B<--verbose>
 
@@ -70,7 +88,9 @@ Display version info and exit.
 
 =head1 Related commands
 
-C<watch> watchDir is a lot like C<watch -d -n 2 ls -lt --full-time>, except:
+C<watch> watchDir is a lot like C<watch -d -n 2 ls -lt --full-time> (which
+is available in Linux, but apparently not on BSD/MacOSX except via C<brew>).
+However:
 
 =over
 
@@ -84,12 +104,25 @@ C<watch> watchDir is a lot like C<watch -d -n 2 ls -lt --full-time>, except:
 
 =back
 
+L<https://superuser.com/questions/181517/how-to-execute-a-command-whenever-a-file-changes> has several solutions for similar problems.
+
+
+=head1 To Do
+
+  * Option to find the first changed line and display it, or edit at it.
+  * Option to do a special command (maybe scp) on the most-recently-changed
+file, when a certain trigger file occurs. For example, this would let people
+drop things into a watchDir'd dropbox, then poll to re-fetch the file.
+Would rsync mirroring be enough?
+
 
 =head1 History
 
   2006-10-16: Written by Steven J. DeRose.
   2012-09-04: Clean up, update.
   2020-11-20: New layout. Mention related commands.
+  2020-12-21: Switch from ls to stat. Add --exec.
+  2021-01-22: Add --spinner.
 
 
 =head1 Rights
@@ -109,19 +142,21 @@ L<https://github.com/sderose>.
 ###############################################################################
 # Options
 #
-
 my $color    = 0;
-my $expected = 9;                  # Num field exp. from 'ls'
+my $exec     = "";
 my $quiet    = 0;
 my $sleep    = 1;
+my $spinner  = 1;
 my $verbose  = 0;
 
 my %getoptHash = (
     "color!"                  => \$color,
+    "exec=s"                  => \$exec,
     "h|help"                  => sub { system "perldoc $0"; exit; },
-    "n=o"                     => \$sleep,
+    "n|sleep=o"               => \$sleep,
     "q|quiet!"                => \$quiet,
-    "verbose+"                => \$verbose,
+    "spinner!"                => \$spinner,
+    "v|verbose+"              => \$verbose,
     "version"                 => sub {
         die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
     },
@@ -136,39 +171,45 @@ GetOptions(%getoptHash) || die "Bad options.\n";
 my $dir = $ARGV[0] || ".";
 (-d $dir) || die "Couldn't find directory '$dir'.\n";
 
-print "(hold ^C to exit)\n";
+print "(^C to exit)\n";
 
-my %prev = getLS($dir);
+my $prevTimesRef = getModTimes($dir);
+my $repCount = 0;
+
 while (1) {
-    my %next = getLS($dir);
-    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime;
-    $year+=1900; $mon+=1;
-    ($mon<10) && ($mon  = "0$mon"); ($hour<10) && ($hour = "0$hour");
-    ($min<10) && ($min = "0$min");  ($sec<10)  && ($sec  = "0$sec");
+    $repCount++;
+    my $nextTimesRef = getModTimes($dir);
 
     my $nchanged = 0;
-    foreach my $x (sort keys %prev) {
-        if (!defined $next{$x}) {
-            print "$x \tDISAPPEARED\n";
+    my @pfiles = sort keys %{$prevTimesRef};
+    foreach my $x (@pfiles) {
+        if (!defined $nextTimesRef->{$x}) {
+            print "\n$x \tDISAPPEARED\n";
             $nchanged++;
         }
     }
-    foreach my $x (sort keys %next) {
-        if (!defined $prev{$x}) {
-            print "$x \tAPPEARED\n";
+
+    my @nfiles = sort keys %{$nextTimesRef};
+    foreach my $x (@nfiles) {
+        if (!defined $prevTimesRef->{$x}) {
+            print "\n$x \tAPPEARED\n";
             $nchanged++;
         }
     }
-    foreach my $x (sort keys %next) {
-        if (defined $prev{$x} && $prev{$x} ne $next{$x}) {
-            print "$x \tUPDATED\n";
+
+    foreach my $x (@pfiles) {
+        if (defined $nextTimesRef->{$x} &&
+            $prevTimesRef->{$x} ne $nextTimesRef->{$x}) {
+            print "\n$x \tUPDATED\n";
+            if ($exec) { print `$exec "$x"`; }
             $nchanged++;
         }
     }
-    if ($nchanged) {
-        print "                    ($hour:$min:$sec: $nchanged CHANGED)\n\n";
+    if ($spinner) {
+        my $spinChar = substr("/-\\|", $repCount % 4, 1);
+        print "                    ($spinChar $nchanged CHANGED)\r";
     }
-    %prev = %next;
+    $prevTimesRef = $nextTimesRef;
     if ($sleep > 0) {
         if (`sleep $sleep`) { exit; }
     }
@@ -180,24 +221,28 @@ exit;
 
 
 ###############################################################################
-# Return a hash of file\ttime.
+# Return a hash of file -> modtime.
 #
-sub getLS {
-    my $lsCommand = "ls -l --full-time $_[0] | grep -v '^total'";
-    if (
+sub getModTimes {
+    my $theCmd = "stat -f \"%N\t%Sm\" $dir/*";
+    ($verbose) && warn "Cmd: $theCmd\n";
     my %rc = ();
-    my @raw = `$lsCommand`;
+    my @raw = `$theCmd`;
     for (my $i=0; $i<scalar @raw; $i++) {
         chomp($raw[$i]);
-        my @fields = split(/\s+/, $raw[$i]);
-        (scalar @fields == $expected) || die "Not $expected fields (but " .
-            (scalar @fields) . ") in '$raw[$i]':\n  " .
-            "|" . join("|", @fields) . "|\n";
-        my ($perm, $n, $user, $group, $size, $date, $time, $zone, $name)
-            = @fields;
-        $rc{$name} = $time;
+        my @fields = split(/\t/, $raw[$i]);
+        if (scalar @fields != 2) {
+            warn sprintf("Got %d fields (expected 2) in:\n    \"%s\"\n",
+                scalar @fields, $raw[$i]);
+            for (my $i=0; $i<scalar @fields; $i++) {
+                warn sprintf("    %2d: \"%s\"\n", $i, $fields[$i]);
+            }
+            exit;
+        }
+        my ($name, $mtime) = @fields;
+        $rc{$name} = $mtime;
     }
-    ($verbose) && print join("\n",@raw) . "\n\n";
-    return(%rc);
+    #($verbose) && print join("\n",@raw) . "\n\n";
+    return(\%rc);
 }
 
