@@ -10,16 +10,15 @@ import sys, os
 import argparse
 import re
 import codecs
-#import math
-#import subprocess
-#from collections import defaultdict
 import hashlib
 from time import time, ctime  #, gmtime, localtime
 import stat
-from pprint import pprint
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
 
 __metadata__ = {
     'title'        : "checkSumDirs.py",
+    'description'  : "Run a checksum on a directory or tree.",
     'rightsHolder' : "Steven J. DeRose",
     'creator'      : "http://viaf.org/viaf/50334488",
     'type'         : "http://purl.org/dc/dcmitype/Software",
@@ -132,6 +131,8 @@ or L<http://github.com/sderose>.
 
 def warn(lvl, msg):
     if (args.verbose>=lvl): sys.stderr.write(msg + "\n")
+    if (lvl<0): sys.exit()
+
 
 ###############################################################################
 #
@@ -277,14 +278,14 @@ def getVolumeID(path):
                 warn(1, "    DiskUUID '%s'" % (part['DiskUUID']))
                 availableID = 'DiskUUID'
             else:
-                warn(0, "    No VolumeName or DiskUUID in: %s" % (pprint(part)))
+                warn(0, "    No VolumeName or DiskUUID in: %s" % (pp.pprint(part)))
                 continue
             if ('MountPoint' in part):
                 warn(1, "        ==> MountPoint '%s'" % (part['MountPoint']))
                 if (path.startswith(part['MountPoint'])):
                     warn(1, "            MATCH: ID '%s'\nfrom:" %
                         (part[availableID]))
-                    if (args.verbose): pprint(part)
+                    if (args.verbose): pp.pprint(part)
                     theVolumeID = part[availableID]
                     break
 

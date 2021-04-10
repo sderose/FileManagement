@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Count how many files of each extension occur below current directory.
+# TODO: Move to Python using PowerWalk.
 #
 if [ "$1" == "-h" ]; then
     echo "$0: Count how many files of each extension occur below current directory."
@@ -11,7 +12,7 @@ command ls -R |\
     grep -v ':$' |\
     sed 's/^.*\///' |\
     grep '\.' |\
-    sed 's/^.*\.//' |\
+    sed 's/^.*\././' |\
     sort |\
     uniq -c |\
     sort -rn

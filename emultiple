@@ -8,31 +8,36 @@ use Getopt::Long;
 
 our %metadata = (
     'title'        => "emultiple",
+    'description'  => "Edit a set of related files in tiled windows.",
     'rightsHolder' => "Steven J. DeRose",
     'creator'      => "http://viaf.org/viaf/50334488",
     'type'         => "http://purl.org/dc/dcmitype/Software",
     'language'     => "Perl 5.18",
     'created'      => "2007-06-06",
-    'modified'     => "2020-09-05",
+    'modified'     => "2020-12-10",
     'publisher'    => "http://github.com/sderose",
     'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
 our $VERSION_DATE = $metadata{'modified'};
 
+
 =pod
 
 =head1 Usage
 
-emultiple [options] [file...] [cvs-version-numbers]
+emultiple [options] [file...] [cvs-version-numbers?]
 
 Try to edit several 'versions' of a given file, typically for comparison.
 These can be actual version-control-system version (such as from svn or git),
 or intermediate forms of a file as it passes through some dataflow (such as
 txt to HTML to tidy'd HTML to XML and on through XSLT; or whatever).
 
-The files are displayed in tiled windows.
+The files are displayed in tiled windows if your \$EDITOR supports the
+X windows I<--geometry> options.
+
 You can also scroll all the files to a line number or a found string (the
 latter is probably more useful, since line numbers are relatively transient).
+
 
 =head2 Note
 
@@ -197,6 +202,8 @@ Screen pixels Y
 
 =head1 Known bugs and limitations
 
+Geometry doesn't work with some editors.
+
 I<--html> is having some problems at the moment.
 
 Can't do more than 2 rows of windows.
@@ -230,6 +237,7 @@ Editors supported include emacs, bbedit, vim, and nedit.
   2009-05-26 sjd: More fixing.
   2012-09-12, 2013-12-20, 2015-02-10: Clean up. --nedit -> --editor.
   2015-09-28: add bbedit support, try to get working again.
+  2020-12-10: Refactor. Update. Make bbedit work.
 
 
 =head1 To do
@@ -255,6 +263,8 @@ L<https://github.com/sderose>.
 =cut
 
 
+my @pids = ();     # list of forked process ids
+
 # Stuff for color
 #
 my $dftColorList = "/usr/X11/lib/X11/rgb.txt"; # Currently unused
@@ -264,13 +274,12 @@ my $colorstring = (defined $ENV{EMULTIPLE_COLORS}) ? $ENV{EMULTIPLE_COLORS}:"";
 if ($colorstring eq "") {
     $colorstring = $dftcolorstring;
 }
+my $colors = split(/\s+/, $colorstring);
+
 my $dft_dheight = 800;
 my $dft_dwidth = 1200;
-
-# Stuff for normalizing
-#
+my $normalizer = "normalizeXML";  # or tidy -indent...
 my $dft_normOpts = " -i --btags --noparam";
-my $normalizer = "normalizeXML";
 
 
 ###############################################################################
@@ -279,7 +288,7 @@ my $normalizer = "normalizeXML";
 my $base        = "";       # base URI for use with curl
 my $cvs         = 0;        # Retrieve CVS revisions to show?
 my @cvsRevs     = ();       # List of which CVS revisions
-my $define      = "";       # Return needed 'kill' command so aliases can grab it
+my $define      = "";       # Return needed 'kill' command so aliases can use
 my $diff        = 0;        # Run 'diff' on each file w/ next file?
 my $dheight     = 0;
 my $dwidth      = 0;
@@ -289,7 +298,7 @@ my $find        = "";       # String to search for in all files.
 my $help        = 0;        # Show help?
 my $line        = 0;        # Open to this line number.
 my $listOfDirs  = 0;        # Use filename + list of dirs from command line?
-my $listOfFiles = 0;        # Use list of files from command line?
+my $listOfFiles = 1;        # Use list of files from command line?
 my @noext       = ();       # List of extensions to exclude
 my $norm        = 0;        # Normalize the files before editing?
 my $normOpts    = $dft_normOpts;
@@ -308,6 +317,17 @@ my $sideBorders = 48;       # Pixels taken up by left+right borders?
 my $topBorders  = 80;       # Pixels taken up by window header
 my $topSpace    = 50;       # How far down to place top of windows.
 
+sub warn0 { ($verbose >= 0) && warn($_[0] . "\n"); }
+sub warn1 { ($verbose >= 1) && warn($_[0] . "\n"); }
+sub fail {
+    if ($define) {
+        print "echo 'emultiple failed: $_[0], so nothing to kill.'";
+        exit;
+    }
+    else {
+        die $_[0];
+    }
+}
 
 my %getoptHash = (
     "2|two!"               => \$twoRows,
@@ -317,14 +337,14 @@ my %getoptHash = (
     "cvs!"                 => \$cvs,
     "define!"              => \$define,
     "diff!"                => \$diff,
-    "dirlist!"             => \$listOfFiles,
     "dheight=i"            => \$dheight,
     "dwidth=i"             => \$dwidth,
     "even!"                => \$even,
     "find=s"               => \$find,
     "h|help|?"             => sub { system "perldoc $0"; exit; },
     "line=i"               => \$line,
-    "list!"                => \$listOfFiles,
+    "listOfDirs|dirlist!"  => \$listOfDirs,
+    "listOfFiles|fileList!"=> \$listOfFiles,
     "editor=s"             => \$editor,
     "noext=s"              => \@noext,
     "norm!"                => \$norm,
@@ -344,189 +364,223 @@ my %getoptHash = (
     );
 Getopt::Long::Configure ("ignore_case");
 my $result = GetOptions(%getoptHash);
-
-
-###############################################################################
-# Option dependencies and validation
-#
 ($result) || fail("Bad options.\n");
 
 if ($test)   { $verbose = 1; }
-
 ($find ne "" && $line ne 0) &&
-    warn "-find ($find) conflicts with -line ($line).\n";
-
+    warn0("-find ($find) conflicts with -line ($line).");
 if ($norm) {
     (-x $normalizer) ||
         die "Cannot find utility to implement -norm at '$normalizer'.\n";
 }
-
 my @colors = split(/\s+/,$colorstring);
-
 my $mainArg = $ARGV[0];
+
+
+###############################################################################
+# Fetch an HTML version, via curl.
+#
+sub tryForHtml {
+    my $file = $_[0];
+    my $filelistref = $_[1];
+    warn1("tryForHtml: incoming filelist has " . scalar(@$filelistref)
+        . " items.");
+
+    # Assemble the URI
+    my $addr = "";
+    my $uri = "$base$addr";
+
+    # Curl the file down from the server
+    my $thtml = "/tmp/aid" . "$addr" . "_$file.html";
+    warn1("Trying to curl HTML from '$uri'..");
+    system "curl --silent --output $thtml $uri" ||
+        warn0("Could not curl HTML from $uri.");
+    if (-f $thtml) {
+        my $csize = (-s $thtml);
+        warn1("curl result for HTML: '$thtml' (size $csize).");
+        push @$filelistref, $thtml;
+    }
+    else {
+        warn0("No file found at '$thtml' after curl for URI '$uri'.");
+        return;
+    }
+} # tryForHtml
 
 
 ###############################################################################
 # Locate all the files and make a list in @files.
 #
-my @files = ();
+sub pickFiles {
+    my @files = ();
 
-# If they gave -aiid instead of a filename, go find a file.
-if (scalar @uri) {
-    fail("-uri is not yet implemented.\n");
-    #curl the HTMLs
-}
-elsif ($cvs) {                                       # CVS versions
-    my $baseFile = shift;
-    (-f $baseFile) || fail("Can't find CVS file '$baseFile'.\n");
-    (-d "CVS") || fail("This is not a CVS directory.\n");
-    my $tloc = "/tmp/emultiple" . int(rand(100000));
-    system "mkdir $tloc";
-    foreach my $r (@ARGV) {
-        my $fn = "$tloc/$baseFile" . "_$r";
-        ($verbose) && warn "Retrieving rev '$r' of file '$baseFile'.\n";
-        system "cvs update -p -r $r $baseFile >$fn"; # trap error?
-        push @files, $fn;
+    # If they gave -aiid instead of a filename, go find a file.
+    if (scalar @uri) {
+        fail("--uri is not yet implemented.\n");
+        #curl the HTMLs
     }
-}
-elsif ($listOfFiles) {                               # user's list of files
-    for my $f (@ARGV) {
-        if (! -f "$f") {
-            fail("Cannot find file '$f'.\n");
-        }
-        else {
-            push @files, "$f";
+    elsif ($cvs) {                                       # CVS versions
+        warn1("Trying for CVS files.");
+        my $baseFile = shift;
+        (-f $baseFile) || fail("Can't find CVS file '$baseFile'.\n");
+        (-d "CVS") || fail("This is not a CVS directory.\n");
+        my $tloc = "/tmp/emultiple" . int(rand(100000));
+        system "mkdir $tloc";
+        foreach my $r (@ARGV) {
+            my $fn = "$tloc/$baseFile" . "_$r";
+            warn1("Retrieving rev '$r' of file '$baseFile'.");
+            system "cvs update -p -r $r $baseFile >$fn"; # trap error?
+            push @files, $fn;
         }
     }
-}
-elsif ($listOfDirs) {                                # user's list of dirs
-    my $fname = shift;
-    ($fname =~ m|/|) &&
-        fail("First arg should be just a filename, not '$fname'.\n");
-    for my $d (@ARGV) {
-        if (! -d "$d") { warn "Cannot find directory '$d'.\n"; }
-        elsif (! -f "$d/$fname") { warn "Cannot find file '$d/$fname'.\n"; }
-        else { push @files, "$d/fname"; }
-    }
-}
-
-# Delete any files with extension the user specified -noext for
-if (scalar(@noext) > 0) {
-    ($verbose) && warn "Initially found " . (scalar(@files)) . " files.\n";
-    for (my $f=0; $f<scalar(@files); $f++) {
-        for (my $x=0; $x<scalar(@noext); $x++) {
-            if ($files[$f] =~ m/\.$noext[$x]$/) {
-                delete $files[$f];
-                last;
+    elsif ($listOfFiles) {                               # user's list of files
+        warn1("Trying files from command line: " . join(", ", @ARGV));
+        for my $f (@ARGV) {
+            if (! -f "$f") {
+                fail("Cannot find file '$f'.\n");
+            }
+            else {
+                push @files, "$f";
             }
         }
     }
-}
-
-
-###############################################################################
-# Now @files should point to all the right files
-#
-($verbose) && warn "Checking existence for " . (scalar(@files)) . " files.\n";
-my @files2 = ();
-for my $f (@files) {
-    if (! -f "$f") {
-        warn "Cannot find file '$f'.\n";
+    elsif ($listOfDirs) {                                # user's list of dirs
+        warn1("Trying for listOfDirs.");
+        my $fname = shift;
+        ($fname =~ m|/|) &&
+            fail("First arg should be just a filename, not '$fname'.\n");
+        for my $d (@ARGV) {
+            if (! -d "$d") { warn0("Cannot find directory '$d'."); }
+            elsif (! -f "$d/$fname") { warn0("Cannot find file '$d/$fname'."); }
+            else { push @files, "$d/fname"; }
+        }
     }
     else {
-        ($verbose) && warn "Found file '$f'.\n";
-        push @files2, "$f";
+        warn0("No file-choice method.");
     }
-}
-@files = @files2;
 
-if ($verbose) {
-    warn "Files to show (total " . scalar(@files) . "):\n"
-        . "    " . join("\n    ",@files) . "\n";
-}
-
-# Bail out if there's nothing to do
-(scalar @files <= 0) &&
-    fail("No files found to work on.\n");
-
-
-# Diff them if asked
-if ($diff) {
-    for (my $i=1; $i<scalar(@files); $i++) {
-        my $cmd = "diff -bq $files[$i-1] $files[$i]";
-        warn "\n\nRunning: $cmd\n";
-        my $rc = system "$cmd";
-        ($quiet) || warn "******* Diff returned $rc.\n";
+    # Delete any files with extension the user specified -noext for
+    if (scalar(@noext) > 0) {
+        warn1("Before extension pruning: " . (scalar(@files)) . " files.");
+        for (my $f=0; $f<scalar(@files); $f++) {
+            for (my $x=0; $x<scalar(@noext); $x++) {
+                if ($files[$f] =~ m/\.$noext[$x]$/) {
+                    delete $files[$f];
+                    last;
+                }
+            }
+        }
     }
+
+    warn1("Checking existence for " . (scalar(@files)) . " files.");
+    my @files2 = ();
+    for my $f (@files) {
+        if (! -f "$f") {
+            warn0("    Cannot find file '$f'.");
+        }
+        else {
+            warn1("    Found file '$f'.");
+            push @files2, "$f";
+        }
+    }
+    @files = @files2;
+
+    warn1("Files to show (total " . scalar(@files) . "):\n"
+            . "    " . join("\n    ",@files));
+    return @files;
 }
 
 
 ###############################################################################
 # Figure out display characteristics and what size windows we can make.
 #
-my $nwindows = scalar @files;
-if ($even && $nwindows%2) { $nwindows++; }
+sub runGeometry {
+    my $filesRef = $_[0];
+    my @files = @{$filesRef};
 
-if ($dwidth > 0 && $dheight > 0) {
-    ($verbose) &&
-        warn "Display size set to $dwidth x $dheight.\n";
-}
-#elsif ($ENV{DISPLAY}) {
-#}
-else {
-    ($verbose) &&
-        warn "Trying to find display size via 'xdpyinfo'.\n";
-    my $info = `xdpyinfo | grep 'dimensions:'`;
-    chomp $info;
-    $info =~ m/.*dimensions:\s+([0-9]+)x([0-9]+)\spixels/;
-    if ($1 && $2) {
-        $dwidth = $1; $dheight = $2;
-        ($verbose ) &&
-            warn "Your display is $dwidth wide by $dheight high.\n";
+    my $nwindows = scalar @files;
+    if ($even && $nwindows%2) { $nwindows++; }
+
+    if ($dwidth > 0 && $dheight > 0) {
+        ($verbose) &&
+            warn0("Display size set to $dwidth x $dheight.");
     }
+    #elsif ($ENV{DISPLAY}) {
+    #}
     else {
-       ($quiet) || warn "Couldn't get screen dimensions from xdpyinfo.\n";
-        $dwidth = $dwidth; $dheight = $dft_dheight;
+        ($verbose) &&
+            warn0("Trying to find display size via 'xdpyinfo'.");
+        my $info = `xdpyinfo | grep 'dimensions:'`;
+        chomp $info;
+        $info =~ m/.*dimensions:\s+([0-9]+)x([0-9]+)\spixels/;
+        if ($1 && $2) {
+            $dwidth = $1; $dheight = $2;
+            ($verbose ) &&
+                warn0("Your display is $dwidth wide by $dheight high.");
+        }
+        else {
+           ($quiet) || warn0("Couldn't get screen dimensions from xdpyinfo.");
+            $dwidth = $dwidth; $dheight = $dft_dheight;
+        }
     }
-}
-$dheight -= 20; # allow a bit for windows footer or mac menubar
+    $dheight -= 20; # allow a bit for windows footer or mac menubar
 
-# Figure geometry parameters, first assuming one row of windows
-my $windowXsize = int($dwidth / $nwindows + 0.5);
-my $windowYsize = $dheight - $topSpace;
-if ($topHalf) { $windowYsize /= 2; }
-my $windowCols = int(($windowXsize - $sideBorders) / ($colpix+0.0) + 0.5);
-my $windowRows = int(($windowYsize - $topBorders ) / ($rowpix+0.0) + 0.5);
+    # Figure geometry parameters, first assuming one row of windows
+    my $windowXsize = int($dwidth / $nwindows + 0.5);
+    my $windowYsize = $dheight - $topSpace;
+    if ($topHalf) { $windowYsize /= 2; }
+    my $windowCols = int(($windowXsize - $sideBorders) / ($colpix+0.0) + 0.5);
+    my $windowRows = int(($windowYsize - $topBorders ) / ($rowpix+0.0) + 0.5);
 
-# Recalculate for two rows if needed or requested
-if ($twoRows || $windowCols < 60) {
-    my $perrow = int((1+ (scalar @files)) / 2);
-    $windowXsize = int($dwidth / $perrow + 0.5);
-    $windowYsize = int($windowYsize / 2);
-    $windowCols = int(($windowXsize - $sideBorders) / ($colpix+0.0) + 0.5);
-    $windowRows = int(($windowYsize - $topBorders ) / ($rowpix+0.0) + 0.5);
-    ($verbose) &&
-        warn "Can fit $windowCols columns per window with 2 rows.\n";
-}
+    # Recalculate for two rows if needed or requested
+    if ($twoRows || $windowCols < 60) {
+        my $perrow = int((1+ (scalar @files)) / 2);
+        $windowXsize = int($dwidth / $perrow + 0.5);
+        $windowYsize = int($windowYsize / 2);
+        $windowCols = int(($windowXsize - $sideBorders) / ($colpix+0.0) + 0.5);
+        $windowRows = int(($windowYsize - $topBorders ) / ($rowpix+0.0) + 0.5);
+        warn1("Can fit $windowCols columns per window with 2 rows.");
+    }
 
-($verbose) && warn "    Pane x $windowXsize pixels, $windowCols columns; "
-    . "y $windowYsize pixels, $windowRows rows.\n\n";
+    warn1("    Pane x $windowXsize pixels, $windowCols columns); "
+        . "y $windowYsize pixels, $windowRows rows.");
+
+
+    # Start editing the files in nicely-arranged windows.
+    #
+    my $vcmd = "";     # weird special-case for vim -O option.
+    my $x = 0;         # left edge of current window
+    my $y = $topSpace; # top edge of current window
+
+    for (my $i=0; $i<scalar @files; $i++) {
+        my $f = $files[$i];
+        warn1("Editing '$f'.");
+
+        # Bail out if just testing
+        ($test) && next;
+
+        my $color = $colors[ $i % scalar(@colors) ];
+        runEditor($f, $windowCols, $windowRows, $x, $y, $colors);
+
+        # Shift to next window position
+        $x += $windowXsize;
+        if ($x > $dwidth - 10) {
+            $x = 0;
+            $y += $windowYsize;  # Calculate to clear first row
+        }
+    } # for each file to edit
+} # runGeometry
 
 
 ###############################################################################
-# Start editing the files in nicely-arranged windows.
+# Start up an editor on a file
 #
-my $vcmd = "";     # weird special-case for vim -O option.
-my @pids = ();     # list of forked process ids
-my $x = 0;         # left edge of current window
-my $y = $topSpace; # top edge of current window
+sub runEditor {
+    my ($f, $windowCols, $windowRows, $x, $y, $color) = @_;
 
-for (my $i=0; $i<scalar @files; $i++) {
-    my $f = $files[$i];
-    ($verbose) && warn "Editing '$f'.\n";
-
-    # Bail out if just testing
-    ($test) && next;
+    if (!$f || ! -f $f) {
+        warn0("File not found: $f.");
+        return;
+    }
 
     # Set up the calculated window geometry
     my $geom = "-geometry $windowCols" . "x$windowRows" . "+$x+$y";
@@ -540,7 +594,7 @@ for (my $i=0; $i<scalar @files; $i++) {
         my $fcmd = "grep -n -m 1 '$find' $f 2>/dev/null | sed 's/:.*\$//'";
         my $fline = `$fcmd`; chomp $fline;
         $fline -= 0;
-        ($verbose) && warn "    Searched for '$find': got line '$fline'.\n";
+        warn1("    Searched for '$find': got line '$fline'.");
         if ($fline > 0) {
             $scrollOption = "+$fline";
         }
@@ -549,42 +603,71 @@ for (my $i=0; $i<scalar @files; $i++) {
     # Assemble the editor startup commands
     my $ecmd = ""; my $bg = 0;
     if ($editor eq "emacs") {
-        $ecmd = "emacs -title $f $geom -bg $colors[$i] $scrollOption $f";
+        $ecmd = "emacs -title $f $geom -bg $colors $scrollOption $f";
         $bg = 0;
     }
     elsif ($editor eq "nedit") {
-        $ecmd = "nedit -wrap $geom -background $colors[$i] $scrollOption $f";
+        $ecmd = "nedit -wrap $geom -background $colors $scrollOption $f";
         $bg = 1;
-    }
-    elsif ($editor eq "vim") {
-        # vim lacks -geometry options, but has -O feature for side-by-side...
-        if ($i==0) {
-            $ecmd = "vim -O " . (scalar @files) . " $f";
-        }
-        $bg = 1;
-    }
-    elsif ($editor eq "bbedit") {
     }
     else {
-        warn "Sorry, don't know \$EDITOR '$ENV{EDITOR}'. Trying...\n";
+        warn0("Sorry, don't know \$EDITOR '$ENV{EDITOR}'. Trying...");
         $ecmd = "$ENV{EDITOR} $f";
     }
+    forkEditor($ecmd, 1)
+}
 
+sub forkEditor {
+    my ($ecmd, $bg) = @_;
     if (my $pid = fork) { # parent process
         push @pids, $pid;
-        ($verbose) && warn "    Forked process ID $pid: '$ecmd'\n";
+        warn1("    Forked process ID $pid: '$ecmd'");
     }
     else { # child process only
         exec "$ecmd" . ($bg ? " &":"");
     }
+}
 
-    # Shift to next window position
-    $x += $windowXsize;
-    if ($x > $dwidth - 10) {
-        $x = 0;
-        $y += $windowYsize;  # Calculate to clear first row
+
+###############################################################################
+# Main
+#
+my @files = pickFiles();
+(scalar @files) || fail("No files found to work on.\n");
+warn1(join("\n", @files));
+
+# Diff them if asked
+if ($diff) {
+    for (my $i=1; $i<scalar(@files); $i++) {
+        my $cmd = "diff -bq $files[$i-1] $files[$i]";
+        warn0("\n\nRunning: $cmd");
+        my $rc = system "$cmd";
+        ($quiet) || warn0("******* Diff returned $rc.");
     }
-} # for each file to edit
+}
+
+my $flist = "'" . join("', '", @files) . "'";
+my $scrollOption = "";
+if ($line) {
+    $scrollOption = "+$line";
+}
+
+my $ecmd = "";
+
+if ($editor eq "vim") {
+    # vim lacks -geometry option, but has -O feature for side-by-side...
+    $ecmd = "vim -O " . (scalar @files) . $flist;
+    forkEditor($ecmd)
+}
+elsif ($editor eq "bbedit") {
+    # bbedit lacks -geometry option
+    my $ecmd = "bbedit $scrollOption $flist";
+    forkEditor($ecmd)
+}
+else {
+    runGeometry(\@files);
+}
+
 
 # Give user a handy way out of all the editor sessions
 my $kcmd = "kill -9 " . join(" ", @pids);
@@ -594,8 +677,8 @@ if ($define) { # so user can alias or otherwise save it.
 else {
     my $killed = 0;
     if (!$quiet) {
-        warn "Type 'k' (and RETURN) when ready to kill all the editor processes,"
-            . " or anything else to exit without killing them.\n";
+        warn0("Type 'k' (+CR) when ready to kill all the editor processes,"
+            . " or anything else to exit without killing them.");
         my $buf = "";
         read STDIN, $buf, 1;
         if ($buf eq "k") {
@@ -603,53 +686,7 @@ else {
             $killed = 1;
         }
     }
-    ($killed) ||
-        warn "\nTo kill the emacs processes, use: $kcmd\n";
+    ($killed) || warn0("\nTo kill the emacs processes, use: $kcmd");
 }
 
 exit;
-
-
-###############################################################################
-# Fetch an HTML version, via curl.
-#
-sub tryForHtml {
-    my $file = $_[0];
-    my $filelistref = $_[1];
-    ($verbose) &&
-        warn "tryForHtml: incoming filelist has " . scalar(@$filelistref)
-        . " items.\n";
-
-    # Assemble the URI
-    my $addr = "";
-    my $uri = "$base$addr";
-
-    # Curl the file down from the server
-    my $thtml = "/tmp/aid" . "$addr" . "_$file.html";
-    ($verbose) && warn "Trying to curl HTML from '$uri'...\n";
-    system "curl --silent --output $thtml $uri" ||
-        warn "Could not curl HTML from $uri.\n";
-    if (-f $thtml) {
-        my $csize = (-s $thtml);
-        ($verbose) && warn "curl result for HTML: '$thtml' (size $csize).\n";
-        push @$filelistref, $thtml;
-    }
-    else {
-        warn "No file found at '$thtml' after curl for URI '$uri'.\n";
-        return;
-    }
-} # tryForHtml
-
-
-###############################################################################
-# Exit on failure. If user set -define, give appropriate value to be aliased.
-#
-sub fail {
-    if ($define) {
-        print "echo 'emultiple failed: $_[0], so nothing to kill.'";
-        exit;
-    }
-    else {
-        die $_[0];
-    }
-}

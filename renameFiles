@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 #
-# renamefiles; Use Perl s/// to rename multiple files.
+# renamefiles: Use Perl s/// to rename multiple files.
+# Written 2006-12-18 by Steven J. DeRose.
 #
 use strict;
 use Getopt::Long;
@@ -11,17 +12,18 @@ use sjdUtils;
 use alogging;
 
 our %metadata = (
-    'title'        => ".pm",
-    'rightsHolder' => "Steven J. DeRose",
-    'creator'      => "http://viaf.org/viaf/50334488",
-    'type'         => "http://purl.org/dc/dcmitype/Software",
-    'language'     => "Perl 5.18",
-    'created'      => "2006-12-18",
-    'modified'     => "2020-06-26",
-    'publisher'    => "http://github.com/sderose",
-    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+    "title"        => "renameFiles",
+    "description"  => "Flexible bulk file-renaming.",
+    "rightsHolder" => "Steven J. DeRose",
+    "creator"      => "http://viaf.org/viaf/50334488",
+    "type"         => "http://purl.org/dc/dcmitype/Software",
+    "language"     => "Perl 5.18",
+    "created"      => "2006-12-18",
+    "modified"     => "2020-06-26",
+    "publisher"    => "http://github.com/sderose",
+    "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
-our $VERSION_DATE = $metadata{'modified'};
+our $VERSION_DATE = $metadata{"modified"};
 
 
 =pod
@@ -37,7 +39,7 @@ padding sequence numbers, or inserting the values of various file attributes
 
 For example:
 
-    renamefiles --expr 's/myFile\$/stevesFile/' *.htm
+    renamefiles --expr "s/myFile\$/stevesFile/" *.htm
 
 would rename all .htm files in the current directory whose names
 contain "myFile", to contain "stevesFile" in place of the first
@@ -158,7 +160,7 @@ See also I<--bactrianize>.
 =item * B<--clean>
 
 An alternative to I<--expr>, that automatically sets up a regex to change
-any unusual characters into '_'.
+any unusual characters into "_".
 "Unusual" means characters that are not among C<[-.\w_\\]>.
 
 =item * B<--copies>
@@ -212,7 +214,7 @@ This can be useful, among other things, for normalizing the length of
 embedded numbers.
 The padding is applied to the right hand side as a whole:
 
-    renameFiles -epad 6 -e 's/([\d+])/$1/' *.foo
+    renameFiles -epad 6 -e "s/([\d+])/$1/" *.foo
 
 This would, for example, rename F<zork37> to F<zork000037>.
 
@@ -265,8 +267,12 @@ List all available items that can be specified for the I<--xattradd>.
 
 =item * B<--lc>
 
-Force filenames entirely to lower-case.
+Force filenames entirely to lower case.
 This does not affect extensions.
+
+=item * B<--lowerExtensions> or B<--lcExtensions>
+
+Force file extensions to lower case.
 
 =item * B<--onlyExtensions>
 Apply any I<--expr> changes to file extensions only (not to the
@@ -446,15 +452,15 @@ I<--moddates>, I<--resolve>, I<--pad>, I<--pull>, and I<-x>.
 Simple batch renames can also be done with the C<bash for> command:
 
     for x in abc*; do
-        y=`echo "$x" | sed 's/foo/bar/g'`
+        y=`echo "$x" | sed "s/foo/bar/g"`
         echo "Renaming file '$x' to '$y'"
         mv $x $y
     done
 
 In `zsh` as opposed to `bash`, you can use `zmv` to do clever renames like:
 
-    zmv '(*).jpeg' '$1.jpg'
-    zmv '(*)-backup.(*)' 'backups/$1.$2'
+    zmv "(*).jpeg" "$1.jpg"
+    zmv "(*)-backup.(*)" "backups/$1.$2"
 
 On Mac OS X you can get a file's source URI (if applicable) via:
 
@@ -464,6 +470,10 @@ or
 
     mdls -name kMDItemWhereFroms [file]
 
+The *nix C<pad> command is handy for padding names or numbers:
+    pad -c 0 -f -w 4
+
+will left-zero-pad each line of stdin to width 4.
 
 =head2 SJD commands
 
@@ -510,56 +520,58 @@ L<http://www.skytag.com/filebuddy/en/index.html> if interested.
 
 =item * 2010-09-12 sjd: Cleanup, Getopt.
 
-=item * 2011-05-25 sjd: More cleanup. Don't skip first file listed. Add --dirs.
+=item * 2011-05-25 sjd: More cleanup. Don't skip first file listed. Add C<--dirs>.
 
-=item * 2012-02-06 sjd: Move regex to option. Allow non-Latin \w,  --test.
-Add doRename() and change from system 'mv' to Perl rename(). sjdUtils.
-Put serializers before extension! Add --pull to pack ancestor dir
+=item * 2012-02-06 sjd: Move regex to option. Allow non-Latin \\w,  C<--test>.
+Add C<doRename()> and change from system C<mv> to Perl rename(). sjdUtils.
+Put serializers before extension! Add C<--pull> to pack ancestor dir
 name(s) onto front of filenames.
 
-=item * 2012-04-10 sjd: Add --force, --recurse, --ancestor, --lc.
+=item * 2012-04-10 sjd: Add C<--force>, C<--recurse>, C<--ancestor>, C<--lc>.
 
-=item * 2013-01-09 sjd: Clean up. Add --camelize. OS stuff like "Copy N of ...".
-Add --dates, --addExtension, --toEnd, --copies.
+=item * 2013-01-09 sjd: Clean up. Add C<--camelize>. OS stuff like "Copy N of ...".
+Add C<--dates>, C<--addExtension>, C<--toEnd>, C<--copies>.
 
-=item * 2013-10-15: --pull w/o --expr. Add --ignoreCase, --sep.
---copies earlier. Use vMsg(). Clean up path vs. name distinction.
+=item * 2013-10-15: C<--pull> w/o C<--expr>. Add C<--ignoreCase>, C<--sep>.
+C<--copies> earlier. Use C<vMsg()>. Clean up path vs. name distinction.
 
-=item * 2013-12-21: Add --pullURI.
+=item * 2013-12-21: Add C<--pullURI>.
 
-=item * 2014-01-09ff: Fix --dates, --pullURI. Add --moddates.
+=item * 2014-01-09ff: Fix C<--dates>, C<--pullURI>. Add C<--moddates>.
 
-=item * 2014-03-27: Add --ePad.
+=item * 2014-03-27: Add C<--ePad>.
 
-=item * 2014-05-09ff: Add --unescapeURI, -x. Count/report extension changes.
+=item * 2014-05-09ff: Add C<--unescapeURI>, C<-x>. Count/report extension changes.
 
 =item * 2014-08-22: Fix recursion. Separate splitPath, joinPath.
 
-=item * 2014-12-15: Add --bactrianize.
+=item * 2014-12-15: Add C<--bactrianize>.
 
-=item * 2015-02-25ff: Fix bugs that prevented backreferences with -e,
-and RHS like "11-4" becoming "7" due to eval. Add --dot, fix --dates.
+=item * 2015-02-25ff: Fix bugs that prevented backreferences with C<-e>,
+and RHS like "11-4" becoming "7" due to eval. Add C<--dot>, fix C<--dates>.
 
-=item * 2015-08-04: Remember to include Encode. Use strftime() for month names.
-Change --moddate to --addStat <statName>.
+=item * 2015-08-04: Remember to include Encode. Use C<strftime()> for month names.
+Change C<--moddate> to C<--addStat statName>.
 
-=item * 2017-01-31: Add --unroman to convert Roman to Arabic numerals.
+=item * 2017-01-31: Add C<--unroman> to convert Roman to Arabic numerals.
 
-=item * 2018-01-26: Add conflict check immediately before doRename() acts.
+=item * 2018-01-26: Add conflict check immediately before C<doRename()> acts.
 
-=item * 2018-04-12: Missing return for -expr. Add -v messages. Fix --addStat.
+=item * 2018-04-12: Missing return for C<--expr>. Add C<-v> messages. Fix C<--addStat>.
 
-=item * 2018-08-09: Finish --extChanges. Add --uc. Split out variousChanges().
+=item * 2018-08-09: Finish C<--extChanges>. Add C<--uc>. Split out variousChanges().
 
-=item * 2018-10-16: Use 'file' command with --addExtension "!".
+=item * 2018-10-16: Use C<file> command with C<--addExtension> "!".
 
-=item * 2019-10-29: Clean up expr parsing logic. Add --dropExtension, --onlyExt.
-Start --kmdAdd, --kmdList.
+=item * 2019-10-29: Clean up expr parsing logic. Add C<--dropExtensions>, C<--onlyExt>.
+Start C<--kmdAdd>, C<--kmdList>.
 
 =item * 2020-06-26: New layout. Add I<--dateYears>.
 
-=item * 2020-10-12: Rename --kmdXXX to --xattrXXX, --onlyExt to
---onlyExtensions. Add --extensions synonym.
+=item * 2020-10-12: Rename C<--kmdXXX> to C<--xattrXXX>, C<--onlyExt> to
+C<--onlyExtensions>. Add C<--extensions> synonym.
+
+=item * 2021-02-16: Add C<--lcExtensions>.
 
 =back
 
@@ -568,38 +580,52 @@ Start --kmdAdd, --kmdList.
 
 =over
 
-=item --clean should also do --addExtension 'txt' (for non-dirs).
+=item * Port to Python and use PowerWalk.py.
 
-=item Option to operate *only* on directories.
+=item * Option to extract date from .eml file.
 
-=item Check for .git and be able to do git mv instead of mv!
+=item * C<--clean> should also do C<--addExtension> 'txt' (for non-dirs).
 
-=item Allow localized date formats and month names.
+=item * Option to operate *only* on directories.
 
-=item Unicode issues, esp nbsp with --dates.
+=item * Check for F<.git> and be able to do C<git mv> instead of C<mv>!
 
-=item Perhaps offer formats a la strftime().
+=item * Allow localized date formats and month names.
 
-=item Add times and datetimes to -addstat.
+=item * Unicode issues, esp nbsp with C<--dates>.
 
-=item Options to set properties on files, like Mac OS label? (see list below)
-http://superuser.com/questions/168927
+=item * Perhaps offer formats a la C<strftime()>.
+
+=item * Add times and datetimes to C<--addstat>.
+
+=item * Options to set properties on files, like Mac OS label? (see list below)
+l<http://superuser.com/questions/168927/>
 com.apple.metadata:_kMDItemUserTags
 
-=item Feature to increment, or make contiguous, numeric portions of filenames?
 
-=item Option to make --camelize and --bactrianize use (e.g.) '_' instead of ' '
+=item * Feature to increment, or make contiguous, numeric portions of filenames?
 
-=item Make --bactrianize not put space after hyphens
+=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead of " "
 
-=item To vs _to_ vs 2?
+=item * Make C<--bactrianize> not put space after hyphens.
 
-=item Extract PDF titles. See
-L<https://stackoverflow.com/questions/44598758> or 'cermine'.
+=item * "To" vs "_to_" vs "2"?
 
-=item Add a way to reference Mac fs metadata in --expr RHS.
+=item * Extract PDF titles. See
+L<https://stackoverflow.com/questions/44598758> or "cermine".
 
-=item Rename to md5 checksum of the file?
+=item * Add a way to reference Mac fs metadata in C<--expr> RHS.
+
+=item * Rename to md5 checksum of the file?
+
+=item * Idea of pulling metadata from PDF into filename.
+Cf L<https://academia.stackexchange.com/questions/139733/how-to-manage-publications-on-a-local-computer?rq=1>
+L<https://stackoverflow.com/questions/50575957/how-to-robustly-extract-author-names-from-pdf-papers>
+L<https://www.tutorialexample.com/python-extract-pdf-paper-title-by-content-not-by-metadata-a-step-guide-python-tutorial/>
+L<https://stackoverflow.com/questions/1813427/extracting-information-from-pdfs-of-research-papers>
+L<https://pypi.org/project/scholarly/>
+PyPDF2, cb2bib, TET, Cermine.
+
 
 =back
 
@@ -658,25 +684,25 @@ my %statKeys = (
      10          => 10,
      11          => 11,
      12          => 12,
-    'adate'      => 8,
-    'cdate'      => 10,
-    'mdate'      => 9,
-#    'atime'	 => 8,
-#    'ctime'	 => 10,
-#    'mtime'	 => 9,
-#    'adatetime' => 8,
-#    'cdatetime' => 10,
-#    'mdatetime' => 9,
-    'blksize'    => 11,
-    'blocks'     => 12,
-    'dev'        => 0,
-    'gid'        => 5,
-    'ino'        => 1,
-    'mode'       => 2,
-    'nlink'      => 3,
-    'rdev'       => 6,
-    'size'       => 7,
-    'uid'        => 4,
+    "adate"      => 8,
+    "cdate"      => 10,
+    "mdate"      => 9,
+#    "atime"	 => 8,
+#    "ctime"	 => 10,
+#    "mtime"	 => 9,
+#    "adatetime" => 8,
+#    "cdatetime" => 10,
+#    "mdatetime" => 9,
+    "blksize"    => 11,
+    "blocks"     => 12,
+    "dev"        => 0,
+    "gid"        => 5,
+    "ino"        => 1,
+    "mode"       => 2,
+    "nlink"      => 3,
+    "rdev"       => 6,
+    "size"       => 7,
+    "uid"        => 4,
 );
 
 # Mac filesystem xattr metadata (all keys start with "kMDItem").
@@ -768,15 +794,16 @@ my $dates           = 0;
 my $dateYears       = 0;
 my $dirs            = 1;
 my $dot             = 0;
-my $dropExtension   = 0;
+my $dropExtensions  = 0;
 my $expr            = "";
 my $ePad            = 0;
 my $ePadChar        = "0";
 my $extChanges      = 0;
 my $force           = 0;
 my $ignoreCase      = 0;
-my $xattrAdd        = '';
+my $xattrAdd        = "";
 my $lc              = 0;
+my $lcExtensions    = 0;
 my $onlyExtensions  = 0;
 my $padWidth        = 3;
 my $pull            = 0;
@@ -814,7 +841,7 @@ my %getOptHash = (
     "dateYears!"       => \$dateYears,
     "dirs!"            => \$dirs,
     "dot!"             => \$dot,
-    "dropExtension!"   => \$dropExtension,
+    "dropExtensions!"  => \$dropExtensions,
     "dry-run|dryrun!"  => \$test,
     "e|expr=s"         => \$expr,
     "ePad=n"           => \$ePad,
@@ -843,6 +870,7 @@ my %getOptHash = (
         exit;
     },
     "lc!"              => \$lc,
+    "lcExtensions|lowerExtensions!" => \$lcExtensions,
     "onlyExtensions!"  => \$onlyExtensions,
     "pad=n"            => \$padWidth,
     "pull=n"           => \$pull,
@@ -899,7 +927,7 @@ elsif ($expr) {
     my $delim = "\\" . substr($expr,0,1);
     my @tokens = split(/$delim/, $expr);
     vMsg(1, sprintf("delim '%s', split regex '%s' to: #%s#].",
-        $delim, $expr, join('#', @tokens)));
+        $delim, $expr, join("#", @tokens)));
     $xx = (scalar @tokens >= 1) ? $tokens[0] : "";   #  "s" optional
     $frExpr = (scalar @tokens >= 2) ? $tokens[1] : "";
     $toExpr = (scalar @tokens >= 3) ? $tokens[2] : "";
@@ -945,12 +973,12 @@ my $conflictCount = 0;
 my $failCount     = 0;
 my $path          = "";
 
-my $roman = '\b([ivxlcm]+|[IVXLCM]+)\b';
+my $roman = "\b([ivxlcm]+|[IVXLCM]+)\b";
 my $romanC = qr/$roman/;
 my $frC  = qr/$frExpr/;
 
 foreach my $fullPath (@ARGV) {
-    $fullPath = decode('utf8', $fullPath);
+    $fullPath = decode("utf8", $fullPath);
     doOneItem($fullPath);
 } # foreach
 
@@ -1033,7 +1061,7 @@ sub doOneItem {
         if ($recursive) {
             opendir(my $dirh, $name);
             while (my $child = readdir($dirh)) {
-                $child = decode('utf8', $child);
+                $child = decode("utf8", $child);
                 next if ($child eq "." || $child eq "..");
                 next if (!$dot && substr($child,0,1) eq ".");
                 doOneItem("$fullPath/$child");
@@ -1098,13 +1126,16 @@ sub variousChanges {
 
     my $name2 = $name;
     my $ext2 = $ext;
-    if ($ext2 && $dropExtension) {               # dropExtension
+    if ($ext2 && $dropExtensions) {              # dropExtension
         $ext2 = "";
     }
+    elsif ($ext2 && $lcExtensions) {             # lcExtensions
+        $ext2 = lc($ext2)
+    }
 
-    if (!$ext2 && $addExtension ne '') {         # addExtension
+    if (!$ext2 && $addExtension ne "") {         # addExtension
         $extFixes++;
-        if ($addExtension eq '!') {  # Try via 'file' command
+        if ($addExtension eq "!") {  # Try via "file" command
             my $fileInfo = `file "$fullPath`;
             for (my $i=0; $i < scalar(@fileToExt); $i++) {
                 my $expr = $fileToExt[$i][0];

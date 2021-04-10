@@ -125,7 +125,7 @@ def reportCandidates(dirpath, filename, top=""):
         ["find", args.baseDir, "-name", filename ]), encoding="utf-8")
     if (not buf):
         return 0
-    files = buf.strip().split("\n")
+    files = buf.strip().split(sep="\n")
     if (len(files) == 0):
         warn(0, "    No candidates found: '%s'" % (filename))
         return 0
@@ -136,7 +136,6 @@ def reportCandidates(dirpath, filename, top=""):
     return len(files)
 
 
-###############################################################################
 ###############################################################################
 # Main
 #
