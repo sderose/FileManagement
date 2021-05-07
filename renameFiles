@@ -54,14 +54,16 @@ Various options can:
 
 =item * normalize dates in names and move them to the front (I<--dates>),
 
+=item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
+
+=item * convert names to conform to various file-systems (I<--fileSystem>),
+
 =item * insert ancestor directory names into the filename (I<--pull>),
 
 =item * insert names extracted from the URI from which a file was downloaded
 (I<--pullURI>, MacOS only),
 
 =item * insert content extracted from the file's contents (I<--pullContent>),
-
-=item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
 
 =item * insert serial numbers to avoid conflicts (I<--resolve>, I<--pad>),
 
@@ -227,6 +229,13 @@ The character to use when padding right-hand sides with I<--ePad>. Default: "0".
 
 With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
 
+=item * B<--filesystem> I<name>
+
+Ensure that all filenames conform to the requirements of a certain filesystem.
+For example, MacOSX prohibits colons, Windows backslashes, and various systems
+have different maximum name lenths. To see a list of supported file systems,
+with their constraints, use I<--help-filesystems>.
+
 =item * B<--force>
 
 Overwrite conflicting output files with prejudice. Experimental.
@@ -391,6 +400,8 @@ See also I<--addExtension> and I<--extChanges>.
 
 
 =head1 Known bugs and limitations
+
+I<--filesystem> is unfinished.
 
 Changes with I<--extensions> put in 2 dots.
 
@@ -573,6 +584,8 @@ C<--onlyExtensions>. Add C<--extensions> synonym.
 
 =item * 2021-02-16: Add C<--lcExtensions>.
 
+=item * 2021-04-27: Start C<--filesystem>.
+
 =back
 
 
@@ -687,9 +700,9 @@ my %statKeys = (
     "adate"      => 8,
     "cdate"      => 10,
     "mdate"      => 9,
-#    "atime"	 => 8,
-#    "ctime"	 => 10,
-#    "mtime"	 => 9,
+#    "atime"   => 8,
+#    "ctime"   => 10,
+#    "mtime"   => 9,
 #    "adatetime" => 8,
 #    "cdatetime" => 10,
 #    "mdatetime" => 9,
@@ -778,6 +791,61 @@ my %macMeta = (
     "kMDItemScreenCaptureType"       => "selection",
 );
 
+# See https://en.wikipedia.org/wiki/Comparison_of_file_systems
+#
+my $BY = "bytes"; my $UC = "UChar";
+my $AS = "ASCII"; my $MS = "cp1252";
+my $U8 = "UTF-8"; my $U2 = "UCS-2"; my $U6 = "UTF-16";
+my $XX = 0;
+my $KB = 1<<9; my $MB = 1<<19; my $GB = 1<<29;
+my $TB = 1<<39; my $PB = 1<<49; my $EB = 1<<59; my $ZB = 1<<69;
+my $UNLIM = -1;
+my $NULL = "[\\x00]";
+my $NULLSOL = "[\\x00/]";
+my $FAT16BAN = "[\\x00-\\x1F \"*+,./:;<=>?\\\\[\\]]";
+my $FAT16LFN = "[\\x00\"*/:<>?\\\\|]";
+my $GEMBAN = "[\\x00-\\x1F *./:?\\\\{}]";
+
+my %filesystemsAvailable = (
+    # Name =>  MaxFname,case,unit,Enc,BannedChars, MaxPath,  MaxFile, MaxVol
+    "BeeGFS" =>     [ 255, 1, $BY,$XX,$XX,   16*$EB, 16*$EB, $NULL ],
+    "CP/M" =>       [ 8.3, 1, $BY,$AS,0,     32*$MB,512*$MB, "[<>.,;:=?*\\[\\]]" ],
+    "RT-11 " =>     [ 6.3, 0, $BY,$AS,0,     32*$MB, 32*$MB, "[^A-Z0-9\$]" ],
+    "V6FS" =>       [  14, 1, $BY,$XX,$XX,   16*$MB, 32*$MB, $NULLSOL ],
+    "CBM DOS" =>    [  16, 1, $BY,$XX,0,     16*$MB, 16*$MB, $NULL ],
+    "V7FS" =>       [  14, 1, $BY,$XX,$XX,    1*$GB,  2*$TB, $NULLSOL ],
+    "exFAT" =>      [ 255, 1, $UC,$XX,32760, 16*$EB, 64*$ZB, $XX ],
+    "FAT8" =>       [ 6.3, 1, $BY,$AS,0,        $XX,    $XX, "^[\\x00\\xFF]" ],
+    "FAT16 base" => [ 8.3, 1, $BY,$MS,$XX,   32*$MB, 32*$MB, $FAT16BAN ],
+    "FAT16 LFN" =>  [ 255, 1, $UC,$XX,$XX,    4*$GB, 32*$MB, $FAT16LFN ],
+    "FAT16B" =>     [ 8.3, 1, $BY,$MS,$XX,    2*$GB,  4*$GB, $XX ],
+    "FAT32" =>      [ 8.3, 1, $BY,$MS,32760,  4*$GB, 16*$TB, $XX ],
+    "FATX" =>       [  42, 1, $BY,$AS,$XX,    2*$GB,  2*$GB, $XX ],
+    "GEMDOS" =>     [ 8.3, 1, $BY,$AS,$XX,      $XX,    $XX, $GEMBAN ],
+    "APFS" =>       [ 255, 1, $UC,$U8,$XX,    8*$EB,    $XX, $XX ],
+    "F2FS" =>       [ 255, 1, $BY,$XX,$XX, 3.94*$TB, 16*$TB, $NULLSOL ],
+    "MFS" =>        [ 255, 1, $BY,$XX,0,    256*$MB,256*$MB, ":" ],
+    "HFS" =>        [  31, 1, $BY,$XX,$UNLIM, 2*$GB,  2*$TB, ":" ],
+    "HPFS" =>       [ 255, 1, $BY,$XX,$XX,    2*$GB,  2*$TB, $NULL ],
+    "NTFS_Win32" => [ 255, 0, $UC,$U6,32767, 16*$EB, 16*$EB, "[\\x00/\\:*\"?<>|]" ],
+    "NTFS_POSIX" => [ 255, 1, $UC,$U6,32767, 16*$EB, 16*$EB, "[\\x00/]" ],
+    "HFS Plus" =>   [ 255, 1, $UC,$U6,$UNLIM, 8*$EB,  8*$EB, $XX ],
+    "UFS1" =>       [ 255, 1, $BY,$XX,$XX,  256*$TB, 16*$EB, $NULL ],
+    "UFS2" =>       [ 255, 1, $BY,$XX,$XX,   32*$PB,512*$ZB, $NULL ],
+    "ext" =>        [ 255, 1, $BY,$XX,$XX,    2*$GB,  2*$GB, $NULL ],
+    "ext2" =>       [ 255, 1, $BY,$XX,$XX,    2*$TB, 32*$TB, $NULL ],
+    "ext3" =>       [ 255, 1, $BY,$XX,$XX,    2*$TB, 32*$TB, $NULL ],
+    "ext4" =>       [ 255, 1, $BY,$XX,$XX,   16*$TB,  1*$EB, $NULL ],
+    "ISO9660:881" =>[ 8.3, 1, $XX,$XX,$XX,    4*$GB,  8*$TB, $XX ],
+    "ISO9660:882" =>[ 180, 1, $XX,$XX,$XX,    4*$GB,  8*$TB, $XX ],
+    "ISO9660:883" =>[ 180, 1, $XX,$XX,$XX,    8*$TB,    $XX, $XX ],
+    "Joliet_CDFS" =>[  64, 1, $UC,$U2,$XX,    8*$TB,  8*$TB, "[*/\\:;?]" ],
+    "Rock Ridge" => [ 255, 1, $BY,$XX,$XX,    8*$TB,  8*$TB, $NULLSOL ],
+    "UniFS" =>      [ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
+    "ISO9660:1999"=>[ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
+    "HighSierra" => [ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
+);
+
 ###############################################################################
 # Options
 #
@@ -799,6 +867,7 @@ my $expr            = "";
 my $ePad            = 0;
 my $ePadChar        = "0";
 my $extChanges      = 0;
+my $filesystem      = '';
 my $force           = 0;
 my $ignoreCase      = 0;
 my $xattrAdd        = "";
@@ -847,8 +916,23 @@ my %getOptHash = (
     "ePad=n"           => \$ePad,
     "ePadChar=s"       => \$ePadChar,
     "extChanges|extensions!" => \$extChanges,
+    "filesystem=s"     => \$filesystem,
     "force!"           => \$force,
     "h|help"           => sub { system "perldoc $0"; exit; },
+    "help-filesystem"  => sub {
+        warn "File system properties:\n";
+        warn "Name      MaxFname case unit   Encod   MaxPath  " .
+          " MaxFile    MaxVol BannedChars\n";
+        my $fmt="%-12s %5d %4s %-6s %-6s %8s %8sB %8sB %s\n";
+        for my $x (sort keys %filesystemsAvailable) {
+            my @f = @{$filesystemsAvailable{$x}};
+            (scalar @f == 8) || die "Bad rec: " . join(@f, ", ") . "\n";
+            warn sprintf($fmt, $x, $f[0], $f[1] ? "R":"I", $f[2], $f[3], $f[4],
+                sjdUtils::toHNumber($f[5]), sjdUtils::toHNumber($f[6]),
+                sjdUtils::showInvisibles($f[7]));
+        }
+        exit;
+    },
     "help-x"           => sub {
         warn "Extensions mapped by the -x option:\n";
         for my $x (sort keys %extensionMap) {
@@ -896,7 +980,6 @@ my %getOptHash = (
 Getopt::Long::Configure ("ignore_case");
 GetOptions(%getOptHash) || die "Bad options.\n";
 
-
 sjdUtils::setVerbose($verbose);
 sjdUtils::setColors($color);
 
@@ -909,6 +992,9 @@ if ($addStat && !defined $statKeys{$addStat}) {
     die "Unknown stat field name/number '$addStat' for --addStat. Known: " .
         join(", ", sort keys %statKeys) . ".\n";
 }
+
+($filesystem && !defined $filesystemsAvailable{$filesystem}) && die
+    "--filesystem $filesystem not known. Check --help-filesystems.\n";
 
 # The user's -e change expression (if any)
 $expr =~ s/^\s*s?//;
@@ -1306,6 +1392,10 @@ sub variousChanges {
         vMsg(1, ">clean: '$name2'");
     }
 
+    if ($filesystem) {
+        $name2 = fixForFilesystem($name, $filesystem);
+    }
+
     return [ $name2, $ext2 ];
 } # variousChanges
 
@@ -1368,6 +1458,35 @@ sub extensionJoin {
     my ($name, $ext) = @_;
     (!$ext) && return $name;
     return $name . "." . $ext;
+}
+
+# TODO: Limit path length, length of each component.
+# What about going to 8.3 systems?
+# Wha do filesystems do with Unicode non-canonical?
+#
+sub fixForFilesystem {
+    my ($orig, $filesystem) = @_;
+    my $name = $orig;
+    my $sub = "_";
+    my @fsProps = @{$filesystemsAvailable{$filesystem}};
+    my $encoding = $fsProps[2];
+    if ($encoding eq "ASCII") {
+        $name =! s/[\x80-\xFF]//g;
+    }
+    elsif ($encoding ne "cp1252") {
+        $name =~ s/[\x80-\x9F]//g;
+    }
+    my $bannedChars = $fsProps[7];
+    if ($bannedChars ne "" && $bannedChars != 0) {
+        $name =~ s/$bannedChars/$sub/g;
+    }
+    my $maxFilename = $fsProps[0];
+    if ($maxFilename > 0 && len($name) > $maxFilename) {
+        $name = substr($name, 0, $maxFilename);
+    }
+    ($name ne $orig) &&
+        vMsg(1, "Name fixed for filesytem:\n    <$orig\n    >$name\n");
+    return $name;
 }
 
 
