@@ -7,7 +7,7 @@
 # To do:
 #     Make into an option on 'renameFiles'.
 #
-if [ "$1" == "-h" ]; then
+if [[ "$1" == "-h" ]]; then
     echo "Force extensions of the listed files, to lower-case."
     exit
 fi
