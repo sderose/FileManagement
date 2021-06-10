@@ -1,22 +1,24 @@
 #!/usr/bin/env python
 #
-# setEmailFileTime.py -- set the file-system timestamps on an email file
+# setEmailFileTime.py: Set the file-system timestamps on an email file
 # to match the MIME header "Date:" field.
+# 2019-03-04: Written by Steven J. DeRose
 #
 from __future__ import print_function
-import sys
+#import sys
 import argparse
 import re
-import subprocess
+from subprocess import check_output, CalledProcessError
 import codecs
 from datetime import datetime
 
-import PowerWalk
-
+from PowerWalk import PowerWalk, PWType
 from alogging import ALogger
+lg = ALogger(1)
 
 __metadata__ = {
     'title'        : "setEmailFileTime.py",
+    'description'  : "Set the file-system timestamps on an email file",
     'rightsHolder' : "Steven J. DeRose",
     'creator'      : "http://viaf.org/viaf/50334488",
     'type'         : "http://purl.org/dc/dcmitype/Software",
@@ -28,63 +30,137 @@ __metadata__ = {
 }
 __version__ = __metadata__['modified']
 
-lg = ALogger(1)
-
 descr = """
-=head1 Description
+=Description=
 
 Set the file-system timestamps on an email file
 to match the MIME header "Date:" field.
 
     touch -mt yyyymmddhhmm [file]
 
-should also work.
+should also work, but you'd have to get the time with C<grep> or similar, then
+convert it to a form C<touch> can handle:
 
-=head1 Related Commands
+You can also use this to extract and display the key header fields from an email file
+(--list).
 
-stat, ls -lU, etc.
 
-=head1 Known bugs and Limitations
+==MIME header example==
 
-=head1 Licensing
+    From: jsmith@example.com
+    X-Uniform-Type-Identifier: com.apple.mail-note
+    Content-Type: text/html;
+        charset=us-ascii
+    Content-Transfer-Encoding: quoted-printable
+    Mime-Version: 1.0 (Mac OS X Notes 3.3 \\(353\\))
+    Date: Mon, 30 Nov 2015 21:25:33 -0500
+    X-Mail-Created-Date: Sat, 23 Aug 2014 19:40:10 -0400
+    Subject: =?utf-8?Q?Eh_what=E2=80=A6?=
+    X-Universally-Unique-Identifier: 415F415F-601E-45DA-A04A1A3DE66A
+    Message-Id: <FB7D3156-A92D-415F-601E@example.com>
+
+
+=Related Commands=
+
+`stat`, `ls -lU`, etc.
+
+Could use a MIME library, but it seems like overkill.
+
+
+=Known bugs and Limitations=
+
+
+=Licensing=
 
 Copyright 2019-03-04 by Steven J. DeRose. This script is licensed under a
 Creative Commons Attribution-Share-alike 3.0 unported license.
 See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
 
+
 =History=
 
 * 2019-03-04: Written by Steven J. DeRose.
-
 * 2020-03-04: Lint, new layout.
+* 2021-05-07: Cleanup. Add `--list`. Factor out time formats.
 
-=head1 Options
+
+=Options=
 """
+
 
 ###############################################################################
 #
-def doOneFile(path, fh):
+mainFields = [ "Date", "From", "To", "Subject" ]
+
+# MIME "Date" fields should be like
+#     Fri, 17 Jul 2015 14:12:22 -0500
+#
+mimeTimeFormat = "%a, %d %b %Y %H:%M:%S %z"
+touchTimeFormat = "%Y%m%d%H%M"
+
+def getMainField(rec:str) -> str:
+    """Check whether this is one of our main fields. If so,
+    return the field name and value. Otherwise, None, None.
+    Also handle escaped UTF in the values.
+    TODO: Fields also include any following indented lines.
+    """
+    mat = re.match(r"^([-\w]+):\s*(.*)", rec)
+    if (not mat): return None, None
+    fdName = mat.group(1)
+    if (fdName not in mainFields): return None, None
+
+    fdVal = mat.group(2)
+    mat = re.match(r"=?(.*)?=$", fdVal.strip())
+    if (mat):
+        fdVal = re.sub(r"=([\da-f][\da-f])", unhex, fdVal, flags=re.I)
+        fdVal = decode(fdVal, encoding="utf-8")
+    return fdName, fdVal
+
+def unhex(mat):
+    return chr(int(mat.group(1),16))
+
+def doOneFile(path:str) -> None:
     """Deal with one individual file.
     """
+    print("File: %s" % (path))
+    fh = codecs.open(path, "rb", encoding="ASCII")
+    dateValue = None
     for rec in fh.readlines():
-        if (rec.startswith("Date:")):
-            dateLine = rec
+        #if (":" in rec): print(rec)
+        if (rec.strip() == ""): break
+        k, v = getMainField(rec)
+        #print("%s ::= %s" % (k or "-", v or "-"))
+        if (not k): continue
+        print("%-12s %s" % (k, v))
+        if (k == "Date"):
+            dateValue = v
             break
     fh.close()
-    if (not dateLine):
-        lg.eMsg("No 'Date:' line in '%s'." % (path))
+
+    if (dateValue is None):
+        lg.eMsg(0, "No 'Date:' line found in '%s'." % (path))
         return
 
-    # This should get like 'Fri, 17 Jul 2015 14:12:22 -0500'
-    dateValue = re.sub(r'^Date:\s*', '', dateLine)
-    dtObject = datetime.strptime(dateValue)
+    try:
+        dtObject = datetime.strptime(dateValue.strip(), mimeTimeFormat)
+    except ValueError as e:
+        lg.warning(0, "Failed to parse time '%s':\n    %s" % (dateValue, e))
+        return
 
-    ftime = dtObject.strftime("%Y%m%d%H%M")
+    # Format the time to what `touch` wants
+    try:
+        ftime = dtObject.strftime(touchTimeFormat)
+    except ValueError as e:
+        lg.warning(0, "strftime could not convert to format '%s':\n    %s" %
+            (touchTimeFormat, e))
 
-    subprocess.check_output('touch -mt "%s"' % (ftime), shell=True)
+    if (not args.dry_run):
+        try:
+            check_output([ 'touch', '-mt', '%s' % (ftime) ])
+        except CalledProcessError as e:
+            lg.warning(0, "`touch -mt %s` failed:\n    %s" % (ftime, e))
 
 
-###############################################################################
 ###############################################################################
 # Main
 #
@@ -98,23 +174,26 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--quiet", "-q",      action='store_true',
+            "--dry-run", "--test", action='store_true',
+            help='Do not actually change the filetime.')
+        parser.add_argument(
+            "--list", action='store_true',
+            help='Display the "main" header fields.')
+        parser.add_argument(
+            "--quiet", "-q", action='store_true',
             help='Suppress most messages.')
         parser.add_argument(
-            "--recursive",        action='store_true',
+            "--recursive", action='store_true',
             help='Descend into subdirectories.')
         parser.add_argument(
-            "--unicode",          action='store_const',  dest='iencoding',
-            const='utf8', help='Assume utf-8 for input files.')
-        parser.add_argument(
-            "--verbose", "-v",    action='count',       default=0,
+            "--verbose", "-v", action='count', default=0,
             help='Add more messages (repeatable).')
         parser.add_argument(
             "--version", action='version', version=__version__,
             help='Display version information, then exit.')
 
         parser.add_argument(
-            'files',             type=str,
+            'files', type=str,
             nargs=argparse.REMAINDER,
             help='Path(s) to input file(s)')
 
@@ -122,33 +201,16 @@ if __name__ == "__main__":
         if (args0.verbose): lg.setVerbose(args0.verbose)
         return(args0)
 
+
     ###########################################################################
     #
     args = processOptions()
 
     if (len(args.files) == 0):
-        lg.error("No files specified....")
-        doOneFile("[STDIN]", sys.stdin)
+        lg.fatal("No file(s) specified.")
     else:
-        depth = 0
-        pw = PowerWalk.PowerWalk(args.files)
+        pw = PowerWalk(args.files)
         pw.setOption('recursive', args.recursive)
-        for path0, fh0 in pw.traverse():
-            if (fh0 == "DIR_END"):
-                depth -= 1
-                continue
-            print("    " * depth + path0)
-            if (fh0 == "DIR_START"):
-                depth += 1
-                continue
-
-            fileNum = pw.stats['itemsReturned']
-            if (fileNum % args.tickInterval == 0):
-                lg.vMsg(0, "At item #%d" % (fileNum))
-            fh0 = codecs.open(path0, "rb", encoding=args.iencoding)
-            doOneFile(path0, fh0)
-            fh0.close()
-
-    if (not args.quiet):
-        lg.vMsg(0,"Done.")
-        lg.showStats()
+        for path0, _fh0, what0 in pw.traverse():
+            if (what0 != PWType.LEAF): continue
+            doOneFile(path0)

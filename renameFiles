@@ -806,6 +806,14 @@ my $FAT16BAN = "[\\x00-\\x1F \"*+,./:;<=>?\\\\[\\]]";
 my $FAT16LFN = "[\\x00\"*/:<>?\\\\|]";
 my $GEMBAN = "[\\x00-\\x1F *./:?\\\\{}]";
 
+my $FS_MAXNAME = 0;      # If not an int, fractional part is extension limit (always 3?)
+my $FS_CASE_REGARD = 1;  # Does it regard case?
+my $FS_UNIT = 2;         # Is FS_MAXNAME measured in bytes or chars?
+my $FS_ENCODING = 3;
+my $FS_BANCHARS = 4;     # Characters just not permitted.
+my $FS_MAXPATH = 5;      # Max char/bytes length of entire path (not # components)
+my $FS_MAXFILE = 6;      # Max supported filesize
+my $FS_MAXVOL = 7;       # Max supported volume size
 my %filesystemsAvailable = (
     # Name =>  MaxFname,case,unit,Enc,BannedChars, MaxPath,  MaxFile, MaxVol
     "BeeGFS" =>     [ 255, 1, $BY,$XX,$XX,   16*$EB, 16*$EB, $NULL ],
@@ -845,6 +853,7 @@ my %filesystemsAvailable = (
     "ISO9660:1999"=>[ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
     "HighSierra" => [ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
 );
+
 
 ###############################################################################
 # Options
@@ -1393,7 +1402,7 @@ sub variousChanges {
     }
 
     if ($filesystem) {
-        $name2 = fixForFilesystem($name, $filesystem);
+        $name2 = fixForFilesystem($fullPath, $name, $filesystem);
     }
 
     return [ $name2, $ext2 ];
@@ -1460,29 +1469,42 @@ sub extensionJoin {
     return $name . "." . $ext;
 }
 
-# TODO: Limit path length, length of each component.
-# What about going to 8.3 systems?
-# Wha do filesystems do with Unicode non-canonical?
+# FS_MAXNAME, FS_CASE_REGARD(UNUSED), FS_UNIT(TODO), FS_ENCODING,
+# FS_BANCHARS, FS_MAXPATH, FS_MAXFILE(UNUSED), FS_MAXVOL(UNUSED).
+# What do filesystems do about Unicode canonical forms?
 #
+
 sub fixForFilesystem {
-    my ($orig, $filesystem) = @_;
+    my ($path, $orig, $filesystem) = @_;
     my $name = $orig;
     my $sub = "_";
     my @fsProps = @{$filesystemsAvailable{$filesystem}};
-    my $encoding = $fsProps[2];
+    my $encoding = $fsProps[$FS_ENCODING];
     if ($encoding eq "ASCII") {
         $name =! s/[\x80-\xFF]//g;
     }
     elsif ($encoding ne "cp1252") {
         $name =~ s/[\x80-\x9F]//g;
     }
-    my $bannedChars = $fsProps[7];
+    my $bannedChars = $fsProps[$FS_BANCHARS];
     if ($bannedChars ne "" && $bannedChars != 0) {
         $name =~ s/$bannedChars/$sub/g;
     }
-    my $maxFilename = $fsProps[0];
-    if ($maxFilename > 0 && len($name) > $maxFilename) {
-        $name = substr($name, 0, $maxFilename);
+    my $maxFilename = $fsProps[$FS_MAXNAME];
+    my $maxExtension = int(($maxFilename - int($maxFilename)) * 10);
+    my $dotIndex = rindex($name, ".");
+    my $extension = ($dotIndex > 1 && $dotIndex+1<len($name)) ?
+      substr($name, $dotIndex) : "";
+    if ($extension ne "" && $maxExtension > 0 && len($extension) > $maxExtension) {
+        $extension = substr($extension, 0, $maxExtension);
+        $name = substr($name, 0, $dotIndex) . $extension;
+    }
+    if ($maxFilename > 0 && len($name) > $maxFilename+$maxExtension) {
+        $name = substr($name, 0, $maxFilename+$maxExtension);
+    }
+    my $maxPath = $fsProps[$FS_MAXPATH];
+    if ($maxPath > 0 && len($path > $maxPath)) {
+        eMSg(0, "ERROR: path length > $maxPath for '$path'\n");
     }
     ($name ne $orig) &&
         vMsg(1, "Name fixed for filesytem:\n    <$orig\n    >$name\n");
