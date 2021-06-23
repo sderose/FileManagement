@@ -5,14 +5,22 @@
 #
 import sys
 import os
-import codecs
-import stat
+#import codecs
+#import stat
 import fcntl
 import hashlib
 from enum import Enum
 
 from PowerWalk import PowerWalk, PWType
 
+try:
+    from os import getxattr, setxattr
+except ImportError as e:
+    from subprocess import check_output
+    def getxattr(path:str, aname:str):
+        return check_output([ "xattr", "-p", aname, path ])
+    def setxattr(path:str, aname:str, avalue:str):
+        return check_output([ "xattr", "-w", aname, avalue, path ])
 
 __metadata__ = {
     "title"        : "provenance.py",
@@ -22,7 +30,7 @@ __metadata__ = {
     "type"         : "http://purl.org/dc/dcmitype/Software",
     "language"     : "Python 3.7",
     "created"      : "2021-04-27",
-    "modified"     : "2021-04-27",
+    "modified"     : "2021-06-14",
     "publisher"    : "http://github.com/sderose",
     "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
@@ -31,6 +39,8 @@ __version__ = __metadata__["modified"]
 
 descr = """
 =Description=
+
+[unfinished]
 
 The idea here is to support annoating files with references to where they
 "came from". For example:
@@ -100,12 +110,12 @@ or [https://github.com/sderose].
 =Options=
 """
 
-def log(lvl, msg):
+def log(lvl:int, msg:str) -> None:
     if (args.verbose >= lvl): sys.stderr.write(msg + "\n")
-def warning0(msg): log(0, msg)
-def warning1(msg): log(1, msg)
-def warning2(msg): log(2, msg)
-def fatal(msg): log(0, msg); sys.exit()
+def warning0(msg:str) -> None: log(0, msg)
+def warning1(msg:str) -> None: log(1, msg)
+def warning2(msg:str) -> None: log(2, msg)
+def fatal(msg:str) -> None: log(0, msg); sys.exit()
 warn = log
 
 
@@ -128,7 +138,7 @@ class ChangeType(Enum):
 ###############################################################################
 #
 class ProvenanceEntry:
-    def __init__(self, path):
+    def __init__(self, path:str):
         assert os.path.exists(path)
 
         self.path = path
@@ -152,36 +162,51 @@ class ProvenanceEntry:
             "gitcommit": ''             # TODO
         }
 
-    def getVolumeId(path, dev):
+    def getVolumeId(self, path:str, dev) -> None:
+        """fcntl commands as OS-dependent. See:
+        https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fcntl.2.html
+        Not sure this is how to do this....
+        """
         with open(path, "rb") as ifh:
             # MacOS
-            fcntl.fcntl(ifh, cmd, arg=bytesArg)
+            cmd =
+            buf = bytes(" " * 1024)
+            try:
+                fcntl.fcntl(ifh, cmd, arg=buf)
+            except OSError as e:
+                fatal("fcntl failed: %s" % (e))
 
-    def dsign(self, path):
+    def dsign(self, path:str) -> str:
         m = hashlib.sha256()
         with open(path, "rb") as ifh:
-            while buf = ifh.read():
+            while (True):
+                buf = ifh.read()
+                if (not buf): break
                 m.add(buf)
         return m.hexdigest()
 
-    def getGitCommit(path):
+    def getGitCommit(self, path:str):
         pass
 
-    def tostring(self):
+    def tostring(self) -> str:
         pass
 
-    def addXAttrs(self, force=False):
-        attrName = "provenance"
-        buf = os.getxattr(path, attrName)
+    def addXAttrs(self, path:str, force:bool=False) -> None:
+        """The os xattr calls are only available on Linux.
+        https://docs.python.org/3/library/os.html?highlight=getxattr#os.getxattr
+        """
+        buf = getxattr(path, args.xattrname)  # Linux only!
         if (buf and not force): return False
-        os.setxattr(self.path, attrName, self.tostring())
-        pass
+        setxattr(path, args.xattrname, self.tostring())
 
-def showPartitions():
+def showPartitions() -> None:
     import psutil
     dps = psutil.disk_partitions()
-    for i, dp in enumerate(dps):
+    for i, _dp in enumerate(dps):
         print("\n*** Disk Partion #%d:" % (i))
+
+def doOneFile(path):
+    print("Unfinished!")
 
 
 ###############################################################################
@@ -189,7 +214,7 @@ def showPartitions():
 #
 if __name__ == "__main__":
     import argparse
-    def anyInt(x):
+    def anyInt(x:str):
         return int(x, 0)
 
     def processOptions():
@@ -200,6 +225,9 @@ if __name__ == "__main__":
         except ImportError:
             parser = argparse.ArgumentParser(description=descr)
 
+        parser.add_argument(
+            "--xattrname", type=str, default="provenance",
+            help="xattr name to store in. Default: 'provenance'.")
         parser.add_argument(
             "--quiet", "-q", action="store_true",
             help="Suppress most messages.")

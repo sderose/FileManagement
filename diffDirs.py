@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 #
-# diffDirs
+# diffDirs: Quick and dirty compare for directory trees.
+#
+# pylint: disable=W0603
 #
 from __future__ import print_function
 import sys
@@ -18,6 +20,7 @@ from PowerWalk import isHidden, isBackup, isGenerated
 
 __metadata__ = {
     'title'        : "diffDirs.py",
+    'description'  : "Quick and dirty compare for directory trees.",
     'rightsHolder' : "Steven J. DeRose",
     'creator'      : "http://viaf.org/viaf/50334488",
     'type'         : "http://purl.org/dc/dcmitype/Software",
@@ -35,7 +38,8 @@ descr = """
 [unfinished]
 
 This compares 2 directories, showing their differences on a file-by-file
-basis. Prefers a wide window. By default, ignores backup files, invisible files, and some generated files (like .pyc).
+basis. Prefers a wide window. By default, ignores backup files, invisible files,
+and some generated files (like .pyc).
 
 Similar to `diff -r`, but more informative and perhaps faster.
 
@@ -66,6 +70,7 @@ See https://stackoverflow.com/questions/1446549/
 * 2020-06-10: Switch to PowerWalk.isBackup. New layout.
 * 2020-08-21: Fix handling of binary files and EOF conditions.
 * 2020-09-23: Drop sjdUtils.
+
 
 =To do=
 
@@ -159,7 +164,7 @@ def firstMismatch(path1, path2):
     fh1 = open(path1, 'r')
     fh2 = open(path2, 'r')
     recnum1 = recnum2 = 0
-    EOF1 = EOF2 = False
+
     lg.vMsg(2, "Comparing %s..." % (os.path.basename(path1)))
     while (1):
         rec1, nRecs1 = advanceFile(fh1, recnum1)
@@ -372,91 +377,91 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--all",               action='store_true',
+            "--all", action='store_true',
             help='Include copy, backup, hidden, and object files.')
             # IF set, this method also sets the other args.
         parser.add_argument(
-            "-b",                  action='store_true',
+            "-b", action='store_true',
             help='Ignore differences in whitespace.')
         parser.add_argument(
-            "--backups",           action='store_true',
+            "--backups", action='store_true',
             help='Include copy and backup files (implied by --all).')
         parser.add_argument(
-            "--color",             action='store_true',   default=False,
+            "--color", action='store_true', default=False,
             help='Colorize the output.')
         parser.add_argument(
-            "--nocolor",           action='store_false',  dest="color",
+            "--nocolor", action='store_false', dest="color",
             help='Turn off colorizing.')
         parser.add_argument(
             "--comment", "--ignore-matching-lines", type=str, default="",
             help='Ignore lines matching this regex (e.g. "^\\s*#").')
         parser.add_argument(
-            "--diff",              action='store_true',   default=True,
+            "--diff", action='store_true', default=True,
             help='Compare contents (see also --showLines). Default: True.')
         parser.add_argument(
-            "--diffq",             action='store_true',
+            "--diffq", action='store_true',
             help='Compare contents via system "diff -q".')
         parser.add_argument(
-            "--nodiff",            action='store_false',  dest='diff',
+            "--nodiff", action='store_false', dest='diff',
             help='Do NOT compare file contents.')
         parser.add_argument(
-            "--generated",         action='store_true',
+            "--generated", action='store_true',
             help='Include generated files, such as .pyc, .DS_Store.')
         parser.add_argument(
-            "--hidden",            action='store_true',
+            "--hidden", action='store_true',
             help='Include hidden (dot-initial) files (implied by --all).')
         parser.add_argument(
-            "--ignoreCase", "-i",  action='store_true',
+            "--ignoreCase", "-i", action='store_true',
             help='Disregard case distinctions.')
         parser.add_argument(
-            "--md5",               action='store_true',
+            "--md5", action='store_true',
             help='Compare file checksums using *nix md5 command.')
         parser.add_argument(
-            "--nameWidth",         type=int,              default=32,
+            "--nameWidth", type=int, default=32,
             help='m to reserve for filenames.')
         parser.add_argument(
-            "--nil",               type=str,              default="(NONE)",
+            "--nil", type=str, default="(NONE)",
             #chr(0xA4)*5,
             help='String to show for missing files.')
         parser.add_argument(
-            "--prefixWidth",       type=int, default=8,
+            "--prefixWidth", type=int, default=8,
             help='Columns to reserve for status prefix (=== or !!!...).')
         parser.add_argument(
-            "--quiet", "-q",       action='store_true',
+            "--quiet", "-q", action='store_true',
             help='Suppress most messages.')
         parser.add_argument(
-            "-permissions",        action='store_true',
+            "-permissions", action='store_true',
             help='Check that permissions match.')
         parser.add_argument(
-            "--recursive", "-r",   action='store_true',
+            "--recursive", "-r", action='store_true',
             help='Descend into subdirectories.')
         parser.add_argument(
             "--report-identical-files", action='store_true',
             help='Just report files that *do* match across dirs.')
         parser.add_argument(
-            "--showDiffs",         action='store_true',
+            "--showDiffs", action='store_true',
             help='For each differing file, list size, time, md5, etc.')
         parser.add_argument(
-            "--showLines",         action='store_true',
+            "--showLines", action='store_true',
             help='Compare file sizes.')
         parser.add_argument(
-            "--size",              action='store_true', default=True,
+            "--size", action='store_true', default=True,
             help='Compare file sizes.')
         parser.add_argument(
-            "--tickInterval",      type=int, default=0,
+            "--tickInterval", type=int, default=0,
             help='For long file comparison, show progress / n lines.')
         parser.add_argument(
-            "--time",              action='store_true',
+            "--time", action='store_true',
             help='Compare file times.')
         parser.add_argument(
-            "--verbose", "-v",     action='count', default=0,
+            "--verbose", "-v", action='count', default=0,
             help='Add more messages (repeatable).')
         parser.add_argument(
             "--version", action='version', version='Version of '+__version__,
             help='Display version information, then exit.')
 
         parser.add_argument(
-            'dirs',                type=str, nargs=argparse.REMAINDER,
+            'dirs', type=str, nargs=argparse.REMAINDER,
             help='Path(s) to input dir(s)')
         args0 = parser.parse_args()
         return args0

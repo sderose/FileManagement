@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 #
 # findDuplicateFiles: "Scan directory subtrees for duplicate files."
-#
 # 2014-09-12: Written by Steven J. DeRose.
 #
 from __future__ import print_function
 import sys
 import os
 import re
+import hashlib
 
 from alogging import ALogger
 lg = ALogger()
 
 __metadata__ = {
     "title"        : "findDuplicateFiles",
-    "description"  : "Scan directory subtrees for duplicate files."
+    "description"  : "Scan directory subtrees for duplicate files.",
     "rightsHolder" : "Steven J. DeRose",
     "creator"      : "http://viaf.org/viaf/50334488",
     "type"         : "http://purl.org/dc/dcmitype/Software",
@@ -119,8 +119,9 @@ def normalizeFilename(
                 break
     return(name)
 
-def loadDirList(dirName:str, fileDict:dict=None, recursive:bool=True) -> dict:
-    """Load info on all the files from the given directory, into a dict by path.
+def loadDirInfo(dirName:str, fileDict:dict=None, recursive:bool=True) -> dict:
+    """Load info on all the files from the given directory, into a dict keyed by path, 
+    with checksums as values.
     """
     if (fileDict is None): fileDict = {}
     if (not os.path.isdir(dirName)):
@@ -131,11 +132,11 @@ def loadDirList(dirName:str, fileDict:dict=None, recursive:bool=True) -> dict:
         if (f[0]=="." and not args.hidden): continue
         path = os.path.join(dirName,f)
         if (os.path.isdir(path)):
-            if (recursive): loadDirList(path, fileDict)
+            if (recursive): fileDict.update(loadDirInfo(path, fileDict))
         else:
             csum = getHash(path) if (args.checksum) else "?"
             fileDict[path] = (
-                opens.path.getmtime(path), os.path.getsize(path), csum)
+                os.path.getmtime(path), os.path.getsize(path), csum)
     return(fileDict)
 
 def getHash(path):
@@ -143,7 +144,7 @@ def getHash(path):
     with open(path, "rb") as ifh:
         for x in ifh.read(1024):
             hasher.update(x)
-    csum = m.hexdigest()
+    csum = hasher.hexdigest()
     return csum
 
 
@@ -229,13 +230,13 @@ if __name__ == "__main__":
     totalRecords = 0
     totalFiles = 0
 
-    fileLists = []
+    fileLists = {}  # path -> checksum
     fileCounts = []
 
-    for dnum, dir in enumerate(args.files):
-        cur = loadDirList(args.files[dnum], cur)
-        fileLists.append(cur)
-        fileCounts.append(len(cur))
+    for dnum, diry in enumerate(args.files):
+        fileDict0 = loadDirInfo(args.files[dnum], diry)
+        fileLists.update(fileDict0)
+        fileCounts.append(len(fileDict0))
 
     lg.vMsg(0, "Done loading. File counts by directory tree:")
     lg.MsgPush()
@@ -276,4 +277,3 @@ if __name__ == "__main__":
         lg.vMsg(0,"Done.")
 
     sys.exit(0)
-

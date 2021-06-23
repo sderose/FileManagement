@@ -14,7 +14,7 @@ our %metadata = (
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12",
-    "modified"     => "2021-02-12",
+    "modified"     => "2021-06-09",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -95,6 +95,7 @@ Show version info and exit.
   2013-01-25 sjd: Port to Perl. Do subdirs by month.
   2017-04-20: Add --message, --cpOptions and default to cp -a.
   2021-02-12: New layout. Handle filenames with spaces, etc. Test --cpOptions '-r'.
+  2021-06-09: Fix misquoting of multiple names.
 
 
 =head1 Rights
@@ -113,15 +114,15 @@ L<https://github.com/sderose>.
 ###############################################################################
 # Options
 #
+my $bdir = $ENV{BACKUP_DIR} || "$ENV{HOME}/backups";
 my $cpOptions     = '-a';
 my $message       = '';
 my $noteFile      = "_backup_note.txt";
 my $quiet         = 0;
 my $verbose       = 0;
 
-my $bdir = $ENV{BACKUP_DIR} || "$ENV{HOME}/backups";
-
 my %getoptHash = (
+    "bdir=s"         => \$bdir,
     "cpOptions=s"    => \$cpOptions,
     "h|help"         => sub {
         system "perldoc $0";
@@ -140,6 +141,8 @@ GetOptions(%getoptHash) || die "Bad options.\n";
 
 (scalar(@ARGV)) || die "No files specified!\n";
 
+(-d "$bdir") || die "Backup dir '$bdir' does not exist.\n";
+
 
 ###############################################################################
 # Main
@@ -153,7 +156,12 @@ for my $f (@ARGV) {
         warn "'$f' is a directory, and you didn't specify '-r' in --cpOptions!\n";
     }
 }
-my $args = join(" ", @ARGV);
+
+my $args = my $qArgs = "";
+foreach my $a (@ARGV) {
+    $args .= " $a";
+    $qArgs .= " '$a'";
+}
 
 my $date = `date +%Y\-%m\-%dT%H.%M.%S`;
 chomp $date;
@@ -196,8 +204,6 @@ print NOTES $note;
 close(NOTES);
 
 # Do the actual backup
-my $qArgs = "";
-foreach my $a ($args) { $qArgs .= " '$a'"; }
 my $cmd = "cp $cpOptions $qArgs $subdir/";
 ($verbose) && warn "Running: $cmd\n";
 system $cmd || die "*** BACKUP FAILED ***\n";

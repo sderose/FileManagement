@@ -1,21 +1,24 @@
 #!/usr/bin/perl -w
 #
-# 2011-04-05: macFinderInfo. Written by Steven J. DeRose.
+# macFinderInfo: Extract and diplay Mac 'finderInfo', etc.
+# 2011-04-05: Written by Steven J. DeRose.
 #
 use strict;
 use Getopt::Long;
 use Encode;
 #use alogging;
 use XmlTuples;
+use sjdUtils;
 
 our %metadata = (
     'title'        => "macFinderInfo",
+    'description'  => "Extract and diplay Mac 'finderInfo', etc.",
     'rightsHolder' => "Steven J. DeRose",
     'creator'      => "http://viaf.org/viaf/50334488",
     'type'         => "http://purl.org/dc/dcmitype/Software",
     'language'     => "Perl 5.18",
     'created'      => "2011-04-05",
-    'modified'     => "2020-07-13",
+    'modified'     => "2021-06-14",
     'publisher'    => "http://github.com/sderose",
     'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -31,6 +34,7 @@ use Cwd 'abs_path';
 finderInfo [options] files
 
 Extract and diplay the 'finderInfo' for a given file, mostly using C<xattr>.
+Also shows UUID for the partition, volume, and host (I hope).
 
 
 =head1 Options
@@ -60,10 +64,17 @@ Add more messages (repeatable).
 
 Show version info and exit.
 
+=item * B<--visible>
+
+Translate unusual characters to visible representation.
+
+
 =back
 
 
 =head1 Known Bugs and Limitations
+
+Doesn't split out and report individual finderFlags yet (though info is here).
 
 
 =head1 Related Commands and Files
@@ -76,21 +87,65 @@ C<whereFrom>, C<pdfinfo>, C<file>, C<xattr>.
 
 =head1 To do
 
+Finish adding PartitionID, VolumeID, getHostID, inode, etc.
+
 Option to get *all* xattr data, and/or to check kMDItemWhereFroms (see xattr -l,
 but chop trailing nulls, decode dates, etc.
 
 Do something smarter with (Unicode?) strings.
 
+Parse the internals.
+
+See e.g. https://eclecticlight.co/2017/12/19/xattr-com-apple-finderinfo-information-for-the-finder/
+"It’s a FileInfo structure followed by a ExtendedFileInfo structure. These are
+located in the CoreServices Framework (CarbonCore>Finder.h>)."
+https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-8A428/Finder.h
+
+struct FileInfo {
+  OSType      fileType;               /* The type of the file (4 bytes) */
+  OSType      fileCreator;            /* The file's creator */
+  UInt16      finderFlags;            /* ex: kHasBundle, kIsInvisible... */
+  Point       location;               /* File's location in the folder */
+      /* If set to {0, 0}, the Finder will place the item automatically */
+  UInt16      reservedField;          /* (set to 0) */
+};
+typedef struct FileInfo                 FileInfo;
+
+struct FolderInfo {
+  Rect        windowBounds;           /* The position and dimension of the folder's window */
+  UInt16      finderFlags;            /* ex. kIsInvisible, kNameLocked, etc.*/
+  Point       location;               /* Folder's location in the parent folder */
+      /* If set to {0, 0}, the Finder will place the item automatically */
+  UInt16      reservedField;          /* (set to 0) */
+};
+typedef struct FolderInfo               FolderInfo;
+
+struct ExtendedFileInfo {
+  SInt16      reserved1[4];           /* Reserved (set to 0) */
+  UInt16      extendedFinderFlags;    /* Extended flags (custom badge, routing info...) */
+  SInt16      reserved2;              /* Reserved (set to 0). Comment ID if high-bit is clear */
+  SInt32      putAwayFolderID;        /* Put away folder ID */
+};
+typedef struct ExtendedFileInfo         ExtendedFileInfo;
+
+struct ExtendedFolderInfo {
+  Point       scrollPosition;         /* Scroll position (for icon views) */
+  SInt32      reserved1;              /* Reserved (set to 0) */
+  UInt16      extendedFinderFlags;    /* Extended flags (custom badge, routing info...) */
+  SInt16      reserved2;              /* Reserved (set to 0). Comment ID if high-bit is clear */
+  SInt32      putAwayFolderID;        /* Put away folder ID */
+};
+
+/* Finder flags and Extended flags -- see below */
+
 
 =head1 History
 
-2011-04-05: Written by Steven J. DeRose, sderose@acm.org.
-
-2018-09-20: Handles paths containing spaces etc.
-
-2020-07-13: New layout.
-
-2020-08-11": FIx decoding/display of utf-8 value, ";"-delimited list values.
+  2011-04-05: Written by Steven J. DeRose, sderose@acm.org.
+  2018-09-20: Handles paths containing spaces etc.
+  2020-07-13: New layout.
+  2020-08-11: Fix decoding/display of utf-8 value, ";"-delimited list values.
+  2021-06-14: Add --visible.
 
 
 =head1 Ownership
@@ -125,6 +180,7 @@ my %finderFlags = (
 my %extendedFinderFlags = (
     kExtendedFlagsAreInvalid => 0x8000,
     kExtendedFlagHasCustomBadge => 0x0100,
+    kExtendedFlagObjectIsBusy => 0x0080,
     kExtendedFlagHasRoutingInfo => 0x0004,
     );
 
@@ -195,17 +251,19 @@ my $keyFile       = "$thisPath/macOsxSpotLightKeys.xsv";
 my $listKeys      = 0;
 my $toHex         = 0;
 my $verbose       = 0;
+my $visible       = 1;
 
 Getopt::Long::Configure ("ignore_case");
 my $result = GetOptions(
-    "h|help"                  => sub { system "perldoc $0"; exit; },
-    "listKeys!"               => \$listKeys,
-    "q!"                      => \$quiet,
-    "toHex!"                  => \$toHex,
-    "v+"                      => \$verbose,
-    "version"                 => sub {
+    "h|help"      => sub { system "perldoc $0"; exit; },
+    "listKeys!"   => \$listKeys,
+    "q!"          => \$quiet,
+    "toHex!"      => \$toHex,
+    "v+"          => \$verbose,
+    "version"     => sub {
         die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
-    }
+    },
+    "visible!"    => \$visible,
     );
 
 ($result) || die "Bad options.\n";
@@ -249,41 +307,12 @@ sub listKeys {
 }
 
 
-sub wrap {  # Now also available in sjdUtils.
-    my ($s, $indent, $width, $breakChar) = @_;
-    if (!$width)     { $width = $ENV{COLUMNS} || 80; }
-    if ($indent)     { $width -= $indent; }
-    if (!$breakChar) { $breakChar = " "; }
-
-    my $istring = " " x ($indent || 0);
-    my $buf = "";
-    for my $line (split(/[\r\n]+/, $s)) {
-        while ($line ne "") {
-            if (length($line) < $width) {
-                $buf .= $istring . $line . "\n";
-                $line = ''; last;
-            }
-            my $lastShadow = rindex($line, $breakChar, $width);
-            if ($lastShadow < 0) {  # no place to break
-                $buf .= $istring . substr($line, 0, $width) . "\n";
-                $line = (length($line) > $width) ?
-                    substr($line, $width) : $line = '';
-            }
-            else {
-                $buf .= $istring . substr($line, 0, $lastShadow) . "\n";
-                $line = substr($line, $lastShadow+1);
-            }
-        }
-    }
-    return($buf);
-} # wrap
-
-
 sub doOneFile {
     my ($file) = @_;
-    my @attrNames = `xattr '$file'`;
+    my @attrNames = `xattr '$file'`;  # Typically returns 'com.apple.FinderInfo'
 
     for my $name (@attrNames) {
+        #($verbose) && warn "Fetching xattr '$name'.\n";
         chomp $name;
         my $cmd = "xattr -p $name '$file'";
         my $val = `$cmd`;
@@ -295,12 +324,34 @@ sub doOneFile {
             print "      " . join(";\n      ", @entries) . "\n    ]\n";
         }
         elsif (" $val" =~ m/^(\s[0-9A-F][0-9A-F])+\s*$/s) {
-            print "    =(string): '" . x2str($val) . "'\n";
+            print "    =(raw string): ###$val###\n";
+            (length($val)/3 == 32) || warn
+                sprintf("Length is %d, not 32.\n", length($val)/3);
+            print "    =(hex string): '" . x2str($val) . "'\n";
         }
         else {
-            print "    =(raw): ###$val###\n";
+            print "    =(raw string): ###$val###\n";
         }
     }
+
+    print("Partition UUID: %s", getPartitionID($file))
+    print("Volume UUID: %s", getVolumeID($file))
+    print("Host UUID: %s", getHostID($file))
+}
+
+sub getPartitionID {
+    my ($file) = @_;
+    return "???";
+}
+
+sub getVolumeID {
+    my ($file) = @_;
+    return "???";
+}
+
+sub getHostID {
+    my ($file) = @_;
+    return "???";
 }
 
 
@@ -323,16 +374,22 @@ BEGIN {
     }
 } # END
 
-sub x2str { # Doesn't handle utf8 or ucs2
+# Convert a string like this to characters:
+#     00 00 00 00 00 00 00 00 40 00 00 00...
+# Doesn't handle utf8 or ucs2.
+#
+sub x2str {
     my ($s) = @_;
     my $buf = "";
     Encode::decode('utf8', $s);
     if ($toHex) {
         while ($s =~ m/\s*([0-9a-f][0-9a-f])/ig) {
-	        my $c = chr(hex("0x".$1));
-            $buf .= $c;
+            my $x = hex("0x".$1);
+            my $c = chr($x);
+	        $buf .= $c;
         }
     }
+    if ($visible) { $buf = sjdUtils::showInvisibles($buf); }
     return($buf);
 }
 

@@ -2,7 +2,7 @@
 #
 # setEmailFileTime.py: Set the file-system timestamps on an email file
 # to match the MIME header "Date:" field.
-# 2019-03-04: Written by Steven J. DeRose
+# 2019-03-04: Written by Steven J. DeRose.
 #
 from __future__ import print_function
 #import sys
@@ -17,57 +17,48 @@ from alogging import ALogger
 lg = ALogger(1)
 
 __metadata__ = {
-    'title'        : "setEmailFileTime.py",
-    'description'  : "Set the file-system timestamps on an email file",
-    'rightsHolder' : "Steven J. DeRose",
-    'creator'      : "http://viaf.org/viaf/50334488",
-    'type'         : "http://purl.org/dc/dcmitype/Software",
-    'language'     : "Python 3.7",
-    'created'      : "2019-03-04",
-    'modified'     : "2020-03-04",
-    'publisher'    : "http://github.com/sderose",
-    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
+    "title"        : "setEmailFileTime.py",
+    "description"  : "Set file-system timestamps on email from their Date field.",
+    "rightsHolder" : "Steven J. DeRose",
+    "creator"      : "http://viaf.org/viaf/50334488",
+    "type"         : "http://purl.org/dc/dcmitype/Software",
+    "language"     : "Python 3.7",
+    "created"      : "2019-03-04",
+    "modified"     : "2021-06-18",
+    "publisher"    : "http://github.com/sderose",
+    "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
-__version__ = __metadata__['modified']
+__version__ = __metadata__["modified"]
 
 descr = """
 =Description=
 
-Set the file-system timestamps on an email file
+Set the file-system timestamps on a (MIME) email file
 to match the MIME header "Date:" field.
 
-    touch -mt yyyymmddhhmm [file]
+This can also be done manually with something like:
+    for x in *.eml; do
+        touch -mt `grep --max 1 '^Date:' $x | cut -c 7- | date +"%Y%m%d%H%M"` $x
+    done
 
-should also work, but you'd have to get the time with C<grep> or similar, then
-convert it to a form C<touch> can handle:
+But that seems less than ideal to me....
 
 You can also use this to extract and display the key header fields from an email file
 (--list).
-
-
-==MIME header example==
-
-    From: jsmith@example.com
-    X-Uniform-Type-Identifier: com.apple.mail-note
-    Content-Type: text/html;
-        charset=us-ascii
-    Content-Transfer-Encoding: quoted-printable
-    Mime-Version: 1.0 (Mac OS X Notes 3.3 \\(353\\))
-    Date: Mon, 30 Nov 2015 21:25:33 -0500
-    X-Mail-Created-Date: Sat, 23 Aug 2014 19:40:10 -0400
-    Subject: =?utf-8?Q?Eh_what=E2=80=A6?=
-    X-Universally-Unique-Identifier: 415F415F-601E-45DA-A04A1A3DE66A
-    Message-Id: <FB7D3156-A92D-415F-601E@example.com>
 
 
 =Related Commands=
 
 `stat`, `ls -lU`, etc.
 
-Could use a MIME library, but it seems like overkill.
+`stat`, `ls -lU`, `date`, `strftime`, etc.
 
 
 =Known bugs and Limitations=
+
+Doesn't do anything special for files containing ''multiple'' emails.
+
+Could use a MIME library, but it seems like overkill.
 
 
 =Licensing=
@@ -82,6 +73,7 @@ See http://creativecommons.org/licenses/by-sa/3.0/ for more information.
 * 2019-03-04: Written by Steven J. DeRose.
 * 2020-03-04: Lint, new layout.
 * 2021-05-07: Cleanup. Add `--list`. Factor out time formats.
+* 2021-06-18: Sync to PowerWalk updates.
 
 
 =Options=
@@ -113,7 +105,7 @@ def getMainField(rec:str) -> str:
     mat = re.match(r"=?(.*)?=$", fdVal.strip())
     if (mat):
         fdVal = re.sub(r"=([\da-f][\da-f])", unhex, fdVal, flags=re.I)
-        fdVal = decode(fdVal, encoding="utf-8")
+        fdVal = fdVal.decode(encoding="utf-8")
     return fdName, fdVal
 
 def unhex(mat):
@@ -141,11 +133,11 @@ def doOneFile(path:str) -> None:
         lg.eMsg(0, "No 'Date:' line found in '%s'." % (path))
         return
 
+    # Should be like 'Fri, 17 Jul 2015 14:12:22 -0500'
     try:
-        dtObject = datetime.strptime(dateValue.strip(), mimeTimeFormat)
+        dtObject = datetime.strptime(dateValue)
     except ValueError as e:
-        lg.warning(0, "Failed to parse time '%s':\n    %s" % (dateValue, e))
-        return
+        lg.error(0, "Unparseable time '%s':\n    %s" % (dateValue, e))
 
     # Format the time to what `touch` wants
     try:
@@ -186,16 +178,20 @@ if __name__ == "__main__":
             "--recursive", action='store_true',
             help='Descend into subdirectories.')
         parser.add_argument(
-            "--verbose", "-v", action='count', default=0,
-            help='Add more messages (repeatable).')
+            "--unicode",action="store_const", dest="iencoding",
+            const="utf8", help="Assume utf-8 for input files.")
         parser.add_argument(
-            "--version", action='version', version=__version__,
-            help='Display version information, then exit.')
+            "--verbose", "-v", action="count", default=0,
+            help="Add more messages (repeatable).")
+        parser.add_argument(
+            "--version", action="version", version=__version__,
+            help="Display version information, then exit.")
 
         parser.add_argument(
-            'files', type=str,
-            nargs=argparse.REMAINDER,
-            help='Path(s) to input file(s)')
+            "files", type=str, nargs=argparse.REMAINDER,
+            help="Path(s) to input file(s)")
+
+        PowerWalk.addOptionsToArgparse(parser)
 
         args0 = parser.parse_args()
         if (args0.verbose): lg.setVerbose(args0.verbose)
@@ -209,8 +205,21 @@ if __name__ == "__main__":
     if (len(args.files) == 0):
         lg.fatal("No file(s) specified.")
     else:
+        depth = 0
         pw = PowerWalk(args.files)
-        pw.setOption('recursive', args.recursive)
-        for path0, _fh0, what0 in pw.traverse():
-            if (what0 != PWType.LEAF): continue
+        pw.setOptionsFromArgparse(args)
+        for path0, fh0, what0 in pw.traverse():
+            if (what0 == PWType.CLOSE):
+                depth -= 1
+                continue
+            print("    " * depth + path0)
+            if (what0 == PWType.OPEN):
+                depth += 1
+                continue
+
+            fileNum = pw.travState.stats["itemsReturned"]
+            if (fileNum % args.tickInterval == 0):
+                lg.vMsg(0, "At item #%d" % (fileNum))
+            fh0 = codecs.open(path0, "rb", encoding=args.iencoding)
             doOneFile(path0)
+            fh0.close()

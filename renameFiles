@@ -1,11 +1,10 @@
 #!/usr/bin/perl -w
 #
-# renamefiles: Use Perl s/// to rename multiple files.
+# renamefiles: Absurdly flexible bulk file-renaming.
 # Written 2006-12-18 by Steven J. DeRose.
 #
 use strict;
 use Getopt::Long;
-#use File::stat; -- broken, but not needed anyway.
 use Encode;
 
 use sjdUtils;
@@ -13,13 +12,13 @@ use alogging;
 
 our %metadata = (
     "title"        => "renameFiles",
-    "description"  => "Flexible bulk file-renaming.",
+    "description"  => "Absurdly flexible bulk file-renaming.",
     "rightsHolder" => "Steven J. DeRose",
     "creator"      => "http://viaf.org/viaf/50334488",
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12-18",
-    "modified"     => "2020-06-26",
+    "modified"     => "2021-06-22",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -52,7 +51,8 @@ Various options can:
 
 =over
 
-=item * normalize dates in names and move them to the front (I<--dates>),
+=item * normalize dates or numbers in names, and/or move them to the front
+(I<--dates>, I<--epad>, etc.),
 
 =item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
 
@@ -103,8 +103,8 @@ Use I<ext> as the extension (don't specify the "."), except that if I<ext> is
 set to "!", use the *nix C<file> command to figure out what the file is, and
 provide the appropriate extension from an internal list. C<file> is not
 complete, nor is the internal list. For example, a Java source file (at
-least on my version of Mac OS) comes back merely as "ASCII text", which the
-list will map to extension "txt".
+least on my version of Mac OS when I checked) comes back merely as "ASCII text",
+which the list maps to extension "txt".
 See also I<--extChanges>.
 
 =item * B<--addStat> I<n>
@@ -468,7 +468,7 @@ Simple batch renames can also be done with the C<bash for> command:
         mv $x $y
     done
 
-In `zsh` as opposed to `bash`, you can use `zmv` to do clever renames like:
+In `zsh` as opposed to `bash`, you can use `zmv` to achieve renames like:
 
     zmv "(*).jpeg" "$1.jpg"
     zmv "(*)-backup.(*)" "backups/$1.$2"
@@ -593,45 +593,32 @@ C<--onlyExtensions>. Add C<--extensions> synonym.
 
 =over
 
-=item * Port to Python and use PowerWalk.py.
+=item * Port to Python and integrate PowerWalk.py.
 
-=item * Option to extract date from .eml file.
+=item * Option to operate *only* on directories, etc.
+Add all PowerWalk file selection).
 
-=item * C<--clean> should also do C<--addExtension> 'txt' (for non-dirs).
+=item * Add generality of C<strftime> and C<PowerStat.py> to
+format inserted dates and C<stat> items.
 
-=item * Option to operate *only* on directories.
+=item * Access to additional data to pull into name
+
+=over
 
 =item * Check for F<.git> and be able to do C<git mv> instead of C<mv>!
 
-=item * Allow localized date formats and month names.
-
-=item * Unicode issues, esp nbsp with C<--dates>.
-
-=item * Perhaps offer formats a la C<strftime()>.
+=item * Allow localized date formats and month names, or strftime formats.
 
 =item * Add times and datetimes to C<--addstat>.
+
+=item * Option to extract MIME "Date:" from .eml files.
 
 =item * Options to set properties on files, like Mac OS label? (see list below)
 l<http://superuser.com/questions/168927/>
 com.apple.metadata:_kMDItemUserTags
 
-
-=item * Feature to increment, or make contiguous, numeric portions of filenames?
-
-=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead of " "
-
-=item * Make C<--bactrianize> not put space after hyphens.
-
-=item * "To" vs "_to_" vs "2"?
-
-=item * Extract PDF titles. See
-L<https://stackoverflow.com/questions/44598758> or "cermine".
-
-=item * Add a way to reference Mac fs metadata in C<--expr> RHS.
-
-=item * Rename to md5 checksum of the file?
-
 =item * Idea of pulling metadata from PDF into filename.
+L<https://stackoverflow.com/questions/44598758> or "cermine".
 Cf L<https://academia.stackexchange.com/questions/139733/how-to-manage-publications-on-a-local-computer?rq=1>
 L<https://stackoverflow.com/questions/50575957/how-to-robustly-extract-author-names-from-pdf-papers>
 L<https://www.tutorialexample.com/python-extract-pdf-paper-title-by-content-not-by-metadata-a-step-guide-python-tutorial/>
@@ -639,6 +626,25 @@ L<https://stackoverflow.com/questions/1813427/extracting-information-from-pdfs-o
 L<https://pypi.org/project/scholarly/>
 PyPDF2, cb2bib, TET, Cermine.
 
+=item * Add a way to reference Mac fs metadata in C<--expr> RHS.
+
+=item * checksum of the file
+
+=back
+
+=item * C<--clean> should also do C<--addExtension> 'txt' (for non-dirs).
+
+=item * Feature to increment, or make contiguous, numeric portions of filenames?
+
+=item * C<--ePad> only allows I<left> padding at present.
+
+=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead of " "
+
+=item * Make C<--bactrianize> not put space after hyphens.
+
+=item * Unicode issues, esp nbsp with C<--dates>.
+
+=item * "To" vs "_to_" vs "2"?
 
 =back
 

@@ -96,50 +96,6 @@ or [https://github.com/sderose].
 
 
 ###############################################################################
-# Options
-#
-def processOptions():
-    try:
-        from BlockFormatter import BlockFormatter
-        parser = argparse.ArgumentParser(
-            description=descr, formatter_class=BlockFormatter)
-    except ImportError:
-        parser = argparse.ArgumentParser(description=descr)
-
-    parser.add_argument(
-        "--maxTries",        type=int, default=100,
-        help='Only make this many tries before giving up.')
-
-    parser.add_argument(
-        "--mustBeAvailable", action='store_true', default=True,
-        help='Return the next name that does NOT yet exist.')
-    parser.add_argument(
-        "--no-mustBeAvailable", "--notest", "--no-test",
-        action='store_false', dest='mustBeAvailable',
-        help='Return the next name whether or not it already exists.')
-
-    parser.add_argument(
-        "--quiet", "-q",     action='store_true',
-        help='Suppress most messages.')
-    parser.add_argument(
-        "--verbose", "-v",   action='count', default=0,
-        help='Add more messages (repeatable).')
-    parser.add_argument(
-        '--version', action='version', version='Version of '+__version__,
-        help='Display version information, then exit.')
-    parser.add_argument(
-        "--width",           type=int, default=4,
-        help='Zero-pad numbers to be at least this wide. Default: 4.')
-
-    parser.add_argument(
-        'names',             type=str,
-        nargs=argparse.REMAINDER,
-        help='Filenames or other strings to "increment."')
-
-    return(parser.parse_args())
-
-
-###############################################################################
 #
 def getNewPath(orig, mustBeAvailable=True, maxTries=100):
     """Split up the path, then try numbers as long as needed.
@@ -183,12 +139,53 @@ def getNewPath(orig, mustBeAvailable=True, maxTries=100):
 # Main
 #
 if __name__ == '__main__':
+    def processOptions():
+        try:
+            from BlockFormatter import BlockFormatter
+            parser = argparse.ArgumentParser(
+                description=descr, formatter_class=BlockFormatter)
+        except ImportError:
+            parser = argparse.ArgumentParser(description=descr)
+
+        parser.add_argument(
+            "--maxTries", type=int, default=100,
+            help='Only make this many tries before giving up.')
+
+        parser.add_argument(
+            "--mustBeAvailable", action='store_true', default=True,
+            help='Return the next name that does NOT yet exist.')
+        parser.add_argument(
+            "--no-mustBeAvailable", "--notest", "--no-test",
+            action='store_false', dest='mustBeAvailable',
+            help='Return the next name whether or not it already exists.')
+
+        parser.add_argument(
+            "--quiet", "-q", action='store_true',
+            help='Suppress most messages.')
+        parser.add_argument(
+            "--verbose", "-v", action='count', default=0,
+            help='Add more messages (repeatable).')
+        parser.add_argument(
+            '--version', action='version', version='Version of '+__version__,
+            help='Display version information, then exit.')
+        parser.add_argument(
+            "--width", type=int, default=4,
+            help='Zero-pad numbers to be at least this wide. Default: 4.')
+
+        parser.add_argument(
+            'names', type=str,
+            nargs=argparse.REMAINDER,
+            help='Filenames or other strings to "increment."')
+
+        args0 = parser.parse_args()
+        return args0
+
+
     args = processOptions()
     for n in (range(len(args.names))):
-        newPath = getNewPath(args.names[n],
+        newPath0 = getNewPath(args.names[n],
             mustBeAvailable=args.mustBeAvailable, maxTries=args.maxTries)
         if (args.verbose):
-            print("%s\t%s" % (args.names[n], newPath))
+            print("%s\t%s" % (args.names[n], newPath0))
         else:
-            print(newPath)
-    sys.exit(0)
+            print(newPath0)
