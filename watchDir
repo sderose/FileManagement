@@ -16,7 +16,7 @@ our %metadata = (
     'type'         => "http://purl.org/dc/dcmitype/Software",
     'language'     => "Perl 5.18",
     'created'      => "2006-10-16",
-    'modified'     => "2020-12-21",
+    'modified'     => "2021-07-23",
     'publisher'    => "http://github.com/sderose",
     'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -38,17 +38,12 @@ For example, you can open an editor on each file as it changes, with:
 
     watchDir --exec "$EDITOR" ~/myDir
 
+Some other handy commands to use with C<--exec> include C<ls -l>, C<diff> vs. a backup,
+C<backup>, C<lint>, and many others.
+
 There is not yet a way to watch a single file in isolation, although
 you can watch the parent directory, which includes catching changes to all files
 within that directory.
-
-There are many similar commands, such as:
-
-C<opensnoop> -- seems great, but I couldn't get it to work on MacOSX Catalina.
-
-C<instruments>
-
-C<watch>
 
 
 =head1 Options
@@ -57,7 +52,9 @@ C<watch>
 
 =item * B<--exec> I<cmd>
 
-When a file changes, run I<cmd> on it.
+When a file changes, run I<cmd> on it. If I<cmd> contains "{}" one or more times,
+replace it with the file's path; otherwise, append the file's path to I<cmd> after a space.
+If the system command fails, a message and the return code are printed.
 
 =item * B<-p>
 
@@ -88,32 +85,42 @@ Display version info and exit.
 
 =head1 Related commands
 
-C<watch> watchDir is a lot like C<watch -d -n 2 ls -lt --full-time> (which
+There are many similar commands, such as:
+
+C<opensnoop> -- seems great, but I couldn't get it to work on MacOSX Catalina.
+
+C<instruments>
+
+C<watch> -- C<watchDir> is a lot like C<watch -d -n 2 ls -lt --full-time> (which
 is available in Linux, but apparently not on BSD/MacOSX except via C<brew>).
-However:
+However, C<watchDir>
 
 =over
 
-=item * it outputs a log of changes, rather than highlighting in one list
+=item * distinguishes changes, additions, and deletions as such
 
-=item * it is better if you're watching a big listing as a whole
+=item * outputs a log of changes, rather than highlighting in one list
 
-=item * it counts changed files
+=item * is better if you're watching a big listing as a whole
 
-=item * it distinguishes changes, additions, and deletions as such
+=item * counts changed files
 
 =back
 
-L<https://superuser.com/questions/181517/how-to-execute-a-command-whenever-a-file-changes> has several solutions for similar problems.
+L<https://superuser.com/questions/181517/how-to-execute-a-command-whenever-a-file-changes> 
+has several additional solutions for similar problems.
 
 
 =head1 To Do
 
+  * Support single-file watching.
   * Option to find the first changed line and display it, or edit at it.
   * Option to do a special command (maybe scp) on the most-recently-changed
 file, when a certain trigger file occurs. For example, this would let people
 drop things into a watchDir'd dropbox, then poll to re-fetch the file.
 Would rsync mirroring be enough?
+  * Perhaps add specific support for backing up files as they change? 
+See my L<https://www.github.com/sderose/FileManagement/blob/master/backup>.
 
 
 =head1 History
@@ -123,6 +130,7 @@ Would rsync mirroring be enough?
   2020-11-20: New layout. Mention related commands.
   2020-12-21: Switch from ls to stat. Add --exec.
   2021-01-22: Add --spinner.
+  2021-07-23: Refactor --exec, report if it fails, support {} substitution.
 
 
 =head1 Rights
@@ -171,6 +179,7 @@ GetOptions(%getoptHash) || die "Bad options.\n";
 my $dir = $ARGV[0] || ".";
 (-d $dir) || die "Couldn't find directory '$dir'.\n";
 
+($exec) && print("Running '$exec' on each changed file...\n");
 print "(^C to exit)\n";
 
 my $prevTimesRef = getModTimes($dir);
@@ -201,7 +210,7 @@ while (1) {
         if (defined $nextTimesRef->{$x} &&
             $prevTimesRef->{$x} ne $nextTimesRef->{$x}) {
             print "\n$x \tUPDATED\n";
-            if ($exec) { print `$exec "$x"`; }
+            if ($exec) { runExec($x); }
             $nchanged++;
         }
     }
@@ -246,3 +255,17 @@ sub getModTimes {
     return(\%rc);
 }
 
+sub runExec {
+    my ($path) = @_;
+    my $cmd = $exec;
+    if ($cmd =~ m/{}/) {
+        $cmd =~ s/{}/$path/g;
+    }
+    else {
+        $cmd .= " " . $path;
+    }
+    system($cmd);
+    if ($? != 0) {
+        print("******* Command failed, rc $?: $cmd\n");
+    }
+}

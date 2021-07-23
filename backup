@@ -30,7 +30,7 @@ backup [options] files
 Copy file(s) to a time-stamped subdirectory under I<$BACKUP_DIR>.
 
 If environment variable I<$BACKUP_DIR> is not set, the backups are
-created under I<$HOME/backups>.
+created under I<\$HOME/backups>.
 
 Each use of this command makes a new directory, named with a timestamp.
 The requested I<files> are copied there, along with a note file
@@ -54,7 +54,7 @@ Options can be specified for the C<cp> command via the I<--cpOptions> option.
 
 =item * B<--cpOptions> I<opts>
 
-Pass the specified options to the copy command.
+Pass the specified options to the copy command (C<cp>).
 Default: C<-a> (for both BSD and *nix, this makes C<cp> preserve
 the timestamps, permissions, etc. of the copied file(s).
 
