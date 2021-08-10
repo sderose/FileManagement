@@ -85,6 +85,13 @@ Show version info and exit.
 =head1 Known Bugs and Limitations
 
 
+=head1 To Do
+
+  * Save git commit and branch info if applicable, or other VCS info.
+        git rev-parse --show-toplevel
+        git log -n 1 [file]
+
+
 =head1 History
 
   2006-12: Written by Steven J. DeRose (in bash).
@@ -109,6 +116,27 @@ For the most recent version, see L<http://www.derose.net/steve/utilities> or
 L<https://github.com/sderose>.
 
 =cut
+
+
+sub makeNote {
+    my ($date, $args, $message) = @_;   
+    my $host = `hostname`;
+    my $note = qq@
+    Time was:
+        $date
+    Hostname:
+        $host
+    Backup command was:
+        $0 $args
+    PWD at the time was:
+        $ENV{PWD}
+    @;
+    
+    my $gitRoot = `git rev-parse --show-toplevel`;
+    $note .= "Git repo:\n    $gitRoot\n";
+    if ($message) { $note .= "Message:\n    $message\n"; }
+    return $note;
+}
 
 
 ###############################################################################
@@ -184,19 +212,8 @@ if (!-d $subdir) {
 
 # Make a note, to preserve source path info:
 #
+my $note = makeNote($date, $args, $message);
 my $notePath="$subdir/$noteFile";
-my $host = `hostname`;
-my $note = qq@
-Time was:
-    $date
-Backup command was:
-    $0 $args
-PWD at the time was:
-    $ENV{PWD}
-Hostname:
-    $host
-@;
-if ($message) { $note .= "Message:\n    $message\n"; }
 if (!open(NOTES, ">$notePath")) {
     die "Couldn't write notes file at '$notePath'.\n";
 }
