@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # checkSumDirs.py Run a checksum on a directory or tree.
 # 2020-05-09: Written by Steven J. DeRose.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # syncDirs.py: find any of these files that also have a copy among my
 # utilities, and report (and optionally update) if they're not identical.

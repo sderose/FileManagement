@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # provenance.py: Experiment with supporting file-source tracking.
 # 2021-04-27: Written by Steven J. DeRose.

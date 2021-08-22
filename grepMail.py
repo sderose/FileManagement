@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # grepMail.py: Search the hard way for emails.
 #
@@ -6,10 +6,14 @@
 #
 from __future__ import print_function
 import sys
+import os
 import codecs
 import re
 import datetime
 import time
+from xml.dom import minidom
+from xml.dom.minidom import Node
+from xml.parsers.expat import ExpatError
 
 from PowerWalk import PowerWalk, PWType
 from alogging import ALogger
@@ -35,61 +39,101 @@ descr = """
 Search a diretory subtree for emails. Mainly for when you've got backups, archives,
 copies, etc. that aren't indexed by your email client itself (or Spotlight).
 
-You can search by the main fields.
-
-Content search is not yet implemented.
-
-
 ==Usage==
 
     grepMail.py [options] [files]
 
-Search directory subtree(s) for emails.
+For example:
 
-* A way to configure where to search
+    grepMail.py --subject "Meeting" --from "root@example.com"
 
-* Extension .emlx, .mbox, etc.
-* Date range
-* Subject regex
-* Re/Few/not
-* From
-* To
+You can search by any of --subject, --from, --to, --mindate, --maxdate,
+--recipient, or --content. If you specify more than one of these, all must be
+satisfied for the mail to be retrieved. However, all but --mindate and --maxdate
+take regexes, so you can use "|" to get OR:
 
-Actions:
+    grepMail.py --subject "Meeting" --from "(root|jsmith)@example.com"
 
-* Report the path
-* Show the header
-* Open with your choice of app
-* Reset filetime to mime time?
-* Copy main fields to extended attributes.
+--mindate and/or --maxdate is specified like ``yyyy-mm-ddThh:mm:ss``, but you can
+omit trailing components and/or leading zeros on components:
+
+    grepMail.py --mindate '2020-1-1'
+
+There is not yet a separate way to specify relative dates, such as finding emails
+from within the last week.
+
+==What files are searched==
+
+This is currently set up to search Apple Mail files, which (since OS 10.4 or so) have
+one message per physical file, in a slight extension of the normal MIME format.
+Attachments also seem to be kept in separate files.
+
+I expect to add support for normal .mbox files, which pack mail end-to-end with
+a blank line between, and each mail's first line beginning "From:" (content lines that
+would collide with this, are prefixed by ">".
+
+You can use all the options of `PowerWalk.py` to select what files to search, such
+as filtering by file extension, looking within tar, gzip, etc. archived, etc.
+
+The output includes the path to each selected email file.
+With -v or --headers, the main header fields are also shown.
+
+==Mail locations and formats==
+
+* Older file is arranged like:
+    ~/Library/Mail/
+        PersistenceInfo.plist  -- lists "VersionDirectories", each with a key ("V5", etc.),
+and says which was last used.
+        V7/  -- a directory named for the 'last used' version
+            this has several big directories, "MailData" plus ones named with guids.
+            MailData -- mostly .plist files, seems to have rules, sync info, signatures, etc.
+            Each guid dir contains folders named list your mailboxes. Probably each is for
+
+        [guid]/[mailboxname].mbox/[]
+* .mbox files (aka "Maildir"): These contain any number of emails,
+separated by a blank line followed
+by a line starting "From:", which starts a MIME headers, which is followed by a blank line
+and then the content (which may have multiple parts of different kinds, even images,
+typically encoded in base64). Since an email might very well have a blank line and a
+line starting "From:" in the content, such cases are escaped, for example by putting
+">" before the "From:".
+
+* Apple Mail: Stored under ~/Library/Mail, then a folder such as "V7" or "V8" (presumably
+to signal successive Mail version?), then "MailData",
+a folder per account?, the "Mailbox"
+With MacOSX 10.4, Apple stopped using normal ".mbox" file format
+(see [http://mike.laiosa.org/2009/03/01/emlx.html]). Their format puts each mail in
+a separate file, with 3 parts:
+** the length as an ASCII decimal number followed by \n.
+** the message (seems to be in normal MIME format)
+** metadata an an Apple-style property list, technically in XML, but imho odd.
+It does have a useful "flags" item, with a number you can unpack into a lot of
+flags bits.
 
 
 =Known bugs and Limitations
 
---mintime and --maxtime must be like:
+* Does not deal with content-transfer-encoding
+* Does not search non-text content (images, base64, etc.
+* Does not search attachments.
+* Doesn't do anything special for mime multipart.
+* What about lines like "=?utf-8?Q?Steve?= <sderose@me.com>"?
+* Searches should be repeatable, so you can find emails that were sent to
+a certain group of people, regardless of order.
+* Need a notion of "or", at least for email addresses.
 
-    "Fri, 16 Aug 2019 13:40:16 +0000 (UTC)"  <-- strptime can't seem to do.
-    "Thu, 29 Aug 2019 15:14:23 +0000"
-    "Fri, 09 Aug 2019 13:36:08 -0700"
-    "Wed, 7 Aug 2019 11:00:23 -0400"
-    "Fri, 30 Aug 2019 00:22:39 +0000"
-    "9 Aug 2019 22:26:43 -0400"
-    "Thu 29 Aug 2019 15:14:23 +0000"
 
-The last one is like ctime(). But this really needs to take ISO 8601 times,
-including truncation.
+=To do=
+
+* Move date/time option-handling into `argparsePP.py`.
+* Open chosen files with your choice of app
+* Option to reset filetimes to the mime time
+* Copy main fields to extended attributes.
 
 
 =Related Commands=
 
 [https://docs.python.org/3/library/email.parser.html]
-
-=Known bugs and Limitations=
-
-
-=To do=
-
-Move date/time option-handling into `argparsePP.py`.
 
 
 =History=
@@ -119,63 +163,75 @@ def fatal(msg): log(0, msg); sys.exit()
 warn = log
 
 # MIME header fields we don't care about.
+# Note: We do all lookups in lower-case in order to ignore case.
 discardList = [
-    #"Content-Type",
-    "Content-Transfer-Encoding",
-    #"Subject",
-    #"DATE",
-    #"Message-ID",
-    #"From",
-    "MIME-Version",
-    #"To",
-    "X-Universally-Unique-Identifier",
-    "References",
-    "Received",
-    #"In-Reply-To",
-    "Authentication-Results",
-    "X-Smtp-Server",
-    "Content-Disposition",
-    "X-Apple-Content-Length",
-    #"Cc",
-    "Return-Path",
-    "Received-SPF",
-    #"Original-recipient",
-    "DKIM-Signature",
-    "X-MANTSH",
-    "X-CLX-Shades",
+    #"content-type",
+    "content-transfer-encoding",
+    #"subject",
+    #"date",
+    #"message-id",
+    #"from",
+    "mime-version",
+    #"to",
+    "x-universally-unique-identifier",
+    "references",
+    "received",
+    #"in-reply-to",
+    "authentication-results",
+    "x-smtp-server",
+    "content-disposition",
+    "x-apple-content-length",
+    #"cc",
+    "return-path",
+    "received-spf",
+    #"original-recipient",
+    "dkim-signature",
+    "x-mantsh",
+    "x-clx-shades",
     "x-dmarc-info",
     "x-dmarc-policy",
-    "Content-ID",
-    "X-Uniform-Type-Identifier",
-    "X-Proofpoint-Virus-Version",
-    #"Bcc",
-    "X-ICL-INFO",
+    "content-id",
+    "x-uniform-type-identifier",
+    "x-proofpoint-virus-version",
+    #"bcc",
+    "x-icl-info",
 ]
+
 
 ###############################################################################
 #
-def readMimeHeader(ifh, discards=None, discardX=True):
+def readMimeHeader(ifh, path:str, discards=None, discardX=True) -> dict:
     if (discards is None): discards = {}
-    rec = ifh.readline()
-    if (re.match(r"\d+\s*$", rec)):  # Apple mail hack
+
+    appleContentSize = None
+    if (path.endswith(".emlx")):  # Apple variant
         rec = ifh.readline()
+        if (re.match(r"\d+\s*$", rec)):  # Apple mail hack
+            appleContentSize = int(rec)
+        else:
+            lg.error("Bad first record in .emlx file: '%s'." % (rec))
+
     fields = {}
     curKey = ""
     curBuf = ""
+    totRead = 0
+    rec = ifh.readline()
     while (rec != ""):
+        totRead += len(rec)
         if (rec.strip() == ""):
             break
         mat = re.match(r"^([-\w]+):\s*(.*)", rec)
         if (mat):
             if (curBuf and curKey and curKey not in discards and
-                (not discardX or not curKey.lower().startswith("X-"))):
+                (not discardX or not curKey.startswith("x-"))):
                 fields[curKey] = curBuf
-            curKey = mat.group(1)
+            curKey = mat.group(1).lower()
             curBuf = mat.group(2)
         elif (re.match(r"^\s", rec)):
             curBuf += rec
         else:
-            raise ValueError("unparseable line in MIME header: %s" % (rec))
+            raise ValueError("unparseable line in MIME header of file '%s':\n    %s" %
+                (path, rec))
         rec = ifh.readline()
 
     if (curBuf and curKey and curBuf not in discards):
@@ -185,13 +241,17 @@ def readMimeHeader(ifh, discards=None, discardX=True):
 def scanContent(ifh, expr:str) -> bool:
     """Compile first, with args.ignorecase.
     TODO: Make --content repeatable for AND.
+    TODO: Read the plist, or at least leave positioned to do so.
     """
     for rec in ifh.readlines():
+        if (rec.startswith("<?xml version=\"1.0\"")):  # End mail, start plist
+            break
         if (re.search(expr, rec)): return True
     return False
 
-def doOneFile(path):
+def doOneFile(path:str) -> dict:
     """Read and deal with one individual file.
+    @return: The MIME fields if it matched, else None.
     """
     try:
         fh = codecs.open(path, "rb", encoding=args.iencoding)
@@ -199,32 +259,47 @@ def doOneFile(path):
         warning0("Cannot open '%s':\n    %s" % (path, e))
         return 0
 
-    fields = readMimeHeader(fh, discards=discardList)
-    for k, v in fields.items():
-        print("Header field '%s' = '%s'" % (k, v))
+    fields = readMimeHeader(fh, path, discards=discardList)
+    #for k, v in fields.items():
+    #    print("Header field '%s' = '%s'" % (k, v))
 
     #print(lg.formatRec(msgObj))
-    if (fails(args.subject, fields, "Subject")):
-        return False
-    if (fails(args.fr, fields, "From")):
-        return False
-    if (fails(args.to, fields, "To")):
-        return False
-    if (fails(args.recip, fields, "To") and
-        fails(args.recip, fields, "Cc") and
-        fails(args.recip, fields, "Bcc")):
-        return False
-    if (args.mindate or args.maxdate):
-        mailDate = parseMimeTime(fields["Date"])
-        if (mailDate<args.umindate or mailDate>args.umaxdate):
-            return False
+    if (fails(args.subject, fields, "subject")):
+        return None
+    if (fails(args.fr, fields, "from")):
+        return None
+    if (fails(args.to, fields, "to")):
+        return None
+    if (fails(args.recipient, fields, "to") and
+        fails(args.recipient, fields, "cc") and
+        fails(args.recipient, fields, "bcc")):
+        return None
+    if (args.mintime or args.maxtime):
+        mailDate = parseMimeDate(fields["date"])
+        if (mailDate<args.umintime or mailDate>args.umaxtime ):
+            return None
 
     if (args.content):
-        if (not scanContent(fh, args.content)): return False
+        if (not scanContent(fh, args.content)): return None
 
     fh.close()
-    return True
+    return fields
 
+def fails(expr:str, fields:list, fieldName:str) -> bool:
+    """Return True iff the user gave a constraint in expr, for the fieldName;
+    and the fieldName either doesn't exist or doesn't match.
+    """
+    if (not expr): return False
+    fieldName = fieldName.lower()
+    if (fieldName not in fields): return True
+    if (args.ignoreCase):
+        return not re.match(fields[fieldName], expr, re.I)
+    else:
+        return not re.match(fields[fieldName], expr)
+
+
+###############################################################################
+#
 # Date formats such as seen in Apple Mail .emlx files
 tformats = [
     "%a, %d %b %Y %H:%M:%S %z",     # Sat, 25 Jan 2020 12:19:49 -0600
@@ -235,18 +310,7 @@ tformats = [
     "%d %b %Y %H:%M:%S %Z",         # 25 Jan 2020 16:10:05
 ]
 
-def fails(expr, fields, fieldName):
-    """Return True iff the user gave a constraint in expr, for the fieldName;
-    and the fieldName either doesn't exist or doesn't match.
-    """
-    if (not expr): return False
-    if (fieldName not in fields): return True
-    if (args.ignorecase):
-        return not re.match(fields[fieldName], expr, re.I)
-    else:
-        return not re.match(fields[fieldName], expr)
-
-def parseMimeTime(s:str) -> int:
+def parseMimeDate(s:str) -> int:
     """Parse a MIME "Date" into a tm_struct, then convert to Unix epoch time.
     Some examples:
         "Fri, 16 Aug 2019 13:40:16 +0000 (UTC)"  <-- strptime can't seem to do.
@@ -256,23 +320,21 @@ def parseMimeTime(s:str) -> int:
         "Fri, 30 Aug 2019 00:22:39 +0000"
         "9 Aug 2019 22:26:43 -0400"
     """
-    t = None
-    s = s.strip()
-    s2 = re.sub(r" \+0000 \(UTC\)$", "", s)
-    if (s2 != s):
-        print("'%s' -> '%s'" % (s, s2))
-        s = s2
-
+    s = re.sub(r" \+0000 \(UTC\)$", "", s.strip())
+    tmStruct = None
     for fmt in tformats:
         try:
-            t = time.strptime(s, fmt)
+            tmStruct = time.strptime(s, fmt)
             break
         except ValueError:
             pass
-    if (t is None): return None
-    epoch_time = time.mktime(t)
+    if (tmStruct is None): return None
+    epoch_time = time.mktime(tmStruct)
     return epoch_time
 
+
+###############################################################################
+#
 def parseArgDate(s:str) -> int:
     """Let people put in a data and optional time, in some simple but
     flexible form: yyyy-mm-dd@hh:mm:ss or any token truncation.
@@ -323,6 +385,105 @@ def parseArgDate(s:str) -> int:
 
 
 ###############################################################################
+#
+def findAppleMailFiles():
+    """Find the Apple Mail folder, such as "V7" (gee, I coulda had a V8...).
+    It should in turn contain "MailData" (containing plists for rules, sync, etc),
+    and one guid-named dir per mail account. Where you get the name/address for those
+    I don't know yet.
+    """
+    home = os.environ["HOME"]
+    if (not os.path.isdir(home)):
+        fatal("HOME/ not found: '%s'." % (home))
+    mailDir = os.path.join(home, "Library/Mail")
+    if (not os.path.isdir(mailDir)):
+        fatal("Mail/ not found: '%s'." % (mailDir))
+    pinfo = os.path.join(mailDir, "PersistenceInfo.plist")
+    if (not os.path.isfile(pinfo)):
+        fatal("Data version plist not found: %s." % (pinfo))
+    plistData = loadApplePlist(pinfo)
+    #print(repr(plistData))
+    luvdn = plistData[0]["LastUsedVersionDirectoryName"]
+    luvd = os.path.join(mailDir, luvdn)
+    if (not os.path.isdir(luvd)):
+        fatal("LastUsedVersionDirectoryName not found: %s." % (luvd))
+    # Here there be guids...
+    return luvd
+
+
+###############################################################################
+#
+def innerText(self:Node, sep:str='') -> str:
+    """Like usual HTML `innertext`, but a function (instead of a property), and allows
+    inserting something in between all the text nodes (typically a space,
+    so text of list items etc. don't join up. But putting in spaces around
+    HTML inlines like i and b, is occasionally wrong.
+    (from DomExtensions.py)
+    """
+    if (self.nodeType == Node.TEXT_NODE or
+        self.nodeType == Node.CDATA_SECTION_NODE):
+        return self.nodeValue
+    if (self.nodeType != Node.ELEMENT_NODE):  # PI, comment
+        return ""
+    t = ""
+    for childNode in self.childNodes:
+        if (t): t += sep
+        t += childNode.innerText(sep=sep)
+    return t
+
+def loadApplePlist(path:str) -> dict:
+    """Parse an Apple plist file in XML form, and return an equivalent Python structure.
+    See [https://en.wikipedia.org/wiki/Property_list]
+    See also Python 'plistlib'.
+    """
+    Node.innerText = innerText
+    with codecs.open(path, "rb", encoding="utf-8") as ifh:
+        try:
+            domDoc = minidom.parse(ifh)
+        except ExpatError as e:
+            fatal("Cannot parse plist file at '%s':\n    %s." % (path, e))
+    pl = domDoc.getElementsByTagName("plist")
+    assert len(pl)==1
+    return convertNode(pl[0])
+
+def convertNode(node:Node, depth=0):
+    """Recursively process one node of the parsed plist.
+    <plist><dict><key>foo</key><string>bar</string>...
+    """
+    if (node.nodeType != Node.ELEMENT_NODE):
+        return None  # caller will discard
+    if (node.nodeName == "true"):
+        return True
+    if (node.nodeName == "false"):
+        return False
+    if (node.nodeName == "string"):
+        return str(node.innerText())
+    if (node.nodeName == "int"):
+        return int(node.innerText().strip())
+    if (node.nodeName == "real"):
+        return float(node.innerText().strip())
+    if (node.nodeName == "array" or node.nodeName == "plist"):
+        rc = []
+        for dsub in node.childNodes:
+            datum = convertNode(dsub, depth=depth+1)
+            if datum is not None: rc.append(datum)
+        return rc
+    if (node.nodeName == "dict"):
+        rc = {}
+        lastKey = "[none]"
+        for dsub in node.childNodes:
+            if (dsub.nodeName == "key"):
+                lastKey = dsub.innerText().strip()
+                if (lastKey in rc):
+                    lg.error("Key '%s' already in dict: %s" % (lastKey, repr(dict)))
+            else:
+                datum = convertNode(dsub, depth=depth+1)
+                if datum is not None: rc[lastKey] = datum
+        return rc
+    raise ValueError("Unexpected tag in plist: '%s'." % (node.nodeName))
+
+
+###############################################################################
 # Main
 #
 if __name__ == "__main__":
@@ -338,6 +499,7 @@ if __name__ == "__main__":
         except ImportError:
             parser = argparse.ArgumentParser(description=descr)
 
+        # Query/filtering args
         parser.add_argument(
             "--content", type=str,
             help="Search for text content matching this regex.")
@@ -345,16 +507,16 @@ if __name__ == "__main__":
             "--extension", type=str, action="append",
             help="Include only files with this extension. Repeatable.")
         parser.add_argument(
-            "--from", type=str, dest="fr",
+            "--fr", type=str, dest="fr",
             help="Search for From matching this regex.")
         parser.add_argument(
-            "--maxtime", type=str,
+            "--maxtime", "--maxdate", type=str,
             help="Search for Date <= this. " + dateHelp)
         parser.add_argument(
-            "--mintime", type=str,
+            "--mintime", "--mindate", type=str,
             help="Search for Date >= this. " + dateHelp)
         parser.add_argument(
-            "--recipient", type=str, dest="recip",
+            "--recipient", type=str,
             help="Search for To, Cc, or Bcc matching this regex.")
         parser.add_argument(
             "--subject", type=str,
@@ -363,6 +525,13 @@ if __name__ == "__main__":
             "--to", type=str,
             help="Search for To matching this regex.")
 
+        # Other args
+        parser.add_argument(
+            "--findMail", action="store_true",
+            help="Try the 'standard' place for MacOS Mails.")
+        parser.add_argument(
+            "--headers", action="store_true",
+            help="Show the main header fields for selected emails.")
         parser.add_argument(
             "--iencoding", type=str, default="ASCII",
             help="Assume the (MIME) file is in this encoding.")
@@ -391,23 +560,47 @@ if __name__ == "__main__":
     ###########################################################################
     #
     args = processOptions()
+
+    if (not (args.content or args.extension or args.fr or args.maxtime or
+        args.mintime or args.recipient or args.subject or args.to)):
+        warning0("No filtering option(s) specified.")
+
     if (not args.extension):
         args.extension = [ "emlx", "mbox", "eml" ]
-    ice = r"(%s)" % ("|".join(args.extension))
+    extensionExpr = r"(%s)" % ("|".join(args.extension))
 
     if (args.mintime):
         args.umintime = parseArgDate(args.mintime)
     if (args.maxtime):
         args.umaxtime = parseArgDate(args.maxtime)
 
+    if (args.findMail):
+        mailRoot = findAppleMailFiles()
+        print("Located Apple Mail dirs in '%s'." % (mailRoot))
+        args.files.append(mailRoot)
+
     if (len(args.files) == 0):
-        warning0("grepMail.py: No files specified....")
-        doOneFile(None)
-    else:
-        pw = PowerWalk(args.files, open=False, close=False, includeExtensions=ice)
-        pw.setOptionsFromArgparse(args)
-        for path0, fh0, what0 in pw.traverse():
-            if (what0 != PWType.LEAF): continue
-            doOneFile(path0)
-        if (not args.quiet):
-            warning0("grepMail.py: Done, %d files.\n" % (pw.getStat("regular")))
+        fatal("grepMail.py: No files specified....")
+
+    pw = PowerWalk(args.files, open=False, close=False)
+    pw.setOptionsFromArgparse(args)
+    pw.setOption("recursive", True)
+    pw.setOption("excludeDir", "Attachments")
+    pw.setOption("includeExtensions", extensionExpr)
+
+    nFound = 0
+    for path0, fh0, what0 in pw.traverse():
+        if (what0 != PWType.LEAF): continue
+        headers = doOneFile(path0)
+        if (headers is None): continue
+        print(path0)
+        nFound += 1
+        if (not args.verbose and not args.headers): continue
+        for hf in [ 'from', 'to', 'subject', 'date' ]:
+            hfValue = headers[hf] if hf in headers else ""
+            print("    %8s:  %s" % (hf.title(), hfValue))
+        print("")
+
+    if (not args.quiet):
+        warning0("grepMail.py: Done, %d files, %d hits.\n" %
+            (pw.getStat("regular"), nFound))
