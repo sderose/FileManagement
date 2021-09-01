@@ -36,7 +36,11 @@ changes such as imposing or removing camel-case, normalizing date strings,
 padding sequence numbers, or inserting the values of various file attributes
 (date, owner id, or even the source URI when available) into the name.
 
-For example:
+For example, to just turn all characters not in C<[-.\\w]> into "_", do:
+
+    renameFiles --clean *
+    
+Regex changes are simple:
 
     renamefiles --expr "s/myFile\$/stevesFile/" *.htm
 
@@ -163,7 +167,7 @@ See also I<--bactrianize>.
 
 An alternative to I<--expr>, that automatically sets up a regex to change
 any unusual characters into "_".
-"Unusual" means characters that are not among C<[-.\w_\\]>.
+"Unusual" means characters that are not among C<[-.\\w_]>.
 
 =item * B<--copies>
 
