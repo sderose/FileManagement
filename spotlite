@@ -26,9 +26,6 @@ use Cwd 'abs_path';
 
 binmode(STDERR,"utf8");
 
-###############################################################################
-#
-
 =pod
 
 =head1 Usage
@@ -79,10 +76,11 @@ The operators are ==, <, >, <=, >=, ||, and &&.
 
   --name fname   Search filenames, allowing * at both ends.
   --xname fname  Search exact filenames (w/ extension but not path)
-                  (if desired, you can do 'fname*', etc.)
+                 (if desired, you can do 'fname*', etc.)
   --nm fname     Search for *fname*
-                  (mnemonic: 'nm' is incomplete 'name')
+                 (mnemonic: 'nm' is incomplete 'name')
   --content s    Search file content for s
+  --text s       Synonym for --content
   --key k        Search attribute k (you can omit "kMDItem")
   --list         Display the list of known keys
 
@@ -95,15 +93,12 @@ will be searched:
   --doc        Look under $HOME/Documents
   --down       Look under $HOME/Downloads
   --here       Look under $PWD
-  --home       Look under $HOME
-                  (--nohome excludes this area)
-  --mail       Look under $HOME/Library/Mail (Apple Mail)
-                  (--nomail excludes this area)
+  --home       Look under $HOME (--nohome excludes this area)
+  --mail       Look under $HOME/Library/Mail (Apple Mail) (--nomail excludes this area)
   --man        Look under directories known to 'man -w'
   --music      Look under $HOME/Music
   --onlyIn d   Look under directory at path d
   --pic        Look under $HOME/Pictures
-  --text       Synonym for --content
 
   --bak        Include backup files (-nobak excludes such files)
   --svn        Include files under SVN version control
@@ -347,6 +342,8 @@ Mac OS X C<mdfind>, C<mdutil>, C<xattr>, C<mdls>.
 
 =head1 To do
 
+    Add git support, including searching (or not) prior versions, and maybe
+mapping the filenames back from hashes to readables.
     Color backups in yellow?
     Don't break out single-digit mail subdirs?
     or perhaps, any dir w/ same number of files as child?
@@ -462,7 +459,6 @@ if ($man) {
 
 
 ###############################################################################
-###############################################################################
 # Main
 #
 my $foo = new XmlTuples();
@@ -548,7 +544,6 @@ if ($outline && !$quiet) {
 exit;
 
 
-###############################################################################
 ###############################################################################
 # Display results
 #
