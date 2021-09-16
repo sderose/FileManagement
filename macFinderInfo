@@ -6,7 +6,6 @@
 use strict;
 use Getopt::Long;
 use Encode;
-#use alogging;
 use XmlTuples;
 use sjdUtils;
 
@@ -141,7 +140,7 @@ struct ExtendedFolderInfo {
 
 =head1 History
 
-  2011-04-05: Written by Steven J. DeRose, sderose@acm.org.
+  2011-04-05: Written by Steven J. DeRose.
   2018-09-20: Handles paths containing spaces etc.
   2020-07-13: New layout.
   2020-08-11: Fix decoding/display of utf-8 value, ";"-delimited list values.
@@ -157,6 +156,7 @@ L<https://creativecommons.org/licenses/by-sa/3.0>.
 
 For the most recent version, see L<http://www.derose.net/steve/utilities> or
 L<https://github.com/sderose>.
+
 
 =cut
 

@@ -333,7 +333,7 @@ Mac OS X C<mdfind>, C<mdutil>, C<xattr>, C<mdls>.
 
 =head1 History
 
-    2013-08-27: Written by Steven J. DeRose, sderose@acm.org.
+    2013-08-27: Written by Steven J. DeRose.
     2013-09-05: Support $BACKUP_DIR.
     2014-01-09: Add --wildcards.
     2014-07-02: Add warning for --xname fail if no extension included.
@@ -364,6 +364,7 @@ L<https://creativecommons.org/licenses/by-sa/3.0>.
 
 For the most recent version, see L<http://www.derose.net/steve/utilities> or
 L<https://github.com/sderose>.
+
 
 =cut
 
