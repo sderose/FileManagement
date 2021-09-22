@@ -90,7 +90,8 @@ Show version info and exit.
   * Save git commit and branch info if applicable, or other VCS info.
         git rev-parse --show-toplevel
         git log -n 1 [file]
-
+  * Alternate backup methods?  git branch or stash; mailto; rsync
+  
 
 =head1 History
 
@@ -247,5 +248,3 @@ if ($nfiles) {
 else {
     warn "backup: *** No files backed up ***\n";
 }
-
-exit;
