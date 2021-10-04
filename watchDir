@@ -16,7 +16,7 @@ our %metadata = (
     'type'         => "http://purl.org/dc/dcmitype/Software",
     'language'     => "Perl 5.18",
     'created'      => "2006-10-16",
-    'modified'     => "2021-07-23",
+    'modified'     => "2021-09-23",
     'publisher'    => "http://github.com/sderose",
     'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -43,7 +43,7 @@ C<backup>, C<lint>, and many others.
 
 There is not yet a way to watch a single file in isolation, although
 you can watch the parent directory, which includes catching changes to all files
-within that directory.
+directly within that directory.
 
 
 =head1 Options
@@ -55,13 +55,20 @@ within that directory.
 When a file changes, run I<cmd> on it. If I<cmd> contains "{}" one or more times,
 replace it with the file's path; otherwise, append the file's path to I<cmd> after a space.
 If the system command fails, a message and the return code are printed.
+To change the "{}" string, set I<--repstring>.
 
 =item * B<-p>
 
 Check for permission changes, too (not implemented).
 
 =item * B<--quiet> OR B<-q>
+
 Suppress most messages.
+
+
+=item * B<-repstring> I<s>
+
+Change the string which will be replaced by the relevant filename, from "{}" to I<s>.
 
 =item * B<--sleep> I<n> OR B<-n> I<n>
 
@@ -93,7 +100,7 @@ C<instruments>
 
 C<watch> -- C<watchDir> is a lot like C<watch -d -n 2 ls -lt --full-time> (which
 is available in Linux, but apparently not on BSD/MacOSX except via C<brew>).
-However, C<watchDir>
+However, C<watchDir> has at least these differences:
 
 =over
 
@@ -116,11 +123,9 @@ has several additional solutions for similar problems.
   * Support single-file watching.
   * Option to find the first changed line and display it, or edit at it.
   * Option to do a special command (maybe scp) on the most-recently-changed
-file, when a certain trigger file occurs. For example, this would let people
+file, when a certain trigger occurs. For example, this would let people
 drop things into a watchDir'd dropbox, then poll to re-fetch the file.
 Would rsync mirroring be enough?
-  * Perhaps add specific support for backing up files as they change? 
-See my L<https://www.github.com/sderose/FileManagement/blob/master/backup>.
 
 
 =head1 History
@@ -131,6 +136,7 @@ See my L<https://www.github.com/sderose/FileManagement/blob/master/backup>.
   2020-12-21: Switch from ls to stat. Add --exec.
   2021-01-22: Add --spinner.
   2021-07-23: Refactor --exec, report if it fails, support {} substitution.
+  2021-09-23: Add I<--repstring>..
 
 
 =head1 Rights
@@ -150,12 +156,13 @@ L<https://github.com/sderose>.
 ###############################################################################
 # Options
 #
-my $color    = 0;
-my $exec     = "";
-my $quiet    = 0;
-my $sleep    = 1;
-my $spinner  = 1;
-my $verbose  = 0;
+my $color     = 0;
+my $exec      = "";
+my $quiet     = 0;
+my $repstring = "{}";
+my $sleep     = 1;
+my $spinner   = 1;
+my $verbose   = 0;
 
 my %getoptHash = (
     "color!"                  => \$color,
@@ -163,6 +170,7 @@ my %getoptHash = (
     "h|help"                  => sub { system "perldoc $0"; exit; },
     "n|sleep=o"               => \$sleep,
     "q|quiet!"                => \$quiet,
+    "repstring=s"             => \$repstring,
     "spinner!"                => \$spinner,
     "v|verbose+"              => \$verbose,
     "version"                 => sub {
@@ -258,8 +266,8 @@ sub getModTimes {
 sub runExec {
     my ($path) = @_;
     my $cmd = $exec;
-    if ($cmd =~ m/{}/) {
-        $cmd =~ s/{}/$path/g;
+    if (index($cmd, $repstring) > -1) {
+        $cmd =~ s/$repstring/$path/g;
     }
     else {
         $cmd .= " " . $path;
