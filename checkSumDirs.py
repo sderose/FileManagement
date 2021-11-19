@@ -6,7 +6,8 @@
 #pylint: disable= W0612
 #
 from __future__ import print_function
-import sys, os
+import sys
+import os
 import argparse
 import re
 import codecs
@@ -85,6 +86,7 @@ or as readable strings (specify `--ctime`).
 
 =Related Commands=
 
+
 =Known bugs and Limitations=
 
 * When building directory digests, the script assumes they're up to date
@@ -101,12 +103,6 @@ longer than XML, without gaining XML's compensating benefits
 (datatyping, validation, etc).
 Having no labels would be evil (see [https://xkcd.com/833/]). JSON also lacks comments, so that's not an option either.
 
-=History=
-
-Written by Steven J. DeRose, 2020-05-09.
-
-2020-08-08: Add volumeID, inode, path.
-
 
 =To do=
 
@@ -117,14 +113,21 @@ to identify links, dirs, executables, specials?
 
 * Option to include more stat fields in the sig lines?
 
+
+=History=
+
+* 2020-05-09: Written by Steven J. DeRose.
+* 2020-08-08: Add volumeID, inode, path.
+
+
 =Rights=
 
 Copyright 2020-05-09 by Steven J. DeRose. This work is licensed under a
 Creative Commons Attribution-Share-alike 3.0 unported license.
 See [http://creativecommons.org/licenses/by-sa/3.0/ for more information].
 
-For the most recent version, see L<http://www.derose.net/steve/utilities/>
-or L<http://github.com/sderose>.
+For the most recent version, see [http://www.derose.net/steve/utilities]
+or [http://github.com/sderose>].
 
 =Options=
 """

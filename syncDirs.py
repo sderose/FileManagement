@@ -3,14 +3,11 @@
 # syncDirs.py: find any of these files that also have a copy among my
 # utilities, and report (and optionally update) if they're not identical.
 #
-from __future__ import print_function
-import sys, os
+import sys
+import os
 import argparse
 import re
-#import string
 import subprocess
-#import codecs
-#import PowerWalk
 
 __metadata__ = {
     'title'        : "syncDirs.py",
@@ -61,8 +58,9 @@ Option to copy any that differ, or move ones that differ in relative path, is no
 
 Should probably have options for better treatment of multiple hits.
 
-Maybe allow C<diff> options like I<-b>, and/or make I<-v> include a full
-C<diff> instead of just C<diff -q> status.
+Maybe allow `diff` options like ''-b'', and/or make ''-v'' include a full
+`diff` instead of just `diff -q` status.
+
 
 =History=
 
@@ -78,6 +76,7 @@ this license, see [http://creativecommons.org/licenses/by-sa/3.0].
 
 For the most recent version, see [http://www.derose.net/steve/utilities] or
 [http://github.com/sderose].
+
 
 =Options=
 """
@@ -149,31 +148,30 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--baseDir",          type=str,
+            "--baseDir", type=str,
             help='Look for copies under this directory.')
         parser.add_argument(
-            "--hidden",           action='store_true',
+            "--hidden", action='store_true',
             help='Include hidden (.-initial) files.')
         parser.add_argument(
-            "--ignore",           type=str, action='append',
+            "--ignore", type=str, action='append',
             default=[ "README.txt" ],
             help='Ignore this filename even if on command line.')
         parser.add_argument(
-            "--quiet", "-q",      action='store_true',
+            "--quiet", "-q", action='store_true',
             help='Suppress most messages.')
         parser.add_argument(
-            "--recursive",        action='store_true',
+            "--recursive", action='store_true',
             help='Descend into subdirectories.')
         parser.add_argument(
-            "--verbose", "-v",    action='count',       default=0,
+            "--verbose", "-v", action='count', default=0,
             help='Add more messages (repeatable).')
         parser.add_argument(
             "--version", action='version', version=__version__,
             help='Display version information, then exit.')
 
         parser.add_argument(
-            'files',             type=str,
-            nargs=argparse.REMAINDER,
+            'files', type=str, nargs=argparse.REMAINDER,
             help='Path(s) to input file(s)')
 
         args0 = parser.parse_args()
@@ -190,6 +188,7 @@ if __name__ == "__main__":
 
         return(args0)
 
+
     ###########################################################################
     #
     args = processOptions()
@@ -202,7 +201,7 @@ if __name__ == "__main__":
         warn(0, "Directory not found: %s\n" % (topDir))
         sys.exit()
 
-    nDiffsTotal = 0;
+    nDiffsTotal = 0
     nSameTotal = 0
     for dirpath, dirnames, filenames in os.walk(topDir):
         if (not args.hidden):
@@ -222,11 +221,8 @@ if __name__ == "__main__":
                 nDiffsHere += 1
             else:
                 nSameHere += 1
-        print("    [ %d files different, %d the same ]"
-            % (nDiffsHere, nSameHere))
-        nDiffsTotal += nDiffsHere;
+        print("    [ %d files different, %d the same ]"  % (nDiffsHere, nSameHere))
+        nDiffsTotal += nDiffsHere
         nSameTotal += nSameHere
 
-    print("[ total: %d files different, %d the same ]"
-        % (nDiffsTotal, nSameTotal))
-
+    print("[ total: %d files different, %d the same ]" % (nDiffsTotal, nSameTotal))

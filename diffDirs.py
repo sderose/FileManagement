@@ -379,7 +379,6 @@ if __name__ == "__main__":
         parser.add_argument(
             "--all", action='store_true',
             help='Include copy, backup, hidden, and object files.')
-            # IF set, this method also sets the other args.
         parser.add_argument(
             "-b", action='store_true',
             help='Ignore differences in whitespace.')
@@ -465,6 +464,7 @@ if __name__ == "__main__":
             help='Path(s) to input dir(s)')
         args0 = parser.parse_args()
         return args0
+
 
     ###########################################################################
     # Main

@@ -5,8 +5,6 @@
 #
 import sys
 import os
-#import codecs
-#import stat
 import fcntl
 import hashlib
 from enum import Enum
@@ -164,12 +162,13 @@ class ProvenanceEntry:
 
     def getVolumeId(self, path:str, dev) -> None:
         """fcntl commands as OS-dependent. See:
-        https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fcntl.2.html
-        Not sure this is how to do this....
+        https://developer.apple.com/library/archive/documentation/System/
+            Conceptual/ManPages_iPhoneOS/man2/fcntl.2.html
+        TODO: Not sure this is how to do this....
         """
         with open(path, "rb") as ifh:
             # MacOS
-            cmd =
+            cmd = "???"
             buf = bytes(" " * 1024)
             try:
                 fcntl.fcntl(ifh, cmd, arg=buf)
@@ -214,8 +213,6 @@ def doOneFile(path):
 #
 if __name__ == "__main__":
     import argparse
-    def anyInt(x:str):
-        return int(x, 0)
 
     def processOptions():
         try:

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 #
 # grepMail.py: Search the hard way for emails.
-#
 # 2021-07-15: Written by Steven J. DeRose.
 #
-from __future__ import print_function
 import sys
 import os
 import codecs
@@ -208,6 +206,7 @@ def readMimeHeader(ifh, path:str, discards=None, discardX=True) -> dict:
         rec = ifh.readline()
         if (re.match(r"\d+\s*$", rec)):  # Apple mail hack
             appleContentSize = int(rec)
+            warning1("Skipped Apple content-size line (%d)." % (appleContentSize))
         else:
             lg.error("Bad first record in .emlx file: '%s'." % (rec))
 
@@ -352,8 +351,8 @@ def parseArgDate(s:str) -> int:
         tim = None
 
     year = mon = mday = 0
+    dparts = re.split(r"-", dat.strip())
     if (dparts):
-        dparts = re.split(r"-", dat.strip())
         year = int(dparts[0])
         if len(dparts>0): mon = int(dparts[1])
         if len(dparts>1): mday = int(dparts[2])
