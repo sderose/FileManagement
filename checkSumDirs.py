@@ -370,40 +370,40 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--backupFiles",      action='store_true',
+            "--backupFiles", action='store_true',
             help='Include any files like #f#, .bak, .tmp, Copy of f, ...')
         parser.add_argument(
-            "--ctime",            action='store_true', default=True,
+            "--ctime", action='store_true', default=True,
             help='Save mod times as readable local time (default), not epoch.')
         parser.add_argument(
             "--epochtime", "--utime", dest='ctime', action='store_false',
             help='Save mod times as Unix epoch times, not ctime.')
         parser.add_argument(
-            "--hiddenFiles",      action='store_true',
+            "--hiddenFiles", action='store_true',
             help='Include any hidden files.')
         parser.add_argument(
-            "--links",            action='store_true',
+            "--links", action='store_true',
             help='Include symbolic links.')
         parser.add_argument(
-            "--noVolumeID",       action='store_true',
+            "--noVolumeID", action='store_true',
             help='Do not attempt to figure out a volume ID.')
         parser.add_argument(
-            "--quiet", "-q",      action='store_true',
+            "--quiet", "-q", action='store_true',
             help='Suppress most messages.')
         parser.add_argument(
-            "--recursive",        action='store_true',
+            "--recursive", action='store_true',
             help='Descend into subdirectories.')
         parser.add_argument(
-            "--save",             action='store_true',
+            "--save", action='store_true',
             help='Save the file to disk instead of writing to stdout. See -o.')
         parser.add_argument(
-            "--outfile", "-o",    type=str, default=".checkSums",
+            "--outfile", "-o", type=str, default=".checkSums",
             help='With --save, save to this name. Default: .checkSums.')
         parser.add_argument(
-            "--unicode",          action='store_const',  dest='iencoding',
+            "--unicode", action='store_const', dest='iencoding',
             const='utf8', help='Assume utf-8 for input files.')
         parser.add_argument(
-            "--verbose", "-v",    action='count',       default=0,
+            "--verbose", "-v", action='count', default=0,
             help='Add more messages (repeatable).')
         parser.add_argument(
             "--version", action='version', version=__version__,
