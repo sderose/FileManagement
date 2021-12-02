@@ -149,9 +149,9 @@ class ProvenanceEntry:
         self.data = {
             "dev": st.st_dev,
             "inode": st.st_ino,
-            "volumeId": getVolumeId(path, st.st_dev),
+            "volumeId": self.getVolumeId(path, st.st_dev),
             "atime": st.st_atime,
-            "btime": st_birthtime,
+            "btime": st.st_birthtime,
             "ctime": st.st_ctime,
             "mtime": st.st_mtime,
             "size": st.st_size,
@@ -160,7 +160,7 @@ class ProvenanceEntry:
             "gitcommit": ''             # TODO
         }
 
-    def getVolumeId(self, path:str, dev) -> None:
+    def getVolumeId(self, path:str, deviceId) -> None:
         """fcntl commands as OS-dependent. See:
         https://developer.apple.com/library/archive/documentation/System/
             Conceptual/ManPages_iPhoneOS/man2/fcntl.2.html
@@ -181,7 +181,7 @@ class ProvenanceEntry:
             while (True):
                 buf = ifh.read()
                 if (not buf): break
-                m.add(buf)
+                m.update(buf)
         return m.hexdigest()
 
     def getGitCommit(self, path:str):
