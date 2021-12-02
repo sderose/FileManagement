@@ -1,80 +1,47 @@
 #!/usr/bin/perl -w
 #
-# findancestordir
-#
+# findAncestorDdirectory
 # 2007-10-05: Written by Steven J. DeRose.
-# 2007-11-26 sjd: strict, Getopt.
 #
-
 use strict;
 use Getopt::Long;
 
-our $VERSION_DATE = "2012-09-12";
-
-my $quiet   = 0;
-my $verbose = 0;
-
-
-# Process options
-#
-Getopt::Long::Configure ("ignore_case");
-my $result = GetOptions(
-	"h|help|?"          => sub {
-        system "perldoc $0"; exit;
-    },
-	"q|quiet!"          => \$quiet,
-	"v|verbose+"        => \$verbose,
-    "version"           => sub {
-		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
-	}
-	);
-
-($result) || die "findancestordir: Bad options.\n";
-
-
-###############################################################################
-# Main
-#
-($ARGV[0] ne '') || die
-    "No ancestor name specified: " . join(' ',@ARGV) . ".\n";
-
-my @tokens = split(/\//, $ENV{PWD});
-my $rc = "";
-for (my $i = (scalar @tokens) - 1; $i>=0; $i--) {
-	if ($tokens[$i] =~ m/$ARGV[0]/) {
-		for (my $j=0; $j<=$i; $j++) {
-			$rc .= $tokens[$j] . "/";
-		}
-		print $rc;
-		exit;
-	}
-}
-
-print ".";
-
-exit;
-
-
-###############################################################################
-###############################################################################
-#
+our %metadata = (
+    'title'        => "findAncestorDdirectory",
+    'rightsHolder' => "Steven J. DeRose",
+    'creator'      => "http://viaf.org/viaf/50334488",
+    'type'         => "http://purl.org/dc/dcmitype/Software",
+    'language'     => "Perl 5",
+    'created'      => "2007-10-05",
+    'modified'     => "2021-12-02",
+    'publisher'    => "http://github.com/sderose",
+    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+);
+our $VERSION_DATE = $metadata{'modified'};
 
 =pod
 
 =head1 Usage
 
-findancestordir [options] [name]
+findAncestorDdirectory [options] [nameOrRegex]
 
 Locates the nearest ancestor directory whose name contains [name].
 Most useful when passed to cd, for example:
-alias upto='cd `findancestordir $1`
 
-Note: Returns '.' on failure, so such a cd doesn't do anything.
+    alias upto='cd `findAncestorDdirectory $1`
+
+Note: Returns '.' on failure, so that passing it to C<cd> just doesn't do anything.
 
 
 =head1 Options
 
 =over
+
+=item * B<--file>
+
+Instead of searching for an ancestor directory whose own name matches a given name or
+regular expression,
+search for one that I<contains a file> whose filename matches.
 
 =item * B<--quiet> OR B<-q>
 Suppress most messages.
@@ -90,7 +57,15 @@ Display version info and exit.
 =back
 
 
-=head1 Ownership
+=head1 History
+
+    2007-10-05: Written by Steven J. DeRose.
+    2007-11-26 sjd: strict, Getopt.
+    2012-09-12: ?
+    2021-12-02: New layout. Add --file. Porting to Perl (see next checkin).
+    
+
+head1 Ownership
 
 This work by Steven J. DeRose is licensed under a Creative Commons
 Attribution-Share Alike 3.0 Unported License. For further information on
@@ -98,4 +73,52 @@ this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
 
 For the most recent version, see L<http://www.derose.net/steve/utilities/>.
 
+
 =cut
+
+
+###############################################################################
+# Options
+#
+my $file    = 0;
+my $quiet   = 0;
+my $verbose = 0;
+
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "file!"             => \$file,
+	"h|help|?"          => sub { system "perldoc $0"; exit; },
+	"q|quiet!"          => \$quiet,
+	"v|verbose+"        => \$verbose,
+    "version"           => sub {
+		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+	}
+	);
+($result) || die "findAncestorDdirectory: Bad options.\n";
+
+
+###############################################################################
+# Main
+#
+($ARGV[0] ne '') || die
+    "No name specified: " . join(' ',@ARGV) . ".\n";
+
+my $curDir = $ENV{PWD};
+while ($curDir) {
+    my $lastPart = $curDir;
+    $lastPart =~ s|^.*/||;
+    if (!$lastPart) { last; }
+    if ($file) {
+        # to be added....
+    }
+    else {
+        if ($lastPart =~ m/$ARGV[0]/) {
+            print $curDir . "\n";
+            exit;
+        }
+	}
+	$curDir =~ s|/[^/]*$||;
+}
+
+print ".";
+return 99;
