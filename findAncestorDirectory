@@ -39,7 +39,7 @@ Most useful when passed to cd, for example:
 
     alias upto='cd `findAncestorDdirectory $1`
 
-Returns '.' on failure, so that passing it to C<cd> just doesn't do anything
+Returns '.' on failure, so that passing it to `cd` just doesn't do anything
 (unless `--nil` is specified, in which case it prints nothing).
 
 With `-f` or `--file`, instead looks for an ancestor directory that contains a file
