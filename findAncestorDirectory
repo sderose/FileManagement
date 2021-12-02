@@ -1,124 +1,141 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env python3
 #
-# findAncestorDdirectory
-# 2007-10-05: Written by Steven J. DeRose.
+# findAncestorDirectory.py: Look upwards for a file or directory.
+# 2021-12-02: Written by Steven J. DeRose.
 #
-use strict;
-use Getopt::Long;
+import sys
+import os
+import re
+#from typing import IO, Dict, List, Union
 
-our %metadata = (
-    'title'        => "findAncestorDdirectory",
-    'rightsHolder' => "Steven J. DeRose",
-    'creator'      => "http://viaf.org/viaf/50334488",
-    'type'         => "http://purl.org/dc/dcmitype/Software",
-    'language'     => "Perl 5",
-    'created'      => "2007-10-05",
-    'modified'     => "2021-12-02",
-    'publisher'    => "http://github.com/sderose",
-    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
-);
-our $VERSION_DATE = $metadata{'modified'};
+#from sjdUtils import sjdUtils
+#from alogging import ALogger
+#su = sjdUtils()
+#lg = ALogger(1)
 
-=pod
+__metadata__ = {
+    "title"        : "findAncestorDirectory.py",
+    "description"  : "Look upwards for a file or directory.",
+    "rightsHolder" : "Steven J. DeRose",
+    "creator"      : "http://viaf.org/viaf/50334488",
+    "type"         : "http://purl.org/dc/dcmitype/Software",
+    "language"     : "Python 3.7 (original was Perl)",
+    "created"      : "2007-10-05",
+    "modified"     : "2021-12-02",
+    "publisher"    : "http://github.com/sderose",
+    "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
+}
+__version__ = __metadata__["modified"]
 
-=head1 Usage
+descr = """
+=Description=
 
-findAncestorDdirectory [options] [nameOrRegex]
+==Usage==
+
+    findAncestorDirectory.py [options] [nameOrRegex]
 
 Locates the nearest ancestor directory whose name contains [name].
 Most useful when passed to cd, for example:
 
     alias upto='cd `findAncestorDdirectory $1`
 
-Note: Returns '.' on failure, so that passing it to C<cd> just doesn't do anything.
+Returns '.' on failure, so that passing it to C<cd> just doesn't do anything
+(unless `--nil` is specified, in which case it prints nothing).
+
+With `-f` or `--file`, instead looks for an ancestor directory that contains a file
+that matches `[nameOrRegex]`.
 
 
-=head1 Options
-
-=over
-
-=item * B<--file>
-
-Instead of searching for an ancestor directory whose own name matches a given name or
-regular expression,
-search for one that I<contains a file> whose filename matches.
-
-=item * B<--quiet> OR B<-q>
-Suppress most messages.
-
-=item * B<-v>
-
-Add more detailed messages.
-
-=item * B<--version>
-
-Display version info and exit.
-
-=back
+=Related Commands=
 
 
-=head1 History
-
-    2007-10-05: Written by Steven J. DeRose.
-    2007-11-26 sjd: strict, Getopt.
-    2012-09-12: ?
-    2021-12-02: New layout. Add --file. Porting to Perl (see next checkin).
-    
-
-head1 Ownership
-
-This work by Steven J. DeRose is licensed under a Creative Commons
-Attribution-Share Alike 3.0 Unported License. For further information on
-this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
-
-For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+=Known bugs and Limitations=
 
 
-=cut
+=To do=
 
 
-###############################################################################
-# Options
-#
-my $file    = 0;
-my $quiet   = 0;
-my $verbose = 0;
+=History=
 
-Getopt::Long::Configure ("ignore_case");
-my $result = GetOptions(
-    "file!"             => \$file,
-	"h|help|?"          => sub { system "perldoc $0"; exit; },
-	"q|quiet!"          => \$quiet,
-	"v|verbose+"        => \$verbose,
-    "version"           => sub {
-		die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
-	}
-	);
-($result) || die "findAncestorDdirectory: Bad options.\n";
+* 2007-10-05: Written by Steven J. DeRose. Original in Perl.
+* 2007-11-26 sjd: strict, Getopt.
+* 2012-09-12: ?
+* 2021-12-02: New layout. Add --file. Port to Python.
+
+
+=Rights=
+
+Copyright 2007-10-05 by Steven J. DeRose. This work is licensed under a
+Creative Commons Attribution-Share-alike 3.0 unported license.
+See [http://creativecommons.org/licenses/by-sa/3.0/] for more information.
+
+For the most recent version, see [http://www.derose.net/steve/utilities]
+or [https://github.com/sderose].
+
+
+=Options=
+"""
 
 
 ###############################################################################
 # Main
 #
-($ARGV[0] ne '') || die
-    "No name specified: " . join(' ',@ARGV) . ".\n";
+if __name__ == "__main__":
+    import argparse
 
-my $curDir = $ENV{PWD};
-while ($curDir) {
-    my $lastPart = $curDir;
-    $lastPart =~ s|^.*/||;
-    if (!$lastPart) { last; }
-    if ($file) {
-        # to be added....
-    }
-    else {
-        if ($lastPart =~ m/$ARGV[0]/) {
-            print $curDir . "\n";
-            exit;
-        }
-	}
-	$curDir =~ s|/[^/]*$||;
-}
+    def processOptions() -> argparse.Namespace:
+        try:
+            from BlockFormatter import BlockFormatter
+            parser = argparse.ArgumentParser(
+                description=descr, formatter_class=BlockFormatter)
+        except ImportError:
+            parser = argparse.ArgumentParser(description=descr)
 
-print ".";
-return 99;
+        parser.add_argument(
+            "--file", "-f", action="store_true",
+            help="Look for ancester directory containg a matching file (instead of dir name itself).")
+        parser.add_argument(
+            "--ignoreCase", "-i", action="store_true",
+            help="Disregard case distinctions.")
+        parser.add_argument(
+            "--nil", action="store_true",
+            help="Print nothing (instead of default '.') on failure.")
+        parser.add_argument(
+            "--quiet", "-q", action="store_true",
+            help="Suppress most messages.")
+        parser.add_argument(
+            "--verbose", "-v", action="count", default=0,
+            help="Add more messages (repeatable).")
+        parser.add_argument(
+            "--version", action="version", version=__version__,
+            help="Display version information, then exit.")
+
+        parser.add_argument(
+            "target", type=str,
+            help="String or regex to look for.")
+
+        args0 = parser.parse_args()
+        return(args0)
+
+
+    ###########################################################################
+    #
+    args = processOptions()
+    reFlags = re.I if args.ignoreCase else 0
+    
+    curDir = os.environ["PWD"]
+    while (curDir and curDir != "/"):
+        parent, lastPart = os.path.split(curDir)
+        if (args.file):
+            for x in os.listdir(curDir):
+                if (re.search(args.target, x, flags=reFlags)):
+                    print(curDir)
+                    sys.exit()
+        else:
+            if (re.search(args.target, lastPart, flags=reFlags)):
+                print(curDir)
+                sys.exit()
+        curDir = parent
+        
+    if (not args.nil): print(".")
+    sys.exit(99)
