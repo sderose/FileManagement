@@ -98,7 +98,7 @@ def tryOneItem(path):
     warn(1, "Starting item '%s'" % (path))
     recnum = 0
     if (not os.path.exists(path)):
-        sys.stderr.write("Couldn't find '%s'.\n" % (path), stat="cantOpen")
+        sys.stderr.write("Couldn't find '%s'.\n" % (path))
     elif (os.path.isdir(path)):
         if (args.recursive):
             for child in os.listdir(path):

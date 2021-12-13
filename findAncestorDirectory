@@ -54,6 +54,8 @@ that matches `[nameOrRegex]`.
 
 =To do=
 
+Add --all to keep going in case there are multiple matches.
+
 
 =History=
 
