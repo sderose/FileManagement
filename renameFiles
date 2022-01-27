@@ -31,27 +31,30 @@ our $VERSION_DATE = $metadata{"modified"};
 
 renameFiles [options] [regex] [files]
 
-Applies a regex expression to rename a file(s), and can do various systematic
+Applies a regular expression, or any of a range of built-in operations,
+to rename a file(s). Can do systematic
 changes such as imposing or removing camel-case, normalizing date strings,
 padding sequence numbers, or inserting the values of various file attributes
 (date, owner id, or even the source URI when available) into the name.
 
-For example, to just turn all characters not in C<[-.\\w]> into "_", do:
+A commonly useful example just turns all characters not in C<[-.\\w]> into "_", do:
 
     renameFiles --clean *
     
-Regex changes are simple:
+The same thing can be done via an equivalent regular expression:
 
-    renamefiles --expr "s/myFile\$/stevesFile/" *.htm
+    renamefiles --expr "s/[^=.\\s]/_/g" *.htm
+
+Or you can get fancier:
+    renamefiles --expr "s/my(File|Stuff|Data)/Herodotuses_$1/" *.htm
+
 
 would rename all .htm files in the current directory whose names
-contain "myFile", to contain "stevesFile" in place of the first
-(or only) occurrence of "myFile",
-keeping the rest of the name the same.
+contain "myFile", "myStuff", or "myData" to refer to "Herodotuses" in place of the "my".
 
 By default, changes do not affect extensions (but see I<--extChanges>).
 Both regular files and directories can be renamed (but see I<--no-dirs>).
-Various options can:
+There are options that can:
 
 =over
 
@@ -61,6 +64,7 @@ Various options can:
 =item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
 
 =item * convert names to conform to various file-systems (I<--fileSystem>),
+such as by removing or replacing prohibited characters,
 
 =item * insert ancestor directory names into the filename (I<--pull>),
 
@@ -91,7 +95,8 @@ nor to extensions, nor to directories (unless you set the corresponding options)
 
 Renaming actions happen in the order:
 copies, pull, pullURI, xattrAdd, unescapeURI, lc, uc, bactrianize,
-camelize, addStat, dates, expr, clean.
+camelize, addStat, dates, expr, clean. Probably, the easiest way to force a 
+different order is to use multiple C<renameFiles> commands.
 
 
 =head1 Options
@@ -268,7 +273,7 @@ so the change ignores case distinctions.
 
 Append to the filename, the specified item extracted from MacOS file-system
 metadata for the file (when available). Such items can be accessed by the
-shell command <mdfind>, and have names beginning C<xattrItem> (that prefix may
+shell command C<mdfind>, and have names beginning C<xattrItem> (that prefix may
 be omitted when using this option). This option should be, but is not, repeatable.
 However, you can run C<renameFiles> multiple times to add one item at a time.
 
@@ -379,8 +384,8 @@ separate command C<unescapeURI>.
 
 Find roman numerals within filenames and convert them to Arabic numerals
 (subject also to I<--pad>).
-Roman numerals are defined (too loosely) as sequences of [ivxlcm], with
-out an adjacent letter on either side (enforced using regex \\b).
+Roman numerals are defined (too loosely) as sequences of [ivxlcm], without
+an adjacent letter on either side (enforced using regex C<\\b>).
 A single match must be in consistent case, but either case is ok.
 Experimental. Requires installing C<Roman> modules
 (L<http://search.cpan.org/~chorny/Roman/lib/Roman.pm>).
@@ -405,6 +410,10 @@ See also I<--addExtension> and I<--extChanges>.
 
 =head1 Known bugs and limitations
 
+Add a conflict resolution suffix for case-insensitive file systems if the rename
+only changes case (and thus looks different to the code, but not to a case-insensitive
+filesystem).
+
 I<--filesystem> is unfinished.
 
 Changes with I<--extensions> put in 2 dots.
@@ -420,9 +429,6 @@ There is no option to change the set of allowed characters with I<--clean>.
 There is no option to change the set of extension mappings used by I<-x>.
 
 Regexes may include a C</options> portion, but it is not used.
-
-May not yet do enough conflict resolution for case-insensitive file systems
-(it just checks for file existence with Perl's I<-e> before renaming).
 
 Does not know about some backup conventions, such as foo~, #foo#, or
 C<emacs>'s ability to put backups into a separate directory:
@@ -590,6 +596,10 @@ C<--onlyExtensions>. Add C<--extensions> synonym.
 
 =item * 2021-04-27: Start C<--filesystem>.
 
+=item * 2022-01-07: FIx bug with name conflicts when there's no extension. 
+Still not great for case-insensitive file-systems when you change only case.
+But now notices and reports them, at least.
+
 =back
 
 
@@ -597,21 +607,22 @@ C<--onlyExtensions>. Add C<--extensions> synonym.
 
 =over
 
+=item * Do something better with case-change-only renames on case-insensitive systems.
+
 =item * Port to Python and integrate PowerWalk.py.
 
 =item * Option to operate *only* on directories, etc.
-Add all PowerWalk file selection).
 
 =item * Add generality of C<strftime> and C<PowerStat.py> to
 format inserted dates and C<stat> items.
 
-=item * Access to additional data to pull into name
+=item * Access to additional data to pull into name.
 
 =over
 
 =item * Check for F<.git> and be able to do C<git mv> instead of C<mv>!
 
-=item * Allow localized date formats and month names, or strftime formats.
+=item * Allow localized date formats and month names, or C<strftime> formats.
 
 =item * Add times and datetimes to C<--addstat>.
 
@@ -1066,17 +1077,18 @@ if ($xattrAdd) {
 ###############################################################################
 # Main
 #
-my $fileCount     = 0;
-my $dirCount      = 0;
-my $notFoundCount = 0;
-my $unchanged     = 0;
-my $simpleCount   = 0;
-my $extFixes      = 0;
-my $forceCount    = 0;
-my $resolveCount  = 0;
-my $conflictCount = 0;
-my $failCount     = 0;
-my $path          = "";
+my $fileCount        = 0;
+my $dirCount         = 0;
+my $notFoundCount    = 0;
+my $unchanged        = 0;
+my $simpleCount      = 0;
+my $extFixes         = 0;
+my $forceCount       = 0;
+my $resolveCount     = 0;
+my $conflictCount    = 0;
+my $caseIssueCount   = 0;
+my $failCount        = 0;
+my $path             = "";
 
 my $roman = "\b([ivxlcm]+|[IVXLCM]+)\b";
 my $romanC = qr/$roman/;
@@ -1120,7 +1132,7 @@ sub rfsplitPath {
 # Put together path, name, and extension
 sub rfjoinPath {
     my ($path, $name, $ext) = @_;
-    my $fullPath = ($path) ? "$path/" : "";
+    my $fullPath = ($path) ? "$path/$name" : $name;
     $fullPath = extensionJoin($fullPath, $ext);
     return($fullPath);
 }
@@ -1179,7 +1191,7 @@ sub doOneItem {
         }
     }
 
-    vMsg(2, "Pre changes:  '$name' '$ext'.");
+    vMsg(2, "Before changes:  '$name' '$ext'.");
     my $newItems = variousChanges($fullPath, $path, $name, $ext);
 
     my $name2 = $newItems->[0];
@@ -1187,37 +1199,42 @@ sub doOneItem {
     my $fullName2 = extensionJoin($name2, $ext2);
     my $fullPath2 = ($path ? "$path/":"") . $fullName2;
 
-    vMsg(2, "Post changes: '$fullName' ('$name' '$ext') -> '$fullName2' " .
+    vMsg(2, "After changes:  '$fullName' ('$name' '$ext') -> '$fullName2' " .
         "('$name2' '$ext2').\n    '$fullPath'\n    '$fullPath2'");
 
     if ($fullName2 eq $fullName) {                # No net change
-        ($quiet) || vMsg(1, "Filename unchanged: '$fullName'");
+        ($quiet) || vMsg(1, "Filename is unchanged: '$fullName'");
         $unchanged++;
     }
     elsif (!-e $fullPath2) {                      # Simple case (dirs & files)
-        vMsg(2, "no conflict for result name '$name2'");
+        vMsg(2, "No conflict found for result name '$name2'");
         $simpleCount++;
         doRename($fullPath, $fullPath2);
     }
+    # TODO Check for case-insensitive file-system match
     else {                                        # Handle output name conflict
-        vMsg(2, "result name already in use: '$fullPath2'");
+        vMsg(2, "Result name is already in use: '$fullPath2'");
         $conflictCount++;
+        if (lc($fullPath) eq lc($fullPath2)) { $caseIssueCount++; }
         if ($force) {
+            vMsg(2, "Forcing...");
             $forceCount++;
             system "rm $fullPath2" || eMsg(
-                0, "Unable to remove output '$fullPath2'");
+                0, "Unable to remove output item '$fullPath2'");
             doRename($fullPath, $fullPath2);
         }
         elsif (!$resolve) {
             ($quiet) || vMsg(0,
-                "File '$fullPath' not renamed, target '$fullPath2' exists.");
+                "File '$fullPath' was not renamed, target '$fullPath2' exists.");
         }
         elsif (my $name3 = findFreeFilename($path, $name2, $ext2)) {
-            doRename($fullPath, rfjoinPath($path, $name3, $ext2));
+            my $path3 = rfjoinPath($path, $name3, $ext2);
+            vMsg(1, "Found free filename: '$name3' (path '$path', ext '$ext2') -> '$path3').");
+            doRename($fullPath, $path3);
             $resolveCount++;
         }
         else {
-            ($quiet) || eMsg(0, "Unable to resolve '$name' -> '$name2'");
+            ($quiet) || eMsg(0, "Unable to resolve '$name' -> '$name2'.");
             $failCount++;
         }
     }
@@ -1475,7 +1492,7 @@ sub extensionSplit {
 
 sub extensionJoin {
     my ($name, $ext) = @_;
-    (!$ext) && return $name;
+    ($ext) || return $name;
     return $name . "." . $ext;
 }
 
@@ -1535,7 +1552,7 @@ sub findFreeFilename {
     }
     for my $ser (0..(10**$padWidth)) {
         my $serPadded = sjdUtils::lpad($ser,-$padWidth);
-        my $testFN = $path . $name . $separator . $serPadded . "." . $ext;
+        my $testFN = $path . $name . $separator . $serPadded . ($ext ? ".$ext" : "");
         vMsg(1, "    Checking target '$testFN'");
         if (!-e $testFN) { return($testFN); }
     }
@@ -1583,6 +1600,7 @@ sub report {
     alogging::pline(sjdUtils::colorize("green/bold", "Simple renames"), $simpleCount);
     alogging::pline("Extensions fixed",  $extFixes);
     alogging::pline("Name conflicts",    $conflictCount);
+    alogging::pline("  Case-only",       $caseIssueCount);
     alogging::pline("  Forced",          $forceCount);
     alogging::pline("  Resolved",        $resolveCount);
     alogging::pline("  Failed",          $failCount);
