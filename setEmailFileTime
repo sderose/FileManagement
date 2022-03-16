@@ -17,7 +17,7 @@ from alogging import ALogger
 lg = ALogger(1)
 
 __metadata__ = {
-    "title"        : "setEmailFileTime.py",
+    "title"        : "setEmailFileTime",
     "description"  : "Set file-system timestamps on email from their Date field.",
     "rightsHolder" : "Steven J. DeRose",
     "creator"      : "http://viaf.org/viaf/50334488",

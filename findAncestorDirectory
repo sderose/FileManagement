@@ -8,20 +8,15 @@ import os
 import re
 #from typing import IO, Dict, List, Union
 
-#from sjdUtils import sjdUtils
-#from alogging import ALogger
-#su = sjdUtils()
-#lg = ALogger(1)
-
 __metadata__ = {
-    "title"        : "findAncestorDirectory.py",
+    "title"        : "findAncestorDirectory",
     "description"  : "Look upwards for a file or directory.",
     "rightsHolder" : "Steven J. DeRose",
     "creator"      : "http://viaf.org/viaf/50334488",
     "type"         : "http://purl.org/dc/dcmitype/Software",
     "language"     : "Python 3.7 (original was Perl)",
     "created"      : "2007-10-05",
-    "modified"     : "2021-12-02",
+    "modified"     : "2022-02-28",
     "publisher"    : "http://github.com/sderose",
     "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
@@ -32,18 +27,33 @@ descr = """
 
 ==Usage==
 
-    findAncestorDirectory.py [options] [nameOrRegex]
+    findAncestorDirectory.py [options] [target]
 
-Locates the nearest ancestor directory whose name contains [name].
-Most useful when passed to cd, for example:
+[target] is interpreted as a regular expression, and allows partial matches (use "^"
+and/or "$" to tie it to the start and/or end of names).
 
-    alias upto='cd `findAncestorDdirectory $1`
+Locates the nearest ancestor directory (or the starting directory itself)
+whose ''own name'' matches [target].
+for example, to find the containing "source" directory (if any):
+    findAncestorDdirectory source
+    
+With `-c` or `--child`, it instead looks for an ancestor directory (or self) 
+of any name, but that ''contains'' a file or directory that matches [target].
+This is handy for locating "inherited" items such as .git, .pyenv, etc.
 
-Returns '.' on failure, so that passing it to `cd` just doesn't do anything
-(unless `--nil` is specified, in which case it prints nothing).
+For example, the following finds which containing directory represents the entire
+git repository (since that ancestor will have a subdirectory named ".git"):
+    findAncestorDirectory -c \\.git$
+    
+The "$" prevents matches that merely ''start' with ".git", such as "\\.gitignore".
 
-With `-f` or `--file`, instead looks for an ancestor directory that contains a file
-that matches `[nameOrRegex]`.
+You can use the result to '''cd''' to the found directory. For example:
+    alias theGitDir='cd `findAncestorDdirectory \\.git`
+
+On failure, the command
+* prints "." (unless `--nil` is specified).  This is so passing it to `cd` doesn't do anything.
+* displays a message on stderr (unless --quiet) is specified).
+* returns status 99.
 
 
 =Related Commands=
@@ -63,6 +73,8 @@ Add --all to keep going in case there are multiple matches.
 * 2007-11-26 sjd: strict, Getopt.
 * 2012-09-12: ?
 * 2021-12-02: New layout. Add --file. Port to Python.
+* 2022-02-28ff: Add error message when target not found. Add -v messages.
+Improve doc, rename --file to --child. Add --all.
 
 
 =Rights=
@@ -78,6 +90,9 @@ or [https://github.com/sderose].
 =Options=
 """
 
+def warning(m):
+    sys.stderr.write(m+"\n")
+    
 
 ###############################################################################
 # Main
@@ -94,8 +109,11 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--file", "-f", action="store_true",
-            help="Look for ancester directory containg a matching file (instead of dir name itself).")
+            "--all", "-a", action="store_true",
+            help="Find all matching ancestors, not just the first.")
+        parser.add_argument(
+            "--child", "--containing", "-c", action="store_true",
+            help="Look for ancester directory *containing* a matching file.")
         parser.add_argument(
             "--ignoreCase", "-i", action="store_true",
             help="Disregard case distinctions.")
@@ -125,19 +143,27 @@ if __name__ == "__main__":
     args = processOptions()
     reFlags = re.I if args.ignoreCase else 0
     
+    nFound = 0
     curDir = os.environ["PWD"]
     while (curDir and curDir != "/"):
         parent, lastPart = os.path.split(curDir)
-        if (args.file):
+        if (args.verbose): warning(
+            "At %s." % (curDir))
+        if (args.child):
             for x in os.listdir(curDir):
                 if (re.search(args.target, x, flags=reFlags)):
                     print(curDir)
-                    sys.exit()
+                    nFound += 1
+                if (nFound and not args.all): break
         else:
             if (re.search(args.target, lastPart, flags=reFlags)):
                 print(curDir)
-                sys.exit()
+                nFound += 1
+        if (nFound and not args.all): break
         curDir = parent
         
-    if (not args.nil): print(".")
-    sys.exit(99)
+    if (nFound == 0):
+        if (not args.nil): 
+            if (not args.quiet): warning("No matching ancestor.")
+            print(".")
+        sys.exit(99)

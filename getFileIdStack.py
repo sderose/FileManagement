@@ -11,7 +11,7 @@ from subprocess import check_output
 from PowerWalk import PowerWalk, PWType
 
 __metadata__ = {
-    "title"        : "getFileIdStack.py",
+    "title"        : "getFileIdStack",
     "description"  : "Show inode, partition id, volume id, etc.",
     "rightsHolder" : "Steven J. DeRose",
     "creator"      : "http://viaf.org/viaf/50334488",

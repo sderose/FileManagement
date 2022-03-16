@@ -18,7 +18,7 @@ from alogging import ALogger
 lg = ALogger(1)
 
 __metadata__ = {
-    "title"        : "grepMail.py",
+    "title"        : "grepMail",
     "description"  : "Search the hard way for emails.",
     "rightsHolder" : "Steven J. DeRose",
     "creator"      : "http://viaf.org/viaf/50334488",

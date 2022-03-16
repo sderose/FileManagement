@@ -10,7 +10,7 @@ import re
 import subprocess
 
 __metadata__ = {
-    'title'        : "syncDirs.py",
+    'title'        : "syncDirs",
     'rightsHolder' : "Steven J. DeRose",
     'creator'      : "http://viaf.org/viaf/50334488",
     'type'         : "http://purl.org/dc/dcmitype/Software",
@@ -113,7 +113,7 @@ def isDifferent(f1, f2):
     raises CalledProcessError.
     """
     try:
-        diffResult = subprocess.check_output([ "diff", "-q", f1, f2])
+        subprocess.check_output([ "diff", "-q", f1, f2])
     except subprocess.CalledProcessError:  # Raised on non-zero exit code
         return True
     return False
@@ -121,7 +121,7 @@ def isDifferent(f1, f2):
 
 def reportCandidates(dirpath, filename, top=""):
     buf = str(subprocess.check_output(
-        ["find", args.baseDir, "-name", filename ]), encoding="utf-8")
+        ["find", dirpath, "-name", filename ]), encoding="utf-8")
     if (not buf):
         return 0
     files = buf.strip().split(sep="\n")
@@ -203,21 +203,17 @@ if __name__ == "__main__":
 
     nDiffsTotal = 0
     nSameTotal = 0
-    for dirpath, dirnames, filenames in os.walk(topDir):
+    for dirpath0, dirnames, filenames in os.walk(topDir):
         if (not args.hidden):
             filenames = [f for f in filenames if not f[0] == '.']
             dirnames[:] = [d for d in dirnames if not d[0] == '.']
             dirnames[:] = [d for d in dirnames if not d == '__pycache__']
-        warn(0, "*** At dir %s" % (dirpath))
-        if (0):
-            for dirname in dirnames:
-                fullPath = os.path.join(dirpath, dirname)
-                print("    Subdir: %s" % (dirname))
+        warn(0, "*** At dir %s" % (dirpath0))
         nDiffsHere = 0; nSameHere = 0
-        for filename in filenames:
-            fullPath = os.path.join(dirpath, filename)
-            if (filename in args.ignore): continue
-            if (doOneFile(dirpath, filename, top=topDir)):
+        for filename0 in filenames:
+            fullPath = os.path.join(dirpath0, filename0)
+            if (filename0 in args.ignore): continue
+            if (doOneFile(dirpath0, filename0, top=topDir)):
                 nDiffsHere += 1
             else:
                 nSameHere += 1

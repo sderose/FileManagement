@@ -8,19 +8,20 @@ use Getopt::Long;
 use XmlTuples;
 
 our %metadata = (
-    'title'        => "spotlite",
-    'rightsHolder' => "Steven J. DeRose",
-    'creator'      => "http://viaf.org/viaf/50334488",
-    'type'         => "http://purl.org/dc/dcmitype/Software",
-    'language'     => "Perl 5.18",
-    'created'      => "2013-08-27",
-    'modified'     => "2020-08-20",
-    'publisher'    => "http://github.com/sderose",
-    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+    "title"        => "spotlite",
+    "description"  => "Command-line interface for Mac OS X Spotlight.",
+    "rightsHolder" => "Steven J. DeRose",
+    "creator"      => "http://viaf.org/viaf/50334488",
+    "type"         => "http://purl.org/dc/dcmitype/Software",
+    "language"     => "Perl 5.18",
+    "created"      => "2013-08-27",
+    "modified"     => "2022-02-15",
+    "publisher"    => "http://github.com/sderose",
+    "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
-our $VERSION_DATE = $metadata{'modified'};
+our $VERSION_DATE = $metadata{"modified"};
 
-use Cwd 'abs_path';
+use Cwd "abs_path";
 (my $thisPath = abs_path($0)) =~ s|/[^/]*$||;
 # Used to keep keys in: $ENV{HOME}/bin/tupleSets/
 
@@ -35,11 +36,11 @@ spotlite [options] file
 Provide a more memorable interface to Spotlight from the shell.
 
 For example, to find all files anywhere under your home
-directory, that are (a) named exactly 'foo' or (b) have names containing
+directory, that are (a) named exactly "foo" or (b) have names containing
 "foo", use:
 
     (a)   spotlite --home --xname foo
-    (b)   spotlite --home --name 'foo'
+    (b)   spotlite --home --name "foo"
 
 The raw C<mdfind> syntax for that looks like:
 
@@ -76,13 +77,14 @@ The operators are ==, <, >, <=, >=, ||, and &&.
 
   --name fname   Search filenames, allowing * at both ends.
   --xname fname  Search exact filenames (w/ extension but not path)
-                 (if desired, you can do 'fname*', etc.)
+                 (if desired, you can do "fname*", etc.)
   --nm fname     Search for *fname*
-                 (mnemonic: 'nm' is incomplete 'name')
+                 (mnemonic: "nm" is incomplete "name")
   --content s    Search file content for s
   --text s       Synonym for --content
   --key k        Search attribute k (you can omit "kMDItem")
   --list         Display the list of known keys
+  --invisible    Also include kMDItemFSInvisible items
 
 =head3 Files to search
 
@@ -95,7 +97,7 @@ will be searched:
   --here       Look under $PWD
   --home       Look under $HOME (--nohome excludes this area)
   --mail       Look under $HOME/Library/Mail (Apple Mail) (--nomail excludes this area)
-  --man        Look under directories known to 'man -w'
+  --man        Look under directories known to "man -w"
   --music      Look under $HOME/Music
   --onlyIn d   Look under directory at path d
   --pic        Look under $HOME/Pictures
@@ -129,7 +131,7 @@ See also I<--days>.
 
 =head1 Options
 
-(prefix 'no' to negate where applicable; however, I<--nohome> and I<--nomail>
+(prefix "no" to negate where applicable; however, I<--nohome> and I<--nomail>
 are special -- see below)
 
 =over
@@ -191,11 +193,16 @@ the opposite of I<--home>.
 =item * B<--ignoreCase> or B<-i>
 
 Disregard upper/lower case distinctions. Default: on.
-B<Note>: ignoring case in C<mdfind> is done by appending 'c' to the target string.
+B<Note>: ignoring case in C<mdfind> is done by appending "c" to the target string.
 
 =item * B<--ignoreDiacritics>
 
 Disregard accents and other diacritics on characters.
+
+=item * B<--invisible>
+
+In progress.
+Don't skip invisible items.
 
 =item * B<--key> I<k>
 
@@ -232,7 +239,7 @@ See also I<--xname>, I<--ignoreCase> and I<--ignoreDiacritics>.
 
 =item * B<--onlyIn> I<path> or B<--in>...
 
-Search 'only' under the directory at I<path>. However, this option is repeatable,
+Search "only" under the directory at I<path>. However, this option is repeatable,
 and you can add directories to the same list using the options
 I<--dir>, I<--doc>, I<--here>, I<--home>, I<--mail>, I<--man>, I<--music>, I<--pic>.
 
@@ -338,6 +345,8 @@ Mac OS X C<mdfind>, C<mdutil>, C<xattr>, C<mdls>.
     2014-01-09: Add --wildcards.
     2014-07-02: Add warning for --xname fail if no extension included.
     2015-09-22: Add --head. Lose File::Stat, which seems badly broken.
+    2020-?: New layout.
+    2022-02-15: Starting adding --invisible.
 
 
 =head1 To do
@@ -361,7 +370,6 @@ Copyright 2013-08-27 by Steven J. DeRose. This work is licensed under a
 Creative Commons Attribution-Share Alike 3.0 Unported License.
 For further information on this license, see
 L<https://creativecommons.org/licenses/by-sa/3.0>.
-
 For the most recent version, see L<http://www.derose.net/steve/utilities> or
 L<https://github.com/sderose>.
 
@@ -383,6 +391,7 @@ my $grep          = 1;
 my $head          = 1;
 my $ignoreCase    = 1;
 my $ignoreDiacritics = 0;
+my $invisible     = 0;
 my $iString       = "    ";
 my $key           = "";
 my $keyFile       = "$thisPath/macOsxSpotLightKeys.xsv";
@@ -415,6 +424,7 @@ my %getoptHash = (
     "head!"              => \$head,
     "h|help"             => sub { system "perldoc $0"; exit; },
     "i|ignoreCase!"      => \$ignoreCase,
+    "invisible!"         => \$invisible,
     "iString=s"          => \$iString,
     "ignoreDiacritics!"  => \$ignoreDiacritics,
     "key=s"              => \$key,
@@ -451,7 +461,7 @@ my %getoptHash = (
 Getopt::Long::Configure ("ignore_case");
 GetOptions(%getoptHash) || die "Bad options.\n";
 
-# See 'man man'.
+# See "man man".
 if ($man) {
     my $mp = `man -w 2>/dev/null`;
     chomp $mp;
@@ -485,7 +495,7 @@ if ($listKeys) {
     exit;
 }
 
-# Assemble and run the 'mdfind' command, Apple's Spotlight i/f.
+# Assemble and run the "mdfind" command, Apple's Spotlight i/f.
 #
 my $args = "";
 if ($name ne "") {
@@ -508,8 +518,9 @@ elsif ($content ne "") {
     $args = "$content";
 }
 
-if ($ignoreCase)       { $args .= "c"; }
-if ($ignoreDiacritics) { $args .= "d"; }
+if ($ignoreCase)       { $args .= " c"; }
+if ($ignoreDiacritics) { $args .= " d"; }
+if ($invisible)        { $args .= ' "kMDItemFSInvisible"'; }
 
 my $options = "";
 if (scalar(@onlyIn)) {

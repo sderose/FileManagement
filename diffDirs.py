@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 #
 # diffDirs: Quick and dirty compare for directory trees.
+# 2014-06-27: Written by Steven J. DeRose.
 #
 # pylint: disable=W0603
 #
-from __future__ import print_function
 import sys
 import os
 import re
@@ -12,14 +12,11 @@ import argparse
 import subprocess
 import stat
 
-PY2 = sys.version_info[0] == 2
-PY3 = sys.version_info[0] == 3
-
 from alogging import ALogger
 from PowerWalk import isHidden, isBackup, isGenerated
 
 __metadata__ = {
-    'title'        : "diffDirs.py",
+    'title'        : "diffDirs",
     'description'  : "Quick and dirty compare for directory trees.",
     'rightsHolder' : "Steven J. DeRose",
     'creator'      : "http://viaf.org/viaf/50334488",
@@ -160,9 +157,8 @@ def firstMismatch(path1, path2):
     Return (linenumber1, linenumber2, line1, line2) of first diff.
     NOTE: Only works for text files....
     """
-    global comment1, comment2
-    fh1 = open(path1, 'r')
-    fh2 = open(path2, 'r')
+    fh1 = open(path1, 'rb')
+    fh2 = open(path2, 'rb')
     recnum1 = recnum2 = 0
 
     lg.vMsg(2, "Comparing %s..." % (os.path.basename(path1)))
@@ -229,7 +225,6 @@ def compareDirs(path1, path2):
     @globals Bumps counters for a bunch of things.
     """
     global total1, total2, missing1, missing2, uncheckedDirs
-    global same, differ, ignored1, ignored2, comment1, comment2
     p1 = os.path.abspath(path1)
     d1 = filteredListdir(p1)
 
@@ -281,7 +276,7 @@ def compareFiles(fp1, fp2):
     @globals Bumps counters for a bunch of things.
     """
     #global total1, total2, missing1, missing2, uncheckedDirs, ignored1, ignored2,
-    global same, differ, comment1, comment2
+    global same, differ
 
     if (os.path.isdir(fp1) or os.path.isdir(fp2)):
         raise ValueError("compareFiles called for a directory.")
@@ -333,7 +328,7 @@ def compareFiles(fp1, fp2):
     elif (args.diffq):
         cmd = "diff -q '%s' '%s'" % (fp1,fp2)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
-        (output, err) = p.communicate()
+        _output, _err = p.communicate()
         p_status = p.wait()
         if (p_status):
             diffLine += " DIFF-Q"
@@ -503,7 +498,7 @@ if __name__ == "__main__":
     rc0 = compareDirs(args.dirs[0], args.dirs[1])
 
     if (not args.quiet):
-        lg.hMsg(0, "Done, rc %d." % (rc0))
+        lg.info("====Done, rc %d." % (rc0))
         lg.MsgPush()
         lg.vMsg(1, ("Options: b %s, diff %s, i %s, md5 %s,\n" +
                 "           permissions %s, r %s, size %s, time %s.") %

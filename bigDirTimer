@@ -1,29 +1,27 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
-# bigDirTimer.py
+# bigDirTimer.py: Measure how badly big directories slow down.
 # 2016-06-21: Written by Steven J. DeRose.
 #
-from __future__ import print_function
-import sys, os, argparse
+import sys
+import os
+import argparse
 from time import time
 import shutil
 
-from alogging import ALogger
-
-lg = ALogger()
-
 __metadata__ = {
-    'title'        : "bigDirTimer",
-    'rightsHolder' : "Steven J. DeRose",
-    'creator'      : "http://viaf.org/viaf/50334488",
-    'type'         : "http://purl.org/dc/dcmitype/Software",
-    'language'     : "Python 3.7",
-    'created'      : "2016-06-21",
-    'modified'     : "2020-08-23",
-    'publisher'    : "http://github.com/sderose",
-    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
+    "title"        : "bigDirTimer",
+    "description"  : "Measure how badly big directories slow down.",
+    "rightsHolder" : "Steven J. DeRose",
+    "creator"      : "http://viaf.org/viaf/50334488",
+    "type"         : "http://purl.org/dc/dcmitype/Software",
+    "language"     : "Python 3.7",
+    "created"      : "2016-06-21",
+    "modified"     : "2020-08-23",
+    "publisher"    : "http://github.com/sderose",
+    "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
-__version__ = __metadata__['modified']
+__version__ = __metadata__["modified"]
 
 
 descr = """
@@ -32,7 +30,7 @@ descr = """
 Create a test directory, and fill it with more and more files
 (doubling each time) up to I<--max>. Report times to create and access.
 
-'access' can mean either doing a C<listdir()>, or opening and closing
+"access" can mean either doing a C<listdir()>, or opening and closing
 every file, depending on the I<--access> option.
 
 =head1 References
@@ -61,6 +59,10 @@ or [https://github.com/sderose].
 
 ###############################################################################
 #
+def fatal(msg):
+    print("\nFATAL ERROR: " + msg)
+    sys.exit()
+    
 def processOptions():
     try:
         from BlockFormatter import BlockFormatter
@@ -70,44 +72,36 @@ def processOptions():
         parser = argparse.ArgumentParser(description=descr)
 
     parser.add_argument(
-        "--access",           type=str, default='listdir',
-        choices=[ 'listdir', 'openall', ],
-        help='How to access the dir once built.')
+        "--access", type=str, default="listdir",
+        choices=[ "listdir", "openall", ],
+        help="How to access the dir once built.")
     parser.add_argument(
-        "--color",  # Don't default. See below.
-        help='Colorize the output.')
+        "--data", type=str, default="How big a directory?",
+        help="String to write --reps times to each temp file.")
     parser.add_argument(
-        "--data",             type=str, default='How big a directory?',
-        help='String to write --reps times to each temp file.')
+        "--max", type=int, default=8192,
+        help="Max number of files to put in test dir. Default: 8192.")
     parser.add_argument(
-        "--max",              type=int, default=8192,
-        help='Max number of files to put in test dir. Default: 8192.')
+        "--quiet", "-q", action="store_true",
+        help="Suppress most messages.")
     parser.add_argument(
-        "--quiet", "-q",      action='store_true',
-        help='Suppress most messages.')
+        "--reps", type=int, default=1,
+        help="Number of times to write --data to each temp file. Default: 1.")
     parser.add_argument(
-        "--reps",             type=int, default=1,
-        help='Number of times to write --data to each temp file. Default: 1.')
+        "--unicode", action="store_const", dest="iencoding",
+        const="utf8", help="Assume utf-8 for input files.")
     parser.add_argument(
-        "--unicode",          action='store_const',  dest='iencoding',
-        const='utf8', help='Assume utf-8 for input files.')
+        "--verbose", "-v", action="count", default=0,
+        help="Add more messages (repeatable).")
     parser.add_argument(
-        "--verbose", "-v",    action='count',       default=0,
-        help='Add more messages (repeatable).')
-    parser.add_argument(
-        "--version", action='version', version=__version__,
-        help='Display version information, then exit.')
+        "--version", action="version", version=__version__,
+        help="Display version information, then exit.")
 
     parser.add_argument(
-        'files',             type=str,
-        nargs=argparse.REMAINDER,
-        help='Path(s) to input file(s)')
+        "files", type=str, nargs=argparse.REMAINDER,
+        help="Path(s) to input file(s)")
 
     args0 = parser.parse_args()
-    lg.setVerbose(args0.verbose)
-    if (args0.color == None):
-        args0.color = ("USE_COLOR" in os.environ and sys.stderr.isatty())
-    lg.setColors(args0.color)
     return(args0)
 
 
@@ -117,14 +111,13 @@ def processOptions():
 args = processOptions()
 
 if (not args.files):
-    args.files = [ '/tmp/bigDirTimerData' ]
+    args.files = [ "/tmp/bigDirTimerData" ]
 
 dirName = args.files[0]
 try:
     os.mkdir(dirName)
 except OSError as e:
-    lg.fatal("Cannot create directory '%s':\n    %s" % (dirName, e))
-    sys.exit()
+    fatal("Cannot create directory '%s':\n    %s" % (dirName, e))
 
 nFiles = 1
 
@@ -135,22 +128,22 @@ while (nFiles<=args.max):
     #print("Starting for %d files." % (nFiles))
     startBuild = time()
     for i in range(nFiles):
-        f = open(os.path.join(dirName, "temp_%08d" % i), 'w')
+        f = open(os.path.join(dirName, "temp_%08d" % i), "w")
         f.write(args.data * args.reps)
         f.close()
     endBuild = time()
 
     startAccess = time()
-    if (args.access == 'listdir'):
+    if (args.access == "listdir"):
         myList = os.listdir(dirName)
-    elif (args.access == 'openall'):
+    elif (args.access == "openall"):
         for i in range(nFiles):
-            f = open(os.path.join(dirName, "temp_%08d" % nFiles-1-i), 'r')
+            f = open(os.path.join(dirName, "temp_%08d" % nFiles-1-i), "r")
             f.close()
     else:
-        lg.fatal("Bad --access value.")
+        fatal("Bad --access value.")
     endAccess = time()
-    x = myList[0] + '.'
+    x = myList[0] + "."
 
     print("    %8d files,  %12.5fms build, %12.5fms access, %10.5fms / file" %
           (nFiles, (endBuild-startBuild)*1000, (endAccess-startAccess)*1000,
@@ -160,4 +153,3 @@ while (nFiles<=args.max):
 if (not args.quiet):
     print("Done. Deleting dir '%s'...." % (dirName))
     shutil.rmtree(dirName)
-    lg.showStats()

@@ -21,7 +21,7 @@ except ImportError as e:
         return check_output([ "xattr", "-w", aname, avalue, path ])
 
 __metadata__ = {
-    "title"        : "provenance.py",
+    "title"        : "provenance",
     "description"  : "Experiment with supporting file-source tracking.",
     "rightsHolder" : "Steven J. DeRose",
     "creator"      : "http://viaf.org/viaf/50334488",

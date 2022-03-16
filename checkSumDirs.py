@@ -18,7 +18,7 @@ import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
 __metadata__ = {
-    'title'        : "checkSumDirs.py",
+    'title'        : "checkSumDirs",
     'description'  : "Run a checksum on a directory or tree.",
     'rightsHolder' : "Steven J. DeRose",
     'creator'      : "http://viaf.org/viaf/50334488",
