@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 #
 # findAncestorDirectory.py: Look upwards for a file or directory.
-# 2021-12-02: Written by Steven J. DeRose.
+# 2007-10-05: Written by Steven J. DeRose (originally in Perl).
 #
 import sys
 import os
 import re
-#from typing import IO, Dict, List, Union
 
 __metadata__ = {
     "title"        : "findAncestorDirectory",
@@ -29,15 +28,18 @@ descr = """
 
     findAncestorDirectory.py [options] [target]
 
-[target] is interpreted as a regular expression, and allows partial matches (use "^"
-and/or "$" to tie it to the start and/or end of names).
-
-Locates the nearest ancestor directory (or the starting directory itself)
-whose ''own name'' matches [target].
-for example, to find the containing "source" directory (if any):
+Locates the nearest ancestor directory whose ''own name'' matches [target].
+For example, to find the containing "source" directory (if any):
     findAncestorDdirectory source
-    
-With `-c` or `--child`, it instead looks for an ancestor directory (or self) 
+
+[target] is interpreted as a regular expression, and allows partial matches
+(use "^" and/or "$" to tie it to the start and/or end of names).
+
+Searching starts at the current directory unless you override that via ''--startDir''.
+The search starts at the start path's ''parent'' directory.
+The starting path ''itself'' is not checked unless you specify ''--self''.
+
+With `-c` or `--child`, searches for an ancestor directory 
 of any name, but that ''contains'' a file or directory that matches [target].
 This is handy for locating "inherited" items such as .git, .pyenv, etc.
 
@@ -51,7 +53,7 @@ You can use the result to '''cd''' to the found directory. For example:
     alias theGitDir='cd `findAncestorDdirectory \\.git`
 
 On failure, the command
-* prints "." (unless `--nil` is specified).  This is so passing it to `cd` doesn't do anything.
+* prints "." (unless `--nil` is specified), so passing it to `cd` won't do anything.
 * displays a message on stderr (unless --quiet) is specified).
 * returns status 99.
 
@@ -64,17 +66,15 @@ On failure, the command
 
 =To do=
 
-Add --all to keep going in case there are multiple matches.
-
 
 =History=
 
 * 2007-10-05: Written by Steven J. DeRose. Original in Perl.
-* 2007-11-26 sjd: strict, Getopt.
+* 2007-11-26: strict, Getopt.
 * 2012-09-12: ?
 * 2021-12-02: New layout. Add --file. Port to Python.
 * 2022-02-28ff: Add error message when target not found. Add -v messages.
-Improve doc, rename --file to --child. Add --all.
+Improve doc. Rename --file to --child. Add --all, --startDir, --self.
 
 
 =Rights=
@@ -92,7 +92,7 @@ or [https://github.com/sderose].
 
 def warning(m):
     sys.stderr.write(m+"\n")
-    
+
 
 ###############################################################################
 # Main
@@ -124,6 +124,12 @@ if __name__ == "__main__":
             "--quiet", "-q", action="store_true",
             help="Suppress most messages.")
         parser.add_argument(
+            "--self", action="store_true",
+            help="Also allow matching the starting directory itself.")
+        parser.add_argument(
+            "--startDir", type=str, default=os.environ["PWD"],
+            help="Directory to start at. Default: the current directory.")
+        parser.add_argument(
             "--verbose", "-v", action="count", default=0,
             help="Add more messages (repeatable).")
         parser.add_argument(
@@ -144,23 +150,26 @@ if __name__ == "__main__":
     reFlags = re.I if args.ignoreCase else 0
     
     nFound = 0
-    curDir = os.environ["PWD"]
-    while (curDir and curDir != "/"):
-        parent, lastPart = os.path.split(curDir)
-        if (args.verbose): warning(
-            "At %s." % (curDir))
-        if (args.child):
-            for x in os.listdir(curDir):
-                if (re.search(args.target, x, flags=reFlags)):
+    if (not os.path.exists(args.startDir)):
+        warning("Starting path not found: '%s'." % (args.startDir))
+    else:
+        curDir = os.path.abspath(args.startDir)
+        if (not args.self): curDir = os.path.split(curDir)[0]
+        while (curDir and curDir != "/"):
+            parent, lastPart = os.path.split(curDir)
+            if (args.verbose): warning("At %s." % (curDir))
+            if (args.child):
+                for x in os.listdir(curDir):
+                    if (re.search(args.target, x, flags=reFlags)):
+                        print(curDir)
+                        nFound += 1
+                    if (nFound and not args.all): break
+            else:
+                if (re.search(args.target, lastPart, flags=reFlags)):
                     print(curDir)
                     nFound += 1
-                if (nFound and not args.all): break
-        else:
-            if (re.search(args.target, lastPart, flags=reFlags)):
-                print(curDir)
-                nFound += 1
-        if (nFound and not args.all): break
-        curDir = parent
+            if (nFound and not args.all): break
+            curDir = parent
         
     if (nFound == 0):
         if (not args.nil): 
