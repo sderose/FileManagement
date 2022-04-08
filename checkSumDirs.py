@@ -410,7 +410,7 @@ if __name__ == "__main__":
             help='Display version information, then exit.')
 
         parser.add_argument(
-            'files',             type=str,
+            'files', type=str,
             nargs=argparse.REMAINDER,
             help='Path(s) to input file(s)')
 

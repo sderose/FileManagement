@@ -28,23 +28,27 @@ descr = """
 
     findAncestorDirectory.py [options] [target]
 
-Locates the nearest ancestor directory whose ''own name'' matches [target].
+Locates the nearest ancestor directory whose own name matches [target].
 For example, to find the containing "source" directory (if any):
+
     findAncestorDdirectory source
 
 [target] is interpreted as a regular expression, and allows partial matches
 (use "^" and/or "$" to tie it to the start and/or end of names).
 
-Searching starts at the current directory unless you override that via ''--startDir''.
-The search starts at the start path's ''parent'' directory.
-The starting path ''itself'' is not checked unless you specify ''--self''.
+The search starts at the parent of the directory via ''--startDir'' (which
+default to the current directory. To include at the startDir or current directory
+itself, specify ''--self''. It stops after finding the first match, unless
+you specify I<--all>.
 
-With `-c` or `--child`, searches for an ancestor directory 
-of any name, but that ''contains'' a file or directory that matches [target].
+With `-c` or `--child`, it searches for an ancestor directory
+that ''contains'' a file or directory that matches [target],
+not that is itself named to match.
 This is handy for locating "inherited" items such as .git, .pyenv, etc.
 
 For example, the following finds which containing directory represents the entire
 git repository (since that ancestor will have a subdirectory named ".git"):
+
     findAncestorDirectory -c \\.git$
     
 The "$" prevents matches that merely ''start' with ".git", such as "\\.gitignore".
@@ -59,6 +63,8 @@ On failure, the command
 
 
 =Related Commands=
+
+I<lsanc>
 
 
 =Known bugs and Limitations=
