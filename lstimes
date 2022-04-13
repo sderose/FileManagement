@@ -8,6 +8,7 @@ import os
 import argparse
 import stat
 import pwd
+import time
 
 __metadata__ = {
     "title"        : "lstimes",
@@ -17,7 +18,7 @@ __metadata__ = {
     "type"         : "http://purl.org/dc/dcmitype/Software",
     "language"     : "Python 3.7",
     "created"      : "2016-02-05",
-    "modified"     : "2022-03-11",
+    "modified"     : "2022-04-12",
     "publisher"    : "http://github.com/sderose",
     "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
@@ -27,12 +28,14 @@ __version__ = __metadata__["modified"]
 descr="""
 =Description=
 
+UNFINISHED
+
 Show lots more information about a file than ls does.
 
 
 =Related Commands=
 
-C<ls>, C<stat -x>, C<file>.
+`ls`, `stat -x`, `file`, `PowerStat.py`, ....
 
 
 =Known bugs and Limitations=
@@ -44,12 +47,14 @@ C<ls>, C<stat -x>, C<file>.
 * 2016-02-05, 2019-10-29: Lint.
 * 2020-08-23: layout, fix report format.
 * 2022-03-11: lint, POD to MarkDown.
+* 2022-04-12: Factor out display formatting. Add --convert for times.
 
 
 =To do=
 
-* INTEGRATE WITH "lss" and maybe "lsoutline".
-
+* INTEGRATE WITH "lss", "lsoutline". Subsume into PowerStat?
+* Add options to actually set the display format.
+* Add H-size conversion
 
 =Rights=
 
@@ -65,12 +70,115 @@ or [https://github.com/sderose].
 =Options=
 """
 
-
 def warn(lvl, msg):
     if (args.verbose >= lvl): sys.stderr.write(msg+"\n")
 
+def convTime(epochTime):
+    return time.ctime(epochTime)
+    
+# Format is a list of tuples of (fieldName, displayName, sprintfCode).
+#
+scode = "%30s"
+
+defaultFormat = [
+    #(fieldName, displayName, sprintfCode), conversionFunc
+    ("nm",	    "filename",		scode, 		None),
+    ("isDir",	"is directory", scode, 		None),
+    ("lnk",	    "is symlink",	scode, 		None),
+    ("filemode","permissions", 	scode,      None),
+    #("eh",	    "eh",			scode, 		None),
+    ("usr",	    "user", 		scode, 		None),
+    ("grp",	    "group",		scode, 		None),
+    ("sz",	    "size",			scode, 		None),
+    ("ct",	    "created",		scode,      convTime),
+    ("mt",	    "modified",		scode,      convTime),
+    ("at",	    "accessed",		scode,      convTime),
+    ("ino",     "inode",        scode,      None),
+    ("flag",	"flags",		scode, 		None),
+]
+
+def formatInfo(theDict, theFormat):
+    buf = ""
+    for fieldName, displayName, sprintfCode, conv in theFormat:
+        thisFmt = "    %-16s: " + sprintfCode + "\n"
+        fieldValue = "???"
+        if (fieldName in theDict):
+            fieldValue = theDict[fieldName]
+            if (args.convert and conv is not None): fieldValue = conv(fieldValue)
+        buf += thisFmt % (displayName, fieldValue)
+    return buf
+    
+    
+###############################################################################
+#
+def tryOneItem(path, theFormat):
+    """Try to open a file (or directory, if -r is set).
+    """
+    warn(1, "Starting item '%s'" % (path))
+    recnum = 0
+    if (not os.path.exists(path)):
+        sys.stderr.write("Couldn't find '%s'.\n" % (path))
+    elif (os.path.isdir(path)):
+        if (args.recursive):
+            for child in os.listdir(path):
+                recnum += tryOneItem(os.path.join(path,child), theFormat)
+        else:
+            warn(1, "Skipping directory '%s'." % (path))
+    else:
+        doOneFile(path, theFormat)
+    return(recnum)
+
+def doOneFile(path, theFormat):
+    """Deal with one individual file.
+    """
+    theInfo = {}
+    s = os.stat(path)  # follow_symlinks?
+    mode = s.st_mode	# protection bits,
+    theInfo["mode"] = mode
+    theInfo["ino"] = s.st_ino	# inode number,
+    theInfo["dev"] = s.st_dev	# device,
+    theInfo["nl"] = s.st_nlink	# number of hard links,
+    theInfo["uid"] = s.st_uid	# user id of owner,
+    theInfo["gid"] = s.st_gid	# group id of owner,
+    theInfo["sz"] = s.st_size	# size of file, in bytes,
+    theInfo["at"] = s.st_atime	# time of most recent access,
+    theInfo["mt"] = s.st_mtime	# time of most recent content modification,
+    theInfo["ct"] = s.st_ctime	# time of last metadata change on Unix; cre on Win
+
+    theInfo["isDir"] = os.path.isdir(path)
+    theInfo["lnk"] = os.path.islink(path)
+    theInfo["eh"] = -1
+    theInfo["usr"] = pwd.getpwuid(theInfo["uid"])[0]
+    # heInfo["grp"] = grp.getgrgid(theInfo["gid"])[0]
+    theInfo["grp"] = "???"
+    #theInfo["sz"] = os.path.getsize(path)
+    #theInfo["ct"] = os.path.getctime(path)
+    #theInfo["mt"] = os.path.getmtime(path)
+    #theInfo["at"] = os.path.getatime(path)
+    theInfo["nm"] = os.path.basename(path)
+    theInfo["flag"] = getFileFlagChar(path)
+
+    theInfo["filemode"] = stat.filemode(mode)
+    print(path + ":\n" + formatInfo(theInfo, theFormat))
+
 
 ###############################################################################
+#
+def getFileFlagChar(path):
+    # There's a more complete version of this in PowerStat.getFlag()....
+    if (os.path.isdir(path)): return("/")
+    return("")
+
+def printHeader(theFormat):
+    print(theFormat %
+        ("per", "lnk", "eh",
+         "usr", "grp", "sz",  "ct",
+         "mt",  "at",  "nm",  "flag", "dir"))
+    return
+
+
+###############################################################################
+# Main
 #
 def processOptions():
     try:
@@ -81,8 +189,20 @@ def processOptions():
         parser = argparse.ArgumentParser(description=descr)
 
     parser.add_argument(
+        "--convert", action="store_true", default=True,
+        help="Convert times to readable form (default).")
+    parser.add_argument(
+        "--no-convert", action="store_false", dest="convert",
+        help="Do not convert times to readable form.")
+    parser.add_argument(
+        "--format", "-f", type=str,
+        help="(not yet supported, see PowerStat.py)")
+    parser.add_argument(
         "--quiet", "-q", action="store_true",
         help="Suppress most messages.")
+    parser.add_argument(
+        "--recursive", "-r", action="store_true",
+        help="Traverse into directories.")
     parser.add_argument(
         "--verbose", "-v", action="count", default=0,
         help="Add more messages (repeatable).")
@@ -97,77 +217,6 @@ def processOptions():
     args0 = parser.parse_args()
     return(args0)
 
-
-###############################################################################
-#
-def tryOneItem(path):
-    """Try to open a file (or directory, if -r is set).
-    """
-    warn(1, "Starting item '%s'" % (path))
-    recnum = 0
-    if (not os.path.exists(path)):
-        sys.stderr.write("Couldn't find '%s'.\n" % (path))
-    elif (os.path.isdir(path)):
-        if (args.recursive):
-            for child in os.listdir(path):
-                recnum += tryOneItem(os.path.join(path,child))
-        else:
-            warn(0, "Skipping directory '%s'." % (path))
-    else:
-        doOneFile(path)
-    return(recnum)
-
-
-###############################################################################
-#
-def getFileFlagChar(path):
-    if (os.path.isdir(path)): return("/")
-    return("")
-
-FMT = "%9s%1s %3d %8s %6s %6s %16s %16s %16s %16s %1s %s"
-def printHeader():
-    print(FMT %
-        ("per", "lnk", "eh",
-         "usr", "grp", "sz",  "ct",
-         "mt",  "at",  "nm",  "flag", "dir"))
-    return
-
-def doOneFile(path):
-    """Deal with one individual file.
-    """
-    s = os.stat(path)  # follow_symlinks?
-    mode = s.st_mode	# protection bits,
-    #ino = s.st_ino	# inode number,
-    #dev = s.st_dev	# device,
-    #nl  = s.st_nlink	# number of hard links,
-    uid = s.st_uid	# user id of owner,
-    #gid = s.st_gid	# group id of owner,
-    sz  = s.st_size	# size of file, in bytes,
-    at  = s.st_atime	# time of most recent access,
-    mt  = s.st_mtime	# time of most recent content modification,
-    ct  = s.st_ctime	# time of last metadata change on Unix; cre on Win
-
-    dirName = os.path.isdir(path)
-    lnk = os.path.islink(path)
-    eh  = -1
-    usr = pwd.getpwuid(uid)[0]
-    #grp = grp.getgrgid(gid)[0]
-    grp = "???"
-    #sz  = os.path.getsize(path)
-    #ct  = os.path.getctime(path)
-    #mt  = os.path.getmtime(path)
-    #at  = os.path.getatime(path)
-    nm  = os.path.basename(path)
-    flag = getFileFlagChar(path)
-
-    filemode0 = stat.filemode(mode)
-    print(FMT %
-        (filemode0, lnk, eh, usr, grp, sz, ct, mt, at, nm, flag, dirName))
-
-
-###############################################################################
-# Main
-#
 args = processOptions()
 
 if (len(args.files) == 0):
@@ -175,4 +224,4 @@ if (len(args.files) == 0):
     sys.exit()
 
 for f in (args.files):
-    doOneFile(f)
+    tryOneItem(f, defaultFormat)
