@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # getFileIdStack.py: Show inode, partition id, volume id, etc.
 # 2021-06-14: Written by Steven J. DeRose.

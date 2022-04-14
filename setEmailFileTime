@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # setEmailFileTime.py: Set the file-system timestamps on an email file
 # to match the MIME header "Date:" field.

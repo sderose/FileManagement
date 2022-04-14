@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # findDuplicateFiles: "Scan directory subtrees for duplicate files."
 # 2014-09-12: Written by Steven J. DeRose.
