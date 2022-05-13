@@ -36,9 +36,9 @@ For example, to find the containing "source" directory (if any):
 [target] is interpreted as a regular expression, and allows partial matches
 (use "^" and/or "$" to tie it to the start and/or end of names).
 
-The search starts at the parent of the directory via ''--startDir'' (which
-default to the current directory. To include at the startDir or current directory
-itself, specify ''--self''. It stops after finding the first match, unless
+The search starts at the parent of the directory given via ''--startDir'' (which
+defaults to the current directory). To include the startDir or current directory
+itself, specify ''--self''. The search stops after finding the first match, unless
 you specify I<--all>.
 
 With `-c` or `--child`, it searches for an ancestor directory
@@ -46,7 +46,7 @@ that ''contains'' a file or directory that matches [target],
 not that is itself named to match.
 This is handy for locating "inherited" items such as .git, .pyenv, etc.
 
-For example, the following finds which containing directory represents the entire
+For example, the following finds the containing directory that represents an entire
 git repository (since that ancestor will have a subdirectory named ".git"):
 
     findAncestorDirectory -c \\.git$
@@ -54,7 +54,7 @@ git repository (since that ancestor will have a subdirectory named ".git"):
 The "$" prevents matches that merely ''start' with ".git", such as "\\.gitignore".
 
 You can use the result to '''cd''' to the found directory. For example:
-    alias theGitDir='cd `findAncestorDdirectory \\.git`
+    alias theGitDir='cd `findAncestorDdirectory \\.git`'
 
 On failure, the command
 * prints "." (unless `--nil` is specified), so passing it to `cd` won't do anything.
@@ -64,13 +64,15 @@ On failure, the command
 
 =Related Commands=
 
-I<lsanc>
+I<lsanc> -- do `ls -ld` for each ancestor directory (handy for checking permissions).
 
 
 =Known bugs and Limitations=
 
 
 =To do=
+
+* On fail with `--self` not set, check the self dir and warn.
 
 
 =History=
@@ -128,7 +130,7 @@ if __name__ == "__main__":
             help="Print nothing (instead of default '.') on failure.")
         parser.add_argument(
             "--quiet", "-q", action="store_true",
-            help="Suppress most messages.")
+            help="Suppress most messages (see also --nil).")
         parser.add_argument(
             "--self", action="store_true",
             help="Also allow matching the starting directory itself.")

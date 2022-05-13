@@ -128,7 +128,7 @@ while (nFiles<=args.max):
     #print("Starting for %d files." % (nFiles))
     startBuild = time()
     for i in range(nFiles):
-        f = open(os.path.join(dirName, "temp_%08d" % i), "w")
+        f = open(os.path.join(dirName, "temp_%08d" % i), "w", encoding="utf-8")
         f.write(args.data * args.reps)
         f.close()
     endBuild = time()
@@ -138,7 +138,7 @@ while (nFiles<=args.max):
         myList = os.listdir(dirName)
     elif (args.access == "openall"):
         for i in range(nFiles):
-            f = open(os.path.join(dirName, "temp_%08d" % nFiles-1-i), "r")
+            f = open(os.path.join(dirName, "temp_%08d" % nFiles-1-i), "r", encoding="utf-8")
             f.close()
     else:
         fatal("Bad --access value.")

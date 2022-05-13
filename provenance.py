@@ -13,7 +13,7 @@ from PowerWalk import PowerWalk, PWType
 
 try:
     from os import getxattr, setxattr
-except ImportError as e:
+except ImportError:
     from subprocess import check_output
     def getxattr(path:str, aname:str):
         return check_output([ "xattr", "-p", aname, path ])
