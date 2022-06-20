@@ -80,7 +80,7 @@ Show count of files per directory (implies I<"--dirs">). Not yet supported.
 =item * B<--color>
 
 Colorize output. This is the default if environment variable
-C<USE_COLOR> is set and STDOUT is going to a terminal.
+C<CLI_COLOR> is set and STDOUT is going to a terminal.
 
 =item * B<--css> I<path>
 
@@ -285,7 +285,7 @@ my $absolute      = 0;
 my $all           = 0;
 my $bak           = 0;
 my $byExtension   = 0,
-my $color         = ($ENV{USE_COLOR} && -t STDOUT) ? 1:0;
+my $color         = ($ENV{CLI_COLOR} && -t STDOUT) ? 1:0;
 my $count         = 0;
 my $css           = "";
 my $dirs          = 1;

@@ -61,7 +61,7 @@ Consider backup and CVS files, normally ignored, and also dot-initial filenames.
 =item * B<--color>
 
 Colorize the output (see below).
-Default: off unless environment variable I<USE_COLOR> is set and
+Default: off unless environment variable I<CLI_COLOR> is set and
 STDOUT is going to a terminal.
 
 =item * B<--colWidth> I<n>
@@ -240,7 +240,7 @@ For the most recent version, see L<http://www.derose.net/steve/utilities/>.
 
 
 my $all          = 0;
-my $color        = ($ENV{"USE_COLOR"} && -t STDOUT);
+my $color        = ($ENV{"CLI_COLOR"} && -t STDOUT);
 my $colWidth     = 6;
 my $content      = 0;
 my $diffsOnly    = 0;

@@ -472,7 +472,7 @@ if __name__ == "__main__":
         args.backups = args.hidden = True
 
     if (not args.color):
-        args.color = ("USE_COLOR" in os.environ and sys.stderr.isatty())
+        args.color = ("CLI_COLOR" in os.environ and sys.stderr.isatty())
     lg.setColors(args.color)
 
     if (not (args.size or args.time or args.md5 or args.diff)):

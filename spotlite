@@ -152,7 +152,7 @@ Default (use I<--nobak> to turn off).
 =item * B<--color>
 
 Colorize the output. Default to on if
-environment variable C<USE_COLOR> is set and STDERR is going to the terminal.
+environment variable C<CLI_COLOR> is set and STDERR is going to the terminal.
 
 =item * B<--date>
 
@@ -383,7 +383,7 @@ L<https://github.com/sderose>.
 my $age           = 0;
 my $align         = "L";
 my $bak           = 1;
-my $color         = ($ENV{USE_COLOR} && -t STDERR) ? 1:0;
+my $color         = ($ENV{CLI_COLOR} && -t STDERR) ? 1:0;
 my $content       = "";
 my $date          = 1;
 my $days          = 0;
