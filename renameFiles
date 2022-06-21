@@ -17,7 +17,7 @@ our %metadata = (
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12-18",
-    "modified"     => "2022-03-30",
+    "modified"     => "2022-06-21",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -896,7 +896,7 @@ my $ancestor        = 0;
 my $bactrianize     = 0;
 my $camelize        = 0;
 my $clean           = 0;
-my $cleanChars      = "-.\\w";
+my $cleanChars      = "-\\.\\w";
 my $color           = ($ENV{CLI_COLOR} && -t STDERR) ? 1:0;
 my $copies          = 0;
 my $dates           = 0;
@@ -1155,9 +1155,7 @@ sub doOneItem {
     if ($fullPath =~ m/([^ -~]+)/) {
         vMsg(1, showInvisibles("Warning: Non-ASCII in filename '$fullPath': '$1'\n"));
     }
-    MsgSet(0);
     hMsg(1, "\nStarting item: '" . $fullPath . "'");
-    MsgSet(1);
 
     #if (my $vcs = whatVCS($fullPath)) {
     #    hMsg("Seems to be owned by $vcs: $fullPath.");
