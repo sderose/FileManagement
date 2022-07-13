@@ -33,14 +33,50 @@ by using (or adding) serial numbers within the name. For example,
 
     nextFilename myFile0205.txt
 
-would return "myFile0206.txt" (whether it already exists of not).
+would return "myFile0206.txt". 
 
-To get the next `available` filename, use `--mustBeAvailable`
-(or either of the synonyms `--available` or `-a`).
+* By default, neither the mentioned file nor the
+constructed incremental file needs to exist or not exist.
+* Generated numbers are padded to at least `--width` digits.
+* If there are no digits in a supplied filename, 1 (as padded) is appended
+immediately preceding the extension (if any). 
+* If there are noncontiguous digits, the last sequence is used.
+* If there are leading path components, they are retained.
 
-For each path provided as an argument:
+To get the next `available` filename,
+use `--mustBeAvailable` (or either of the synonyms `--available` or `-a`).
+In that case, if the file named by the argument does not exist, that name is returned
+unchanged. Otherwise, the first natural number is used that yields 
+a filename that does not represent an extant file. 
+
+''Note'': A reasonable alternative is 
+to want the number one past the highest one that does exist. That is not yet 
+implemented.
+
+==Number padding==
+
+Serial numbers are left-0-padded to `--width` digits (default 4), and are added
+if there are no digits already present. That means that
+
+    nextFilename myFile205.txt
+
+will also return "myFile0206.txt" (note the added "0"). 
+For testing existence, "myFile205.txt" does not
+(yet, at least) block the script from returning "myFile0205.txt", because they are
+not properly "the same filename" (at least for any OS I can think of).
+
+This may or may not be what you want.
+You may instead want to suppress padding entirely here, which you can accomplish
+by setting `--width 0`. But if your files
+have mixed widths (say, myFile1.txt, ...myFile15.txt), you may want to
+normalize them first, for example using my `renameFiles` command.
+
+==Order of processing==
+
+For each path provided as an argument, this is the basic order of steps:
+
     Separate the path, basename, and extension
-    extract final ASCII decimal digits from the basename (default to 1)
+    Extract final ASCII decimal digits from the basename (default to 1)
     W = number of digits (including any leading zeros)
     N = integer value of that number
     Repeat forever:
@@ -52,47 +88,53 @@ For each path provided as an argument:
 
 If `--available` is specified, such names will be generated with larger
 and larger numeric values inserted, until a name (path) is generated that
-does not already exist.
+does not already exist (or until `--maxTries` attempts have been made).
 
 
 =Related commands=
 
-C<rename>, C<renameFiles>.
+*nix C<rename>, my C<renameFiles>.
 
 
 =Known bugs and limitations=
 
 It is possible that files with higher numbers exist, for example if
-there are gaps in the sequence of extant filenames.
+there are gaps in the sequence of extant filenames. An option to avoid
+this is desirable.
 
 Existence is tested for
 the literal filename, including the exact number of 0s inserted as padding.
 Thus, "file01" and "file000000001" are not considered the same. It would be
 better to automatically find all variants, and even auto-set `--width`.
 
-Knows nothing about OS conventions such as "Copy 12 of X", etc.
+Knows nothing about OS conventions such as "Copy 12 of X", "Backup of backup of X", etc.
+
+Does not know enough to ignore numbers if they are part of dates, such as
+in "foo-2020-01-01.log". Speaking of which, it knows nothing of negative or
+non-integer or non-decimal numbers.
 
 It is worth mentioning that many file-systems get slow if a single directory
 contains more than about 1,000 files (see `bigDirTimer` to test yours).
 
 
-=To do
+=To do=
 
-* Append 1 if a basename without a number is given.
 * Option to skip gaps (started, see getNumberedFiles()).
-* Maybe support hexadecimal?
-* Maybe offer to normalize the number-field widths?
+* Maybe support hexadecimal? But what about "foo00BEef.txt"?
+* Maybe warn if files with different-width number fields are around?
 
 
 =History=
 
-    2014-11-04: Written by Steven J. DeRose.
-    2015-02-06: Add --available, --width. Rename incrementFilename->nextFilename
-    2018-04-18: lint.
-    2020-09-15: New layout. Default to test existence.
-    2022-04-27: Improve help. Better handling of --available. Start smarter
+* 2014-11-04: Written by Steven J. DeRose.
+* 2015-02-06: Add --available, --width. Rename incrementFilename->nextFilename
+* 2018-04-18: lint.
+* 2020-09-15: New layout. Default to test existence.
+* 2022-04-27: Improve help. Better handling of --available. Start smarter
 handling of varying widths, numbering gaps, etc.
-    
+* 2022-07-13: Improve help, describe various edge cases. Fix bug that 
+prepended "/" even when there was no prior path. Add type hinting.
+
 
 =Rights=
 
@@ -111,7 +153,7 @@ or [https://github.com/sderose].
 
 ###############################################################################
 #
-def getNumberedFiles(orig):
+def getNumberedFiles(orig:str) -> (int, list, list):
     """Locate all filenames in the directory that differ from the given 
     one only in the last set of digits (immediately before the extension). 
     Return the maximum integer value found for those numbers, the list of
@@ -137,8 +179,9 @@ def getNumberedFiles(orig):
             if (numValue > maxValue): maxValue = numValue
     return maxValue, nameList, widths
     
-def getNewPath(orig, mustBeAvailable=True, maxTries=100):
+def getNewPath(orig:str, mustBeAvailable:bool=True, maxTries:int=100) -> str:
     """Split up the path, then try numbers as long as needed.
+    Return the end result.
     """
     dirPath, basename = os.path.split(orig)
     nam, ext = os.path.splitext(basename)  # (keeps the 'dot')
@@ -168,10 +211,11 @@ def getNewPath(orig, mustBeAvailable=True, maxTries=100):
             (dirPath, pre, newNum, post, ext))
 
         numPadded = str(newNum).rjust(thisWidth, '0')
-        newPath = dirPath + "/" + pre + numPadded + post + ext
+        newPath = ""
+        if (dirPath): newPath += dirPath + "/"
+        newPath += pre + numPadded + post + ext
         if (not mustBeAvailable): break
         if (not os.path.exists(newPath)): break
-
     return(newPath)
 
 
@@ -188,17 +232,18 @@ if __name__ == '__main__':
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
+            "--list", action='store_true',
+            help='Just list all existing numerical variants, and exit.')
+        parser.add_argument(
             "--maxTries", type=int, default=100,
             help='Only make this many tries before giving up.')
-
         parser.add_argument(
-            "--mustBeAvailable", "--available", "-a", action='store_true', default=True,
+            "--mustBeAvailable", "--available", "-a", action='store_true',
             help='Return the next name that does NOT yet exist.')
         parser.add_argument(
             "--no-mustBeAvailable", "--no-available",
             action='store_false', dest='mustBeAvailable',
             help='Return the next name whether or not it already exists.')
-
         parser.add_argument(
             "--quiet", "-q", action='store_true',
             help='Suppress most messages.')
@@ -213,8 +258,7 @@ if __name__ == '__main__':
             help='Zero-pad numbers to be at least this wide. Default: 4.')
 
         parser.add_argument(
-            'names', type=str,
-            nargs=argparse.REMAINDER,
+            'names', type=str, nargs=argparse.REMAINDER,
             help='Filenames or other strings to "increment."')
 
         args0 = parser.parse_args()
@@ -222,9 +266,17 @@ if __name__ == '__main__':
 
     args = processOptions()
     for n in (range(len(args.names))):
-        newPath0 = getNewPath(args.names[n],
-            mustBeAvailable=args.mustBeAvailable, maxTries=args.maxTries)
-        if (args.verbose):
-            print("%s\t%s" % (args.names[n], newPath0))
+        if (args.list):
+            theMax, theNames, theWidths = getNumberedFiles(args.names[n])
+            print("Max integer found: %d" % (theMax))
+            if (len(set(theWidths)) > 1):
+                print("WARNING: Not all the same width.")
+            for i0 in range(len(theNames)):
+                print("%2d: '%s'" % (theWidths[i0], theNames[i0]))
         else:
-            print(newPath0)
+            newPath0 = getNewPath(args.names[n],
+                mustBeAvailable=args.mustBeAvailable, maxTries=args.maxTries)
+            if (args.verbose):
+                print("%s\t%s" % (args.names[n], newPath0))
+            else:
+                print(newPath0)
