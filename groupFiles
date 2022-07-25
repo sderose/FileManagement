@@ -1,195 +1,32 @@
 #!/usr/bin/perl -w
 #
-# Organize a folder full of files into subfolders by similarity of names.
-#
-# ?? -- written by Steven J. DeRose.
-# 2011-05-06 sjd: clean up. Getopt. Support organizing by hyphenations.
-# 2018-09-25: Generalize. Better messaging. Add --copyTo, --onlyExtension,
-#     --singletons.
-#
-# To do:
-#    Port to Python and use PowerWalk
-#    Add --dry-run option.
+# groupFiles: Organize a folder into subfolders by similarity of names.
+# <2011-05-0: written by Steven J. DeRose.
 #
 use strict;
 use Getopt::Long;
 use File::Copy;
 
-our $VERSION_DATE = "2018-09-25";
-
-my $cleanExtensions = 0;
-my $cleanNames    = 0;
-my $copyTo        = '';
-my $dryRun        = 0;
-my $ignoreCase    = 0;
-my $numerics      = '';
-my $onlyExtension = '';
-my $quiet         = 0;
-my $recursive     = 0;
-my $serials       = 1;
-my $singletons    = 1;
-my $verbose       = 0;
-
-sub vMsg {
-    my ($level, $msg) = @_;
-    ($verbose >= $level) && warn($msg . "\n");
-}
-
-sub doRename {
-    my ($fr, $to) = @_;
-    my $suffix = sjdUtils::availableFileNum($to);
-    if ($suffix) {
-        $to = $to . $suffix;   # FIX to insert before extension
-    }
-    rename($fr, $to);
-    return $to;
-}
-
-###############################################################################
-#
-Getopt::Long::Configure ("ignore_case");
-my $result = GetOptions(
-    "cleanNames!"             => \$cleanNames,
-    "copyTo!"                 => \$copyTo,
-    "cleanExtensions!"        => \$cleanExtensions,
-    "dryRun|test!"            => \$dryRun,
-    "h|help"                  => sub { system "perldoc $0"; exit; },
-    "i|ignoreCase!"           => \$ignoreCase,
-    "numerics=s"              => \$numerics,
-    "onlyExtension=s"         => \$onlyExtension,
-    "q|quiet!"                => \$quiet,
-    "recursive!"              => \$recursive,
-    "singletons!"             => \$singletons,
-    "serials!"                => \$serials,
-    "v|verbose+"              => \$verbose,
-    "version"                 => sub {
-        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
-    }
-    );
-
-($result) || die "Bad options.\n";
-
-($dryRun) && die
-    "--dryRun is not yet supported.\n";
-($recursive) && die
-    "--recursive is not yet supported.\n";
-(!$numerics || -d $numerics) || die
-    "--numerics directory '$numerics' not found.\n";
-
-
-###############################################################################
-#
-my %extensionMap  = (
-    "jpeg"    => "jpg",
-    "html"    => "htm",
-    "text"    => "txt",
-    "tiff"    => "tif",
+our %metadata = (
+    'title'        => "groupFiles",
+    'description'  => "",
+    'rightsHolder' => "Steven J. DeRose",
+    'creator'      => "http://viaf.org/viaf/50334488",
+    'type'         => "http://purl.org/dc/dcmitype/Software",
+    'language'     => "Perl 5.18",
+    'created'      => "<2011-05-06",
+    'modified'     => "2022-07-22",
+    'publisher'    => "http://github.com/sderose",
+    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
-my $extFail       = 0;
-my $extSucc       = 0;
-my $charSucc      = 0;
-my $nNumerics     = 0;
-my $nSerials      = 0;
+our $VERSION_DATE = $metadata{'modified'};
 
-# Determine the list of files to work on.
-#
-my $fileArgs = '';
-foreach my $f (@ARGV) {
-    $f =~ s/'/\\'/g;
-    $fileArgs .= "'$f'";
-}
-my @files = @ARGV;
-vMsg(1, "Number of files: " . scalar(@files));
-
-
-if ($cleanExtensions) {
-    foreach my $x (@files) {
-        $x =~ m/\.([^.\+])$/;
-        my $ext = ($1) ? $1:"";
-        my $extKey = lc($ext);
-        if (defined $extensionMap{$extKey}) {
-            (my $newName = $x) =~ s/\.$ext$/.$extensionMap{$ext}/;
-            if (-e $newName) {
-                vMsg(0,  "Could not rename '$x' to '$newName' -- already exists.\n");
-                $extFail++;
-            }
-            else {
-                my $cmd = "mv '$x' '$newName'";
-                system "$cmd" || vMsg(0,  "$cmd failed\n");
-                $extSucc++;
-            }
-        }
-    } # $x
-}
-
-if ($cleanNames) {
-    foreach my $x (@files) {
-        my $newName = $x;
-        $newName =~ s/[^-_.a-zA-Z0-9]+/_/g;
-        if ($x ne $newName) {
-            ($verbose) && vMsg(0,  "normalizing '$x' to '$newName'\n");
-            rename($x,$newName);
-            $charSucc++;
-        }
-    } # $c
-}
-
-if ($serials) {
-    # Find unique prefixes
-    my %prefixes = ();
-    foreach my $f (@files) {
-        (my $fpre = $f) =~ s/\d+\.\w+$//;
-        if ($fpre == '' || $fpre == $f) { next; }
-        if (!defined $prefixes{$fpre}) { $prefixes{$fpre} = []; }
-        else { push($prefixes{$fpre}, $f); }
-    }
-
-    foreach my $pre (keys(%prefixes)) {
-        if (!$singletons && scalar(@$pre)) { next; }
-        my $nfiles = scalar(@$pre);
-        vMsg(1, "Moving $nfiles files for '$pre*' to '_$pre/'");
-        if (-e "_$pre" == 0) {
-            mkdir("_$pre");
-        }
-        foreach my $f (@$pre) {
-            if ($copyTo) {
-                File::copy($f, "$copyTo/$pre/$f");
-            }
-            else {
-                rename($f, "$pre/$f");
-            }
-            $nSerials++;
-        } # $f
-    } # $pre
-}
-
-if ($numerics) {
-    vMsg(0, "Moving all-numeric files to '$numerics' dir.");
-    for my $f (@files) {
-        ($f =~ m/^\d+(\.\w+)?$/) || next;
-        if ($f =~ m/^\d+\.jpg$/) {
-            rename($f, "$numerics/$f");
-            $nNumerics++;
-        }
-    }
-}
-
-if (!$quiet) {
-    vMsg(0, "Done.");
-}
-exit;
-
-
-###############################################################################
-###############################################################################
-###############################################################################
-#
 
 =pod
 
 =head1 Usage
 
-groupFiles [options] file
+    groupFiles [options] file
 
 Normalize file names and move files into sub-folders based on
 common parts of their names, ignoring any final digits.
@@ -280,8 +117,7 @@ Show version info and exit.
 =head1 Known Bugs and Limitations
 
 This is only really meant for handling files in a single source directory
-at a time. It's not smart about moving in files with duplicate names and/or
-contents.
+at a time. It's not smart about files with duplicate names and/or contents.
 
 
 =head1 Related commands
@@ -292,13 +128,197 @@ C<find> can do similar work a bit more manually:
 
 C<renameFiles> does regex renaming (the *nix C<rename> command is similar).
 
+
+=head1 History
+
+    <2011-05-06: written by Steven J. DeRose.
+    2011-05-06 sjd: clean up. Getopt. Support organizing by hyphenations.
+    2018-09-25: Generalize. Better messaging. Add --copyTo, --onlyExtension,
+--singletons.
+    2022-07-22: Layout. Update for push-reference being dropped from Perl.
+
+
+=head1 To do
+
+    Port to Python and use PowerWalk
+    Add --dry-run option.
+
+
 =head1 Ownership
 
-This work by Steven J. DeRose is licensed under a Creative Commons
-Attribution-Share Alike 3.0 Unported License. For further information on
-this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+Copyright 2011 by Steven J. DeRose. This work is licensed under a
+Creative Commons Attribution-Share Alike 3.0 Unported License.
+For further information on this license, see
+L<https://creativecommons.org/licenses/by-sa/3.0>.
 
-For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+For the most recent version, see L<http://www.derose.net/steve/utilities> or
+L<https://github.com/sderose>.
+
 
 =cut
 
+
+###############################################################################
+# Options
+#
+my $cleanExtensions = 0;
+my $cleanNames    = 0;
+my $copyTo        = '';
+my $dryRun        = 0;
+my $ignoreCase    = 0;
+my $numerics      = '';
+my $onlyExtension = '';
+my $quiet         = 0;
+my $recursive     = 0;
+my $serials       = 1;
+my $singletons    = 1;
+my $verbose       = 0;
+
+Getopt::Long::Configure ("ignore_case");
+my $result = GetOptions(
+    "cleanNames!"      => \$cleanNames,
+    "copyTo!"          => \$copyTo,
+    "cleanExtensions!" => \$cleanExtensions,
+    "dryRun|test!"     => \$dryRun,
+    "h|help"           => sub { system "perldoc $0"; exit; },
+    "i|ignoreCase!"    => \$ignoreCase,
+    "numerics=s"       => \$numerics,
+    "onlyExtension=s"  => \$onlyExtension,
+    "q|quiet!"         => \$quiet,
+    "recursive!"       => \$recursive,
+    "singletons!"      => \$singletons,
+    "serials!"         => \$serials,
+    "v|verbose+"       => \$verbose,
+    "version"          => sub {
+        die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
+    }
+);
+($result) || die "Bad options.\n";
+
+($dryRun) && die
+    "--dryRun is not yet supported.\n";
+($recursive) && die
+    "--recursive is not yet supported.\n";
+(!$numerics || -d $numerics) || die
+    "--numerics directory '$numerics' not found.\n";
+
+
+###############################################################################
+#
+sub vMsg {
+    my ($level, $msg) = @_;
+    ($verbose >= $level) && warn($msg . "\n");
+}
+
+sub doRename {
+    my ($fr, $to) = @_;
+    my $suffix = sjdUtils::availableFileNum($to);
+    if ($suffix) {
+        $to = $to . $suffix;   # FIX to insert before extension
+    }
+    rename($fr, $to);
+    return $to;
+}
+
+my %extensionMap  = (
+    "jpeg"    => "jpg",
+    "html"    => "htm",
+    "text"    => "txt",
+    "tiff"    => "tif",
+);
+my $extFail   = 0;
+my $extSucc   = 0;
+my $charSucc  = 0;
+my $nNumerics = 0;
+my $nSerials  = 0;
+
+# Determine the list of files to work on.
+#
+my $fileArgs = '';
+foreach my $f (@ARGV) {
+    $f =~ s/'/\\'/g;
+    $fileArgs .= "'$f'";
+}
+my @files = @ARGV;
+vMsg(1, "Number of files: " . scalar(@files));
+
+if ($cleanExtensions) {
+    foreach my $x (@files) {
+        $x =~ m/\.([^.\+])$/;
+        my $ext = ($1) ? $1:"";
+        my $extKey = lc($ext);
+        if (defined $extensionMap{$extKey}) {
+            (my $newName = $x) =~ s/\.$ext$/.$extensionMap{$ext}/;
+            if (-e $newName) {
+                vMsg(0,  "Could not rename '$x' to '$newName' -- already exists.\n");
+                $extFail++;
+            }
+            else {
+                my $cmd = "mv '$x' '$newName'";
+                system "$cmd" || vMsg(0,  "$cmd failed\n");
+                $extSucc++;
+            }
+        }
+    } # $x
+}
+
+if ($cleanNames) {
+    foreach my $x (@files) {
+        my $newName = $x;
+        $newName =~ s/[^-_.a-zA-Z0-9]+/_/g;
+        if ($x ne $newName) {
+            ($verbose) && vMsg(0,  "normalizing '$x' to '$newName'\n");
+            rename($x,$newName);
+            $charSucc++;
+        }
+    } # $c
+}
+
+if ($serials) {
+    # Find unique prefixes
+    my %prefixes = ();
+    foreach my $f (@files) {
+        (my $fpre = $f) =~ s/\d+\.\w+$//;
+        if ($fpre == '' || $fpre == $f) { next; }
+        if (!defined $prefixes{$fpre}) {
+            $prefixes{$fpre} = [];
+        }
+        else { 
+            my $aref = $prefixes{$fpre};
+            push @$aref, $f;
+        }
+    }
+
+    foreach my $pre (keys(%prefixes)) {
+        if (!$singletons && scalar(@$pre)) { next; }
+        my $nfiles = scalar(@$pre);
+        vMsg(1, "Moving $nfiles files for '$pre*' to '_$pre/'");
+        if (-e "_$pre" == 0) {
+            mkdir("_$pre");
+        }
+        foreach my $f (@$pre) {
+            if ($copyTo) {
+                File::copy($f, "$copyTo/$pre/$f");
+            }
+            else {
+                rename($f, "$pre/$f");
+            }
+            $nSerials++;
+        } # $f
+    } # $pre
+}
+
+if ($numerics) {
+    vMsg(0, "Moving all-numeric files to '$numerics' dir.");
+    for my $f (@files) {
+        ($f =~ m/^\d+(\.\w+)?$/) || next;
+        if ($f =~ m/^\d+\.jpg$/) {
+            rename($f, "$numerics/$f");
+            $nNumerics++;
+        }
+    }
+}
+
+if (!$quiet) {
+    vMsg(0, "Done.");
+}
