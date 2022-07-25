@@ -39,7 +39,7 @@ padding sequence numbers, or inserting the values of various file attributes
 A commonly useful example just turns all characters not in C<[-.\\w]> into "_", do:
 
     renameFiles --clean *
-    
+
 The same thing can be done via an equivalent regular expression:
 
     renamefiles --expr "s/[^=.\\s]/_/g" *.htm
@@ -47,7 +47,7 @@ The same thing can be done via an equivalent regular expression:
 Or to pad numbers to a uniform number of digits, use:
 
     renamefiles --expr "s/^(\d+)/\$1/" --ePad 4 *.htm
-    
+
 Be sure to backslash "$" (such as for back-references) if your shell would interpret them.
 
 Or you can get fancier. This would rename all .htm files in the current directory whose names
@@ -97,7 +97,7 @@ such as by removing or replacing prohibited characters,
 
 Renaming actions happen in the order:
 copies, pull, pullURI, xattrAdd, unescapeURI, lc, uc, bactrianize,
-camelize, addStat, dates, expr, clean. Probably, the easiest way to force a 
+camelize, addStat, dates, expr, clean. Probably, the easiest way to force a
 different order is to use multiple C<renameFiles> commands.
 
 
@@ -246,7 +246,7 @@ Apply the given regex to filenames (several example are given near the start of
 this help). All matches will be changed, not just the first.
 
 This uses PERL regexes, and respects the I<--ignorecase> option.
-To use a capture, use $1 etc. on the right-hand side, not \\1. 
+To use a capture, use $1 etc. on the right-hand side, not \\1.
 But remember that you may have to backslash that "$" to protect it from the shell.
 This change does not affect filename extensions unless you
 also specify I<--extChanges>.
@@ -266,6 +266,11 @@ Ensure that all filenames conform to the requirements of a certain filesystem.
 For example, MacOSX prohibits colons, Windows backslashes, and various systems
 have different maximum name lenths. To see a list of supported file systems,
 with their names and constraints, use I<--help-filesystems>.
+
+B<Note>: Maximum filename lengths for different file systems may not be
+measured the same. For example, both Mac and ext4 (at least on Synology)
+say 255, but if the Mac name includes UTF-8, the byte cound can apparently
+go over 255, in which case copying to ext4 seems to fail.
 
 =item * B<--force>
 
@@ -673,7 +678,7 @@ C<--onlyExtensions>. Add C<--extensions> synonym.
 
 =item * 2021-04-27: Start C<--filesystem>.
 
-=item * 2022-01-07: Fix bug with name conflicts when there's no extension. 
+=item * 2022-01-07: Fix bug with name conflicts when there's no extension.
 Still not great for case-insensitive file-systems when you change only case.
 But now notices and reports them, at least.
 
