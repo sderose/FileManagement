@@ -67,6 +67,11 @@ actually copy anything. At present, however, the target directory is still creat
 
 Add the output of C<git diff --stat> to the note file (only when in a git repo).
 
+
+=item * B<--ignore> I<extension>
+
+Do not include files with the given extension (do not include the "."). Repeatable.
+
 =item * B<--message> I<text> OR B<-m> I<text>
 
 An optional message to append to the I<_backup_note> file.
@@ -95,7 +100,7 @@ Show version info and exit.
 
 The generated note file isn't smart if you specify multiple directories
 to be backed up. For example, each could be in a different git repo, but the
-git root, commit it, and diff won't be generated for all of them.
+git root, commit id, and diff won't be generated for all of them.
 
 
 =head1 To Do
@@ -103,9 +108,9 @@ git root, commit it, and diff won't be generated for all of them.
     * Save git commit and branch info if applicable, or other VCS info.
         git rev-parse --show-toplevel
         git log -n 1 [file]
-    * Alternate backup methods? git branch or stash; mailto; rsync!
-    * Esp. for rsync, support remote destination.
-    * Perhaps add a --dry-run option?
+    * Apply .gitignore, and/or add own --ignore option?
+    * Alternate backup methods? git branch or stash; mailto; rsync?
+Esp. for rsync, support remote destination.
     * Add --warn-extension and/or --exclude? Use .gitignore?
     
 
@@ -122,6 +127,7 @@ git root, commit it, and diff won't be generated for all of them.
     2021-06-09: Fix misquoting of multiple names.
     2022-04-27: Improve git info inserted into note.
     2022-05-09: Actually implement dry-run.
+    2022-07-25: Add --noteFile option, fix some messages.
    
 
 =head1 Rights
@@ -142,37 +148,41 @@ L<https://github.com/sderose>.
 # Options
 #
 my $bdir = $ENV{BACKUP_DIR} || "$ENV{HOME}/backups";
-my $cpOptions     = '-a';
-my $dryRun        = 0;
-my $gitdiff       = 1;
-my $message       = '';
-my $noteFile      = "_backup_note.txt";
-my $quiet         = 0;
-my $verbose       = 0;
+my $cpOptions = '-a';
+my $dryRun    = 0;
+my $gitdiff   = 1;
+my $message   = '';
+my $noteFile  = "_backup_note.txt";
+my $quiet     = 0;
+my $verbose   = 0;
 
 my %getoptHash = (
-    "bdir=s"         => \$bdir,
-    "cpOptions=s"    => \$cpOptions,
-    "dryRun!"        => \$dryRun,
-    "gitdiff!"       => \$gitdiff,
-    "h|help"         => sub {
+    "bdir=s"          => \$bdir,
+    "cpOptions=s"     => \$cpOptions,
+    "dryRun|dry-run!" => \$dryRun,
+    "gitdiff!"        => \$gitdiff,
+    "h|help"          => sub {
         system "perldoc $0";
         print "Currently, your backup directory is '$bdir'.\n";
         exit;
     },
-    "m|message=s"    => \$message,
-    "q|quiet!"       => \$quiet,
-    "v|verbose+"     => \$verbose,
-    "version"        => sub {
+    "m|message=s"     => \$message,
+    "noteFile=s"      => \$noteFile,
+    "q|quiet!"        => \$quiet,
+    "v|verbose+"      => \$verbose,
+    "version"         => sub {
         die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
     },
 );
 Getopt::Long::Configure ("ignore_case");
 GetOptions(%getoptHash) || die "Bad options.\n";
 
-(scalar(@ARGV)) || die "No files specified!\n";
-
-(-d "$bdir") || die "Backup dir '$bdir' does not exist.\n";
+(scalar(@ARGV)) || die
+    "No files specified!\n";
+($noteFile =~ m|/|) && die
+    "Slash in --noteFile, should be just a name, no path.\n";
+(-d "$bdir") || die
+    "Backup dir '$bdir' does not exist.\n";
 
 
 ###############################################################################
@@ -184,7 +194,8 @@ for my $f (@ARGV) {
         warn "'$f' not found!\n";
     }
     elsif (-d $f && $cpOptions !~ m/-r/) {
-        warn "'$f' is a directory, and you didn't specify '-r' in --cpOptions.\n";
+        ($verbose) && warn 
+            "'$f' is a directory, and you didn't specify '-r' in --cpOptions.\n";
     }
 }
 
@@ -213,10 +224,10 @@ if (!-d $subdir) {
     }
 }
 
-# Make a note, to preserve source path and other state info:
-#
 my $note = makeNote($date, $args, $message);
 
+# Run through and copy files as needed.
+#
 if ($dryRun) {
     my $cmd = "ls -ld $qArgs";
     warn "Note to be included:\n$note\n";
@@ -245,6 +256,8 @@ else {
 }
 exit;
 
+# Generate a note, to preserve source path and other state info:
+#
 sub makeNote {
     my ($date, $args, $message) = @_;   
     my $host = `hostname`;
@@ -282,7 +295,7 @@ sub report {
     my $nfiles = `ls $subdir | wc -l`;
     chomp $nfiles;
     if ($nfiles) {
-        warn "backup: " . ($nfiles-1) . " file(s) + note, " .
+        warn "backup: " . ($nfiles-1) . " top-level item(s) + note, " .
             "copied to $subdir\n    (linked from $bdir/latest).\n";
     }
     else {
