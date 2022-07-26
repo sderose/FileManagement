@@ -67,10 +67,15 @@ actually copy anything. At present, however, the target directory is still creat
 
 Add the output of C<git diff --stat> to the note file (only when in a git repo).
 
-
 =item * B<--ignore> I<extension>
 
 Do not include files with the given extension (do not include the "."). Repeatable.
+
+=item * B<--list>
+
+Rather than backing up, search the backup area (using C<find -name>, q.v.)
+for files with names matching those
+listed on the command lines, and list them. Use "*" as wildcard if needed.
 
 =item * B<--message> I<text> OR B<-m> I<text>
 
@@ -105,6 +110,10 @@ git root, commit id, and diff won't be generated for all of them.
 
 =head1 To Do
 
+    * Option to retrieve the list of backed-up copies of a given file(s?).
+Perhaps show amount of difference, fetch latest that has some content, or before
+a given date, etc. Problem of distinguishing like-named files -- perhaps should
+stash all absolute paths in the notes file? or just ignore for now?
     * Save git commit and branch info if applicable, or other VCS info.
         git rev-parse --show-toplevel
         git log -n 1 [file]
@@ -127,7 +136,7 @@ Esp. for rsync, support remote destination.
     2021-06-09: Fix misquoting of multiple names.
     2022-04-27: Improve git info inserted into note.
     2022-05-09: Actually implement dry-run.
-    2022-07-25: Add --noteFile option, fix some messages.
+    2022-07-25f: Add --noteFile option, --list. Fix some messages.
    
 
 =head1 Rights
@@ -151,6 +160,7 @@ my $bdir = $ENV{BACKUP_DIR} || "$ENV{HOME}/backups";
 my $cpOptions = '-a';
 my $dryRun    = 0;
 my $gitdiff   = 1;
+my $list      = 0;
 my $message   = '';
 my $noteFile  = "_backup_note.txt";
 my $quiet     = 0;
@@ -166,6 +176,7 @@ my %getoptHash = (
         print "Currently, your backup directory is '$bdir'.\n";
         exit;
     },
+    "list!"           => \$list,
     "m|message=s"     => \$message,
     "noteFile=s"      => \$noteFile,
     "q|quiet!"        => \$quiet,
@@ -188,6 +199,16 @@ GetOptions(%getoptHash) || die "Bad options.\n";
 ###############################################################################
 # Main
 #
+if ($list) {
+    for my $f (@ARGV) {
+        print("======= matches for '$f' under $bdir:\n");
+        chdir $bdir;
+        my $rc = `find -s . -name '$f'`;
+        print($rc);
+    }
+    exit;
+}
+    
 for my $f (@ARGV) {
     chomp $f;
     if (!-e $f) {
