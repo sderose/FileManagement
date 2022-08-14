@@ -120,7 +120,7 @@ def normalizeFilename(
     return(name)
 
 def loadDirInfo(dirName:str, fileDict:dict=None, recursive:bool=True) -> dict:
-    """Load info on all the files from the given directory, into a dict keyed by path, 
+    """Load info on all the files from the given directory, into a dict keyed by path,
     with checksums as values.
     """
     if (fileDict is None): fileDict = {}
@@ -239,10 +239,8 @@ if __name__ == "__main__":
         fileCounts.append(len(fileDict0))
 
     lg.vMsg(0, "Done loading. File counts by directory tree:")
-    lg.MsgPush()
     for dnum in (range(0, len(args.files))):
-        lg.vMsg(0, "%8d %s" % (fileCounts[dnum], args.files[dnum]))
-    lg.MsgPop()
+        lg.vMsg(0, "    %8d %s" % (fileCounts[dnum], args.files[dnum]))
 
 
     union = {}

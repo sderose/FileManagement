@@ -18,7 +18,7 @@ our %metadata = (
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12-18",
-    "modified"     => "2022-06-21",
+    "modified"     => "2022-08-14",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -217,6 +217,16 @@ There is no setting (yet) to operate I<only> on directories.
 =item * B<--dot>
 
 Include hidden files (that is, files whose names begin with ".").
+
+=item * B<--dropExtensions>
+
+Delete file extensions.
+
+=item * B<--dropOriginal>
+
+Don't include the original name in the result. For the moment, this only
+applies when I<--pullContent> is used; it should be extended to other
+options that similarly apend brand-new, likely-unique strings to the filenames.
 
 =item * B<--ePad> I<num>
 
@@ -550,6 +560,10 @@ L<http://www.skytag.com/filebuddy/en/index.html> if interested.
 
 =item * Option to affect only the first (or Nth?) match with --expr.
 
+=item * Make --dropOriginal apply to other
+options (not just --pullContent), that similarly apend brand-new,
+likely-unique strings to the filenames.
+
 =item * Port to Python and integrate PowerWalk.py.
 
 =item * Options to set properties on files, like Mac OS label? (see list below)
@@ -686,6 +700,8 @@ But now notices and reports them, at least.
 
 =item * 2022-07-18: Put alogging back.
 
+=item * 2022-08-14: Add --dropOriginal.
+
 =back
 
 
@@ -726,7 +742,7 @@ my $date3expr = qr/\b(\d+ )($monthExpr)\.? (\d{2,4})\b\s*/;
 my $date4expr = qr/\b([12]\d\d\d)-([01]\d)-([0123]\d)\b\s*/;
 my $date5expr = qr/\b([12]\d\d\d)([01]\d)([0123]\d)\b\s*/;
 
-# Names on indexes of the fields of a file stat block.
+# Names and indexes of the fields of a file stat block.
 # Strings user can use to specify what to add with --addStat
 #
 my %statKeys = (
@@ -918,6 +934,7 @@ my $dateYears       = 0;
 my $dirs            = 1;
 my $dot             = 0;
 my $dropExtensions  = 0;
+my $dropOriginal    = 0;
 my $expr            = "";
 my $ePad            = 0;
 my $ePadChar        = "0";
@@ -966,6 +983,7 @@ my %getOptHash = (
     "dirs!"            => \$dirs,
     "dot!"             => \$dot,
     "dropExtensions!"  => \$dropExtensions,
+    "dropOriginal!"    => \$dropOriginal,
     "dry-run|dryrun!"  => \$test,
     "e|expr=s"         => \$expr,
     "ePad=n"           => \$ePad,
@@ -1169,10 +1187,10 @@ sub doOneItem {
     if ($fullPath =~ m/([^ -~]+)/) {
         vMsg(1, showInvisibles("Warning: Non-ASCII in filename '$fullPath': '$1'\n"));
     }
-    hMsg(1, "\nStarting item: '" . $fullPath . "'");
+    vMsg(1, "====\nStarting item: '" . $fullPath . "'");
 
     #if (my $vcs = whatVCS($fullPath)) {
-    #    hMsg("Seems to be owned by $vcs: $fullPath.");
+    #    vMsg(0, "====Seems to be owned by $vcs: $fullPath.");
     #    return;
     #}
 
@@ -1321,7 +1339,13 @@ sub variousChanges {
         if ($pullNoEntities) { $rec1 =! s/&.*?;//g; }
         $rec1 =~ s/[^\w.]+/_/g;
         $rec1 =~ s/^\._?/_/;
-        $name2 = $name2 . "_" . $rec1;
+        if (!$rec1) {
+            vMsg(0, "pullContent got '', nothing to pull.\n");
+        }
+        else {
+            if ($dropOriginal) { $name2 = $rec1; }
+            else { $name2 = $name2 . "_" . $rec1; }
+        }
     }
 
     if ($pullURI > 0) {

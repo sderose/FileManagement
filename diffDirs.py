@@ -67,6 +67,7 @@ See https://stackoverflow.com/questions/1446549/
 * 2020-06-10: Switch to PowerWalk.isBackup. New layout.
 * 2020-08-21: Fix handling of binary files and EOF conditions.
 * 2020-09-23: Drop sjdUtils.
+* 2022-08-03: Drop obsolete alogging calls.
 
 
 =To do=
@@ -113,7 +114,7 @@ def normalizeXmlSpace(s):  # From sjdUtils.py
     s = re.sub(r' $','', s)
     return(s)
 
-def pcols(theFile, diffInfo, color1="off", width=0, sep=""):
+def pcols(theFile, diffInfo, color1="off", width=0, sep="", depth:int=0):
     """Print a one-line report about a file-difference.
     @param diffInfo: A string of keywords indicating what the difference is:
         SIZE, TIME, PERM(issions), MD5, DIFF(line %d vs %d).
@@ -121,7 +122,7 @@ def pcols(theFile, diffInfo, color1="off", width=0, sep=""):
     if (width<=0): width = wid
     theFile = theFile.strip()
     diffInfo = diffInfo.strip()
-    ind = "    " * int(lg.MsgGet())
+    ind = "    " * depth
     msg = ind + sep.ljust(args.prefixWidth)
     if (args.color):
         msg += lg.colorize(color1, theFile.ljust(args.nameWidth))
@@ -218,13 +219,13 @@ def filteredListdir(dpath):
         ld2.append(f)
     return ld2
 
-def compareDirs(path1, path2):
+def compareDirs(path1, path2, depth:int=0):
     """Compare two directories, by recursing.
     @return dirsDiffer: 0 if the dirs completely match, else non-zero
     (specifically, the number of differing/missing files found).
     @globals Bumps counters for a bunch of things.
     """
-    global total1, total2, missing1, missing2, uncheckedDirs
+    global total1, total2, missing1, missing2, uncheckedDirs, depth
     p1 = os.path.abspath(path1)
     d1 = filteredListdir(p1)
 
@@ -253,11 +254,9 @@ def compareDirs(path1, path2):
             nSubsDifferent += 1
         elif (os.path.isdir(file1) and os.path.isdir(file2)):
             if (args.recursive):
-                lg.hMsg(2, "    Descending into %s/" % (curName))
-                #lg.MsgPush()
-                subDiffs = compareDirs(file1, file2)
+                lg.vMsg(2, "    Descending into %s/" % (curName))
+                subDiffs = compareDirs(file1, file2, depth=depth+1)
                 if (subDiffs): nSubsDifferent += 1
-                #lg.MsgPop()
             else:
                 uncheckedDirs += 1
         elif (os.path.isdir(file1) or os.path.isdir(file2)):
@@ -266,11 +265,11 @@ def compareDirs(path1, path2):
         else:
             total1 += 1
             total2 += 1
-            fDiff = compareFiles(file1, file2)
+            fDiff = compareFiles(file1, file2, depth=depth+1)
             if (fDiff): nSubsDifferent += 1
     return nSubsDifferent
 
-def compareFiles(fp1, fp2):
+def compareFiles(fp1, fp2, depth:int=0):
     """Compare two *files* (not dirs).
     @return isDifferent: 0 if the files completely match, else 1.
     @globals Bumps counters for a bunch of things.
@@ -337,7 +336,7 @@ def compareFiles(fp1, fp2):
     # Report file difference
     if (args.report_identical_files):
         same += 1
-        pcols(fp1, diffInfo='', sep="======")
+        pcols(fp1, diffInfo='', sep="======", depth=depth)
         if (args.showDiffs):
             fmt = "        size %12d time %-12s md5 %-32s perm %s"
             lg.vMsg(0, fmt % (size1, time1, md51, stat1))
@@ -346,7 +345,7 @@ def compareFiles(fp1, fp2):
         differ += 1
         sep = "!!!!!!"
         color = "red"
-        pcols(os.path.basename(fp1), diffLine, color1=color, sep=sep)
+        pcols(os.path.basename(fp1), diffLine, color1=color, sep=sep, depth=depth)
         if (args.showDiffs):
             fmt = "        size %10d, time %-20s, md5 %-32s, perm %s"
             lg.vMsg(0, fmt % (size1, time1, md51, stat1))
@@ -499,23 +498,22 @@ if __name__ == "__main__":
 
     if (not args.quiet):
         lg.info("====Done, rc %d." % (rc0))
-        lg.MsgPush()
         lg.vMsg(1, ("Options: b %s, diff %s, i %s, md5 %s,\n" +
                 "           permissions %s, r %s, size %s, time %s.") %
                 (args.b, args.diff, args.ignoreCase, args.md5,
                  args.permissions, args.recursive, args.size, args.time))
-        lg.vMsg(0, "Dirs: %s\n        %s" % (args.dirs[0],  args.dirs[1]))
-        lg.pline("Total files from 1:",       total1)
-        lg.pline("Total files from 2:",       total2)
-        lg.pline("Missing from 1:",           missing1)
-        lg.pline("Missing from 2:",           missing2)
-        lg.pline("Unchecked nested dirs:",    uncheckedDirs)
-        lg.pline("Differing:",                differ)
-        lg.pline("Ignored files from 1:",     ignored1)
-        lg.pline("Ignored files from 2:",     ignored2)
+
+        lg.vMsg(0, "    Dirs: %s\n        %s" % (args.dirs[0],  args.dirs[1]))
+        lg.pline("    Total files from 1:",       total1)
+        lg.pline("    Total files from 2:",       total2)
+        lg.pline("    Missing from 1:",           missing1)
+        lg.pline("    Missing from 2:",           missing2)
+        lg.pline("    Unchecked nested dirs:",    uncheckedDirs)
+        lg.pline("    Differing:",                differ)
+        lg.pline("    Ignored files from 1:",     ignored1)
+        lg.pline("    Ignored files from 2:",     ignored2)
         if (args.comment != ""):
-            lg.pline("Comment lines from 1//*:",  comment1)
-            lg.pline("Comment lines from 2//*",   comment2)
-        lg.MsgPop()
+            lg.pline("    Comment lines from 1//*:",  comment1)
+            lg.pline("    Comment lines from 2//*",   comment2)
 
     sys.exit(0)
