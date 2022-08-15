@@ -1,41 +1,134 @@
 #!/usr/bin/perl -w
 #
-# postdiff: run diff after some other process on both files
-#
+# postdiff: Run diff after some other process on both files.
 # 2006-10-30: Written by Steven J. DeRose.
-# 2006-12-28 sjd: Add -t -blank -comment -doctype, -l, $VERSION_DATE, rid for -i.
-# 2007-01-05 sjd: Fix some bugs, add -v, randomize temp file names.
-# 2007-01-09 sjd: Rename options, add noattrpat, nogenid, split noid/norid,
-#    organize option parsing, help, and code to same order.
-# 2007-12-07 sjd: strict. Drop all the built-in processing (done better by
-#    normalizeXML).
-# 2007-12-31 sjd: Getopt.
-# 2008-01-25 sjd: Add -cvs, and various pass-through options.
-# 2008-09-24 sjd: Port to BSD.
-# 2010-09-12, 2012-10-05 sjd: Cleanup.
-#
-# To do:
 #
 use strict;
 use Getopt::Long;
 
-our $VERSION_DATE = "2012-10-05";
+our %metadata = (
+    'title'        => "postdiff",
+    'description'  => "Run diff after some other process on both files.",
+    'rightsHolder' => "Steven J. DeRose",
+    'creator'      => "http://viaf.org/viaf/50334488",
+    'type'         => "http://purl.org/dc/dcmitype/Software",
+    'language'     => "Perl 5.18",
+    'created'      => "2006-10-30",
+    'modified'     => "2022-08-15",
+    'publisher'    => "http://github.com/sderose",
+    'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
+);
+our $VERSION_DATE = $metadata{'modified'};
 
-my $dft_normalize =
-	"normalizeXML -q -i -ic -btext -ballattrs -btags ";
+my $dft_normalize = "normalizeUnicode --ligatures --dashes --allQuotes --spaces --runs";
 
-my $cvs         = 0;
-my $diffOptions = "";
-my $pre         = "";
-my $preserve    = 0;
-my $quiet       = 0;
-my $r           = "";
-my $verbose     = 0;
-my $xml         = 0;
+my %dft_normalizers = (
+    "txt"  => $dft_normalize,
+    "xml"  => "normalizeXML -q -i -ic -btext -ballattrs -btags ",
+);
+
+=pod
+
+=head1 Usage
+
+postdiff [--cmd C] [options] file1 file2
+
+Runs some command (specific via I<C>) on both files, then diffs the results.
+Put '{}' wherever you want the filenames to appear in the command you give.
+If there is no '{}', the filenames will be appended to the command.
+
+I<--cmd> defaults to:
+    $dft_normalize
+
+A feature to use a different default I<--cmd> based on file extensions, may be added.
+
+
+=head1 Options
+
+=over
+
+=item * B<--cmd> I<cmd>
+
+A command or pipe to run on the files. This will be run twice, once for each
+input file. If I<cmd> includes "{}", the filename is inserted in place of that;
+otherwise, the filename is added at the end.
+
+=item * B<--do> I<foo>
+
+Pass I<foo> on to C<diff> (some options can also be
+specified directly: -b -d -E -i -n -q -t -w -y).
+
+=item * B<--preserve>
+
+Don't erase the temp files when done.
+
+=item * B<--verbose> OR B<-v>
+Add more detailed messages.
+
+=item * B<--version>
+
+Display version info and exit.
+
+=item * B<-x>
+
+Shorthand to normalize XML files. Takes the place of I<--cmd>.
+
+=back
+
+
+=head1 Related commands
+
+C<normalizeXML> -- re-breaks XML files in a standard way, allowing them to be
+compared without worrying about whitespace variation, attribute quoting, etc.
+
+
+=head1 Known bugs and lmitations
+
+Recursive diffing is not supported.
+
+
+=head1 History
+
+    2006-10-30: Written by Steven J. DeRose.
+    2006-12-28 sjd: Add -t -blank -comment -doctype, -l, $VERSION_DATE, rid for -i.
+    2007-01-05 sjd: Fix some bugs, add -v, randomize temp file names.
+    2007-01-09 sjd: Rename options, add noattrpat, nogenid, split noid/norid,
+organize option parsing, help, and code to same order.
+    2007-12-07 sjd: strict. Drop all the built-in processing (done better by normalizeXML).
+    2007-12-31 sjd: Getopt.
+    2008-01-25 sjd: Add -cvs, and various pass-through options.
+    2008-09-24 sjd: Port to BSD.
+    2010-09-12, 2012-10-05 sjd: Cleanup.
+    2022-08-15: New layout. Drop (partial) cvs support.
+    
+    
+=head1 To do
+
+    Use a different default per file extension.
+    Add git support.
+    
+
+=head1 Ownership
+
+This work by Steven J. DeRose is licensed under a Creative Commons 
+Attribution-Share Alike 3.0 Unported License. For further information on
+this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
+
+For the most recent version, see L<http://www.derose.net/steve/utilities/>.
+
+=cut
+
 
 ###############################################################################
 # Process options
 #
+my $diffOptions = "";
+my $pre         = "";
+my $preserve    = 0;
+my $quiet       = 0;
+my $verbose     = 0;
+my $xml         = 0;
+
 my %getoptHash = (
     # Pass-throughs to 'diff':
     "b"                 => sub { $diffOptions .= " -b"; },
@@ -48,12 +141,8 @@ my %getoptHash = (
     "w"                 => sub { $diffOptions .= " -w"; },
     "y"                 => sub { $diffOptions .= " -y"; },
     
-    # Pass-through to 'cvs update':
-    "r=s"               => \$r,
-    
     # Our own options:
     "cmd=s"             => \$pre,
-    "cvs!"              => \$cvs,
     "do=s"              => \$diffOptions,
     "h|help|?"          => sub { system "perldoc $0"; exit; },
     "preserve!"         => \$preserve,
@@ -71,12 +160,8 @@ GetOptions(%getoptHash) || die("Bad options.\n");
 ###############################################################################
 # Process and validate options
 #
-if ($r) { $cvs = 1; }
-if ($xml) {
+if (!$pre) {
 	$pre = $dft_normalize;
-}
-elsif ($pre eq "") {
-	die "No pre-processing commands to run.\n";
 }
 
 if ($diffOptions =~ m/ -b/) {
@@ -85,24 +170,14 @@ if ($diffOptions =~ m/ -b/) {
 
 
 ###############################################################################
-###############################################################################
 # Main
 #
 my $file1 = $ARGV[0];
 my $file2 = $ARGV[1];
 my $tmpfile = "/tmp/postdiff_$file1\_" . int(rand(100000));
 
-if ($cvs) {
-	$file2 = $file1;
-	$file1 = $tmpfile;
-	my $cvscmd = "cvs update -p $r $file2 >$tmpfile";
-	($verbose) && warn "Retrieving cvs version with: $cvscmd\n";
-	system "$cvscmd" || die "Failed.\n";
-}
-else {
-	(-e $file1) || die "Couldn't find file 1: '$file1'.\n";
-	(-e $file2) || die "Couldn't find file 2: '$file2'.\n";
-}
+(-e $file1) || die "Couldn't find file 1: '$file1'.\n";
+(-e $file2) || die "Couldn't find file 2: '$file2'.\n";
 
 # Set up output files
 #
@@ -139,92 +214,9 @@ if (!$preserve) {
 	system "rm $tmpfile 2>/dev/null";
 }
 else {
-	warn "Temp files are: $o1 $o2 " . ($cvs ? $tmpfile:"") . "\n";
+	warn "Temp files are: $o1 $o2.\n";
 }
 
 ($verbose) && warn "Done.\n";
 
 exit;
-
-
-
-###############################################################################
-###############################################################################
-###############################################################################
-#
-
-=pod
-
-=head1 Usage
-
-postdiff [options] file1 file2
-
-Runs some command(s) on both files, then diffs the results.
-Put '{}' wherever you want the filenames to appear in the command you give.
-If there is no '{}', the filenames will be appended to the command.
-
-
-
-=head1 Options
-
-=over
-
-=item * B<--cmd> I<cmd>
-
-A command or pipe to run on the files.
-
-=item * B<--cvs>
-
-Retrieve CVS file like C<cvs diff> (unfinished).
-
-=item * B<--do> I<foo>
-
-Pass I<foo> on to C<diff> (some options can also be
-specified directly: -b -d -E -i -n -q -t -w -y).
-
-=item * B<--preserve>
-
-Don't erase the temp files when done.
-
-=item * B<-r> I<value>
-
-With I<--cvs>, pass I<value> through to the C<cvs update -r> option.
-
-=item * B<--verbose> OR B<-v>
-Add more detailed messages.
-
-=item * B<--version>
-
-Display version info and exit.
-
-=item * B<-x>
-
-Shorthand to normalize XML files. Takes the place of I<--cmd>.
-
-=back
-
-
-
-=head1 Related commands
-
-C<normalizeXML> -- re-breaks XML files in a standard way, allowing them to be
-compared without worrying about whitespace variation, attribute quoting, etc.
-Supports cvs, but not yet svn.
-
-
-
-=head1 Known bugs and lmitations
-
-Recursive diffing is not supported.
-
-
-
-=head1 Ownership
-
-This work by Steven J. DeRose is licensed under a Creative Commons 
-Attribution-Share Alike 3.0 Unported License. For further information on
-this license, see L<http://creativecommons.org/licenses/by-sa/3.0/>.
-
-For the most recent version, see L<http://www.derose.net/steve/utilities/>.
-
-=cut
