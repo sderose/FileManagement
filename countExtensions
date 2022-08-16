@@ -3,7 +3,7 @@
 # Count how many files of each extension occur below current directory.
 # TODO: Move to Python using PowerWalk.
 #
-if [[ "$1" == "-h" ]]; then
+if isHelpOption "$1"; then
     echo "$0: Count how many files of each extension occur below current directory."
     exit
 fi
