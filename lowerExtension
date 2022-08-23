@@ -1,14 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 #
 # lowerExtension: Force extensions to lower-case
-#
 # <2012-03-01: Written by Steven J. DeRose.
-# 
-# To do:
-#     Make into an option on 'renameFiles'.
+
 #
 if isHelpOption "$1"; then
-    echo "Force extensions of the listed files, to lower-case."
+    cat <<EOF
+Usage: lowerExtension [files]
+    Force extensions of the listed files, to lower-case."
+See also:
+    renameFiles --lowerExtensions
+EOF
+    exit
+fi
+
+if ! [[ -e "$1" ]]; then
+    echo "File not specified or not found."
     exit
 fi
 
@@ -19,4 +26,4 @@ for x in $*; do
    set newname = $r.$elower
    echo $x "-->" $newname
    mv $x $newname
-end
+done

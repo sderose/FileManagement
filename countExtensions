@@ -1,10 +1,13 @@
-#!/bin/bash
+#!/bin/zsh
 #
-# Count how many files of each extension occur below current directory.
-# TODO: Move to Python using PowerWalk.
+ # TODO: Move to Python using PowerWalk.
 #
 if isHelpOption "$1"; then
-    echo "$0: Count how many files of each extension occur below current directory."
+    cat <<EOF
+Usage: countExtensions [files]
+    Count how many files of each extension occur below current directory.
+    Files with no extension are ignored.
+EOF
     exit
 fi
 
