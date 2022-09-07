@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 #
 # watchDir: See when files in a directory change.
 # 2006-10-16: Written by Steven J. DeRose.

@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 #
 # groupFiles: Organize a folder into subfolders by similarity of names.
 # <2011-05-0: written by Steven J. DeRose.

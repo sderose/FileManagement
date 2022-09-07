@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 #
 # splitBigDir: move a bunch of files to subdirs of somewhere, sorting by first n
 #    characters of the filenames.

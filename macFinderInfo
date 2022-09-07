@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 #
 # macFinderInfo: Extract and diplay Mac 'finderInfo', etc.
 # 2011-04-05: Written by Steven J. DeRose.

@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 #
 # emultiple: Edit a set of related files in tiled windows.
 # 2007-06-06: Written by Steven J. DeRose.

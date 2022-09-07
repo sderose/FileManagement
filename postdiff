@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 #
 # postdiff: Run diff after some other process on both files.
 # 2006-10-30: Written by Steven J. DeRose.

@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 #
 # spot: Command-line interface for Mac OS X Spotlight.
 # 2013-08-27f: Written by Steven J. DeRose.
