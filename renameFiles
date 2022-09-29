@@ -18,7 +18,7 @@ our %metadata = (
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12-18",
-    "modified"     => "2022-08-14",
+    "modified"     => "2022-09-29",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -35,6 +35,8 @@ to rename a file(s). Can do systematic
 changes such as imposing or removing camel-case, normalizing date strings,
 padding sequence numbers, or inserting the values of various file attributes
 (date, owner id, or even the source URI when available) into the name.
+
+If a file is under git control, this will do "git mv" instead of a regular rename.
 
 A commonly useful example just turns all characters not in C<[-.\\w]> into "_", do:
 
@@ -702,6 +704,8 @@ But now notices and reports them, at least.
 
 =item * 2022-08-14: Add --dropOriginal.
 
+=item * 2022-09-29: Add "git mv" support via my C<versionStatus.py>.
+
 =back
 
 
@@ -1131,6 +1135,7 @@ my $resolveCount     = 0;
 my $conflictCount    = 0;
 my $caseIssueCount   = 0;
 my $failCount        = 0;
+my $gitCount         = 0;
 my $path             = "";
 
 my $roman = "\b([ivxlcm]+|[IVXLCM]+)\b";
@@ -1625,10 +1630,18 @@ sub doRename {
         return(0);
     }
     if ($test) { return(1); }
-    my $rc = rename($fp1, $fp2);
-    if ($rc) { return(1); }
-    ($quiet) || eMsg(0, "  *** Rename failed: '$fp1'\n  to: '$fp2':\n    $!");
-    $failCount++;
+    
+    my $gitStatus = system("versionStatus.py --nosystem '$fp1'");
+    if ($gitStatus =~ /^NOT_MINE/) {
+        my $rc = rename($fp1, $fp2);
+        if ($rc) { return(1); }
+        ($quiet) || eMsg(0, "  *** Rename failed: '$fp1'\n  to: '$fp2':\n    $!");
+        $failCount++;
+    }
+    else {
+        system("git mv '$fp1' '$fp2'");
+        $gitCount++;
+    }
     return(0);
 }
 
@@ -1644,6 +1657,7 @@ sub report {
     warn sprintf($fmt, "Rename attempts",   $simpleCount+$resolveCount);
     warn sprintf($fmt, sjdUtils::colorize("green/bold", "Simple renames")
         . "      ", $simpleCount);  # Allow for the color escapes
+    warn sprintf($fmt, "git renames",       $gitCount);
     warn sprintf($fmt, "Extensions fixed",  $extFixes);
     warn sprintf($fmt, "Not found",         $notFoundCount);
     warn sprintf($fmt, "No net change",     $unchanged);
