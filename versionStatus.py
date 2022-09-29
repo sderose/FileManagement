@@ -68,7 +68,10 @@ If you'd like to add some, feel free, and send me the patch.
 
 =To do=
 
-Move git support functions into here, from ''PowerWalk.py''.
+* Move git support functions into here, from ''PowerWalk.py''.
+* Option to spell out status instead of using single-char codes.
+* A non-existent file is not considered to be in any version control
+system, even if its directory is in scope for one.
 
 
 =History=
@@ -123,20 +126,77 @@ class VCS_Type(Enum):
     Pijul		= 112    
     
     
-def doOneFile(path:str) -> gitStatus:
+def doOneFile(path:str) -> (VCS_Type, gitStatus):
     """Read and deal with one individual file.
     """
-    if (not os.path.exists(path)):                      # Exists at all?
-        return gitStatus.NO_FILE
+    if (not os.path.exists(path)):            # Exists at all?
+        return VCS_Type.NONE, gitStatus.NO_FILE
     rc = getGitStatus(path)
     if (rc != gitStatus.NOT_MINE):            # In git?
-        return rc
+        return VCS_Type.Git, rc
     rc = getMercurialStatus(path)
     if (rc != gitStatus.NOT_MINE):            # In Mercurial?
-        return rc
+        return VCS_Type.Mercurial, rc
     rc = getSVNStatus(path)
     if (rc != gitStatus.NOT_MINE):            # In SVN?
-        return rc
+        return VCS_Type.SVN, rc
+    return VCS_Type.NONE, gitStatus.ERROR
+
+
+###############################################################################
+#
+class gitStatus(Enum):
+    # Most of the symbols are what you get from 'git status --porcelain'....
+    # (exceptions: E, \\u2205, X, =.
+    # git also uses a second column with sub-codes... And submodules are special.
+    #
+    ERROR		= "E"
+    NO_FILE     = "\u2205"  # EMPTY SET symbol
+    
+    NOT_MINE    = "X"       # Not in this VCS (cf UNTRACKED) TODO: SVN "X" = "present b/c of externals"
+
+    UNTRACKED	= "?"
+    IGNORED		= "!"       # TODO: vs. SVN "I"
+    UNMODIFIED  = "="       # TODO: vs. SVN "C" = 'clean'; " " in git
+    MODIFIED	= "M"
+    ADDED		= "A"
+    DELETED		= "D"       # TODO: vs. Mercurial "R" = removed
+    RENAMED		= "R"       # TODO: SVN "R" = 'replaced'
+    COPIED		= "C"       # TODO: SVN "C" = 'conflict'
+    UNMERGED	= "U"
+
+    #             "~"       # TODO: SVN "~" = 'changed type'
+
+def getGitStatus(path:str) -> gitStatus:
+    """See what sort of git state we're in (see `git status --help` for --porcelain).
+    NOTE: It outputs "" for untracked and unchanged files. Some relevant options:
+        -uall  -- show untracked
+        --ignored=matching
+        
+    """
+    # See if we're even in a git repo
+    try:
+        gitDir = check_output("git rev-parse --show-toplevel 2>/dev/null", shell=True)
+    except CalledProcessError as e:
+        return gitStatus.NOT_GIT
+    try:
+        tokens = [ "git", "status", "--porcelain", "--ignored=matching", path ]
+        buf = str(check_output(tokens))
+        buf0 = buf[0]
+        if (args.verbose): lg.info("status response length %d, buf0 '%s'" % (len(buf), buf0))
+    except CalledProcessError:
+        if (args.verbose): lg.info("CalledProcessError")
+        return gitStatus.NOT_MINE
+    except IndexError:
+        if (args.verbose): lg.info("IndexError")
+        return gitStatus.UNMODIFIED  # TODO: Check if this is always right
+    if (buf0 == " "):
+        if (args.verbose): lg.info("Found space")
+        return gitStatus.UNMODIFIED
+    if (buf0 in "MADRCU?!"): 
+        if (args.verbose): lg.info("Found code '%s'" % (buf9))
+        return gitStatus(buf0)
+    warn(0, "Unknown code '%s' from git status for '%s'." % (buf0, path))
     return gitStatus.ERROR
 
 def getMercurialStatus(path):
@@ -200,6 +260,9 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
+            "--longStat", action="store_true",
+            help="Show words for file status, not just single characters.")
+        parser.add_argument(
             "--quiet", "-q", action="store_true",
             help="Suppress most messages.")
         parser.add_argument(
@@ -233,6 +296,11 @@ if __name__ == "__main__":
         sys.exit()
 
     for path0 in args.files:
-        doOneFile(path0)
+        vcs, status = doOneFile(path0)
+        if (args.longStat):
+            print("%-12s %-12s %s" % (vcs.name, status.name, path0))
+        else:
+            print("%-12s %-3s %s" % (vcs.name, status.value, path0))
+        
     if (not args.quiet):
         lg.info("versionStatus.py: Done")
