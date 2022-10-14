@@ -5,10 +5,8 @@
 #
 #pylint: disable= W0612
 #
-from __future__ import print_function
 import sys
 import os
-import argparse
 import re
 import codecs
 import hashlib
@@ -101,7 +99,8 @@ which has labels for the fields in the following entries. I don't see a better
 way to do that in JSON: Labeling them on each instance would make the JSON
 longer than XML, without gaining XML's compensating benefits
 (datatyping, validation, etc).
-Having no labels would be evil (see [https://xkcd.com/833/]). JSON also lacks comments, so that's not an option either.
+Having no labels would be evil (see [https://xkcd.com/833/]).
+JSON also lacks comments, so that's not an option either.
 
 
 =To do=
@@ -154,7 +153,6 @@ def dirAlreadyUpToDate(path):
     ourModTime = s[stat.ST_MTIME]
     if (d > s): return False
     return True
-
 
 def doOneDir(pathArg):
     """Make the file-sigs content for one individual directory.
@@ -291,7 +289,6 @@ def getVolumeID(path):
                     if (args.verbose): pp.pprint(part)
                     theVolumeID = part[availableID]
                     break
-
     return theVolumeID
 
 def isBackup(path):
@@ -307,7 +304,6 @@ def isBackup(path):
     if (re.match(keywords, path)): return True
     if (re.match(keywords+r'(\s\d+)?$', root)): return True
     return False
-
 
 def get_dir_digest(path):
     """The only secure-ish digest would require including all the content
@@ -354,13 +350,11 @@ def get_str_digest(s):
 
 
 ###############################################################################
-###############################################################################
 # Main
 #
 if __name__ == "__main__":
-    def anyInt(x):
-        return int(x, 0)
-
+    import argparse
+    
     def processOptions():
         try:
             from BlockFormatter import BlockFormatter
@@ -416,6 +410,7 @@ if __name__ == "__main__":
 
         args0 = parser.parse_args()
         return(args0)
+
 
     ###########################################################################
     #
