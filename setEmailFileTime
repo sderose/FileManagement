@@ -4,7 +4,6 @@
 # to match the MIME header "Date:" field.
 # 2019-03-04: Written by Steven J. DeRose.
 #
-from __future__ import print_function
 #import sys
 import argparse
 import re
@@ -12,7 +11,6 @@ from subprocess import check_output, CalledProcessError
 import codecs
 from datetime import datetime
 
-from PowerWalk import PowerWalk, PWType
 from alogging import ALogger
 lg = ALogger(1)
 
@@ -48,8 +46,6 @@ You can also use this to extract and display the key header fields from an email
 
 
 =Related Commands=
-
-`stat`, `ls -lU`, etc.
 
 `stat`, `ls -lU`, `date`, `strftime`, etc.
 
@@ -191,8 +187,6 @@ if __name__ == "__main__":
             "files", type=str, nargs=argparse.REMAINDER,
             help="Path(s) to input file(s)")
 
-        PowerWalk.addOptionsToArgparse(parser)
-
         args0 = parser.parse_args()
         if (args0.verbose): lg.setVerbose(args0.verbose)
         return(args0)
@@ -208,18 +202,7 @@ if __name__ == "__main__":
         depth = 0
         pw = PowerWalk(args.files)
         pw.setOptionsFromArgparse(args)
-        for path0, fh0, what0 in pw.traverse():
-            if (what0 == PWType.CLOSE):
-                depth -= 1
-                continue
-            print("    " * depth + path0)
-            if (what0 == PWType.OPEN):
-                depth += 1
-                continue
-
-            fileNum = pw.travState.stats["itemsReturned"]
-            if (fileNum % args.tickInterval == 0):
-                lg.vMsg(0, "At item #%d" % (fileNum))
+        for path0 in args.files:
             fh0 = codecs.open(path0, "rb", encoding=args.iencoding)
             doOneFile(path0)
             fh0.close()
