@@ -18,7 +18,7 @@ our %metadata = (
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12-18",
-    "modified"     => "2022-09-29",
+    "modified"     => "2022-12-08",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -30,30 +30,34 @@ our $VERSION_DATE = $metadata{"modified"};
 
 renameFiles [options] [regex] [files]
 
-Applies a regular expression, or any of a range of built-in operations,
+Apply a regular expression, or any of a range of built-in operations,
 to rename a file(s). Can do systematic
 changes such as imposing or removing camel-case, normalizing date strings,
+moving date strings to the front,
 padding sequence numbers, or inserting the values of various file attributes
 (date, owner id, or even the source URI when available) into the name.
 
-If a file is under git control, this will do "git mv" instead of a regular rename.
+If a file is under git control, does "git mv" instead of a regular rename.
 
-A commonly useful example just turns all characters not in C<[-.\\w]> into "_", do:
+=head2 Examples
+
+A commonly useful case is to turn all characters not in C<[-.\\w]> into "_":
 
     renameFiles --clean *
 
-The same thing can be done via an equivalent regular expression:
+The same thing via an equivalent (Perl-style) regular expression change:
 
-    renamefiles --expr "s/[^=.\\s]/_/g" *.htm
+    renamefiles --expr "s/[^-.\\w]/_/g" *.htm
 
-Or to pad numbers to a uniform number of digits, use:
+To pad numbers to a uniform number of digits (in this case 4):
 
-    renamefiles --expr "s/^(\d+)/\$1/" --ePad 4 *.htm
+    renamefiles --expr 's/^(\d+)/\$1/'"' --ePad 4 *.htm
 
-Be sure to backslash "$" (such as for back-references) if your shell would interpret them.
+Be sure to backslash or quote '$' (such as when used for back-references
+as in this example).
 
-Or you can get fancier. This would rename all .htm files in the current directory whose names
-contain "myFile", "myStuff", or "myData" to refer to "Herodotuses" in place of the "my".
+Renames all .htm files in the current directory whose names contain
+"myFile", "myStuff", or "myData" to refer to "Herodotuses" in place of the "my".
 
     renamefiles --expr "s/my(File|Stuff|Data)/Herodotuses_\$1/" *.htm
 
@@ -61,7 +65,7 @@ B<Note>: Changes apply to each filename, not the path leading to it,
 nor to an extension.
 They do apply to names of directories, unless you set I<--no-dirs>).
 
-There are options that can:
+There are options to:
 
 =over
 
@@ -75,22 +79,21 @@ such as by removing or replacing prohibited characters,
 
 =item * insert ancestor directory names into the filename (I<--pull>),
 
+=item * insert content extracted from the file's contents (I<--pullContent>),
+
 =item * insert names extracted from the URI from which a file was downloaded
 (I<--pullURI>, MacOS only),
 
-=item * insert content extracted from the file's contents (I<--pullContent>),
-
 =item * insert serial numbers to avoid conflicts (I<--resolve>, I<--pad>),
 
-=item * fiddle with extensions (I<--addExtension>, I<--extChanges>, I<--onlyExtensions>, I<-x>),
+=item * fiddle with extensions (I<--addExtension>, I<--extChanges>,
+I<--onlyExtensions>, I<-x>),
 
 =item * prepend file access, creation, or modification dates, etc. (I<--addStat>),
 
 =item * handle conventions for naming duplicates and backups (I<--copies>),
 
-=item * Fix URI-style %XX special-character codes (I<--unescapeURI>),
-
-=item * etc.
+=item * fix URI-style %XX special-character codes (I<--unescapeURI>),
 
 =back
 
@@ -116,7 +119,7 @@ Use I<ext> as the extension (don't specify the "."), except that if I<ext> is
 set to "!", use the *nix C<file> command to figure out what the file is, and
 provide the appropriate extension from an internal list. C<file> is not
 complete, nor is the internal list. For example, a Java source file (at
-least on my version of Mac OS when I checked) comes back merely as "ASCII text",
+least on Mac OS when I checked) comes back merely as "ASCII text",
 which the list maps to extension "txt".
 See also I<--extChanges>.
 
@@ -174,38 +177,40 @@ See also I<--bactrianize>.
 
 =item * B<--clean>
 
-An alternative to I<--expr>, that automatically sets up a regex to change
-any unusual characters into "_".
-"Unusual" means characters that are not among C<[-.\\w_]>.
+Change unusual characters to "_".
+"Unusual" means characters that are not among C<[-.\\w]>.
 
 =item * B<--copies>
 
-Scan for various OS conventions for duplicated files, such as
+Scan for various OS conventions for duplicate files, such as
 "Copy 4 of foo", "foo - Copy (4)", "foo (another copy)", etc.
 Where found, replace them with a trailing I<--separator>
 character and number (left zero-padded if you specify I<--pad>).
+If there are already numbered editions, avoid overwriting them.
+However, nothing is done to ensure that the editions are numbered in
+order by mod date or some other criterion.
 Experimental.
 
 =item * B<--dates>
 
-Notice simple dates embedded in names, change to yyyy-mm-dd form
+Notice simple dates embedded in names, change them to yyyy-mm-dd form
 (see ISO 8601), and move
 them to the beginning of the filenames. See also I<--addStat>.
 
 The formats recognized include:
-    02/28/1492
+    02/28/1492 (US style, but not European style)
     Feb. 28, 1492
     28 Feb 92
     1492-02-28
     14920228
 
 All matches must begin and end at word boundaries (regex "\\b").
-Month names must be English, but are recognized spelled out in full, or
+Month names must be English, but are recognized spelled out in full or
 abbreviated to 3 characters (or "Sept") with an optional following ".".
 
 =item * B<--dateyears>
 
-This option is similar to I<--dates>, but recognizes 4-digit years beginning
+This option is similar to I<--dates>, but recognizes lone 4-digit years beginning
 with "1" or "2", and merely moves them to the front (a 4-digit year by itself
 is a valid ISO 8601 data representation). It will I<not> move
 them if followed by a hyphen or digit.
@@ -228,7 +233,7 @@ Delete file extensions.
 
 Don't include the original name in the result. For the moment, this only
 applies when I<--pullContent> is used; it should be extended to other
-options that similarly apend brand-new, likely-unique strings to the filenames.
+options that similarly append brand-new, likely-unique strings to the filenames.
 
 =item * B<--ePad> I<num>
 
@@ -249,7 +254,6 @@ while renaming.
 =item * B<--ePadChar> I<c>
 
 The character to use when padding right-hand sides with I<--ePad>. Default: "0".
-
 With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
 
 =item * B<--expr> I<'s/lhs/rhs/'> OR B<-e> I<'s/lhs/rhs/'>
@@ -259,12 +263,11 @@ this help). All matches will be changed, not just the first.
 
 This uses PERL regexes, and respects the I<--ignorecase> option.
 To use a capture, use $1 etc. on the right-hand side, not \\1.
-But remember that you may have to backslash that "$" to protect it from the shell.
+But remember to backslash or quote the "$" to protect it from the shell.
 This change does not affect filename extensions unless you
 also specify I<--extChanges>.
 See also I<--ignoreCase>.
 This option is I<not> repeatable.
-
 
 =item * B<--extChanges> OR B<--extensions>
 
@@ -281,7 +284,7 @@ with their names and constraints, use I<--help-filesystems>.
 
 B<Note>: Maximum filename lengths for different file systems may not be
 measured the same. For example, both Mac and ext4 (at least on Synology)
-say 255, but if the Mac name includes UTF-8, the byte cound can apparently
+say 255, but if the Mac name includes UTF-8, the byte count can apparently
 go over 255, in which case copying to ext4 seems to fail.
 
 =item * B<--force>
@@ -289,7 +292,7 @@ go over 255, in which case copying to ext4 seems to fail.
 Overwrite conflicting output files with prejudice. Experimental.
 This is not intended to overwrite output directories.
 
-=item * B<--ignoreCase> or I<-i>
+=item * B<--ignoreCase> OR I<-i>
 
 Add the "i" option to the regex change specified by I<--expr>,
 so the change ignores case distinctions.
@@ -308,18 +311,18 @@ The available items can be listed by using the I<--xattrList> option.
 
 List all available items that can be specified for the I<--xattradd>.
 
-=item * B<--lc>
+=item * B<--lc> OR B<--lower>
 
 Force filenames entirely to lower case.
 This does not affect extensions.
 
-=item * B<--lowerExtensions> or B<--lcExtensions>
+=item * B<--lowerExtensions> OR B<--lcExtensions>
 
 Force file extensions to lower case.
 
 =item * B<--onlyExtensions>
 Apply any I<--expr> changes to file extensions only (not to the
-basename, nor to the full name including the extension.
+basename, nor to the full name including the extension).
 Experimental. See also I<--extChanges>.
 
 =item * B<--pad> I<num>
@@ -329,27 +332,24 @@ In case of name conflicts, padded numbers will be tried,
 from 0 up to 10**I<num>.
 If no filename in that range is available, the rename fails.
 
-<Note>: See also I<--ePad>, which can be used to pad the "to" size of a
-I<--expr> change to a certain size, and thus can be used to pad internal
-numbers within filenames.
-
+<Note>: See also I<--ePad>, to pad the "to" side of an I<--expr> change.
 
 =item * B<--pull> I<n>
 
-Add the names of the I<n> containing directories into the filename proper,
-separated by the I<--separator> character (default "_").
+Add the names of the I<n> nearest containing directories into the filename
+proper, separated by the I<--separator> character (default "_").
 See also I<--ancestor> and I<--pullURI>.
 For example, with I<--pull 2> a file at
 
     stuff/dax/ezri/pix/12.jpg
 
-would become
+becomes
 
     stuff/dax/ezri/pix/ezri_pix_12.jpg
 
 =item * B<--pullContent>
 
-Extract content from the beginning of the file, and put it into the name.
+Extract content from the beginning of the file and put it into the name.
 The first record is read, and any HTML or XML tags are stripped out
 (for actual HTML or XML, it would be better to extract html/head/title or
 similar). Unusual characters are removed, spaces are changed to "_", and
@@ -363,24 +363,24 @@ and numeric character references.
 =item * B<--pullURI> I<n>
 
 Extract the URI from which the file was downloaded (Mac only,
-using the C<xattrs> command).
+obtained via the C<xattrs> command).
 Then add the names of the last I<n> directories from the URI (assuming
 it's a directory-style URI) into the filename proper
 (see also I<--ancestor> and I<--pull>, and the C<whereFrom> command).
 The directory names will be separated by the I<--separator> value
-(since leaving the "/" would typically be at least inconvenient).
+(since a literal "/" would be at least inconvenient).
 
 =item * B<--quiet> OR B<-q>
 Suppress most messages.
 
 =item * B<--recursive> OR B<-r>
 
-Runs through subdirectories, too. Experimental. See also I<--dirs>.
+Run through subdirectories, too. Experimental. See also I<--dirs>.
 
 =item * B<--resolve>
 
 If a rename leads to a conflict, suffix a serial-number. See also I<--pad>.
-Default.
+Default (unset with I<--no-resolve>).
 
 =item * B<--separator> I<s>
 
@@ -394,7 +394,7 @@ Run through and show what would be done, but don't actually rename anything.
 B<Note>: This is not a perfect test, since actual renaming of early files
 might produce conflicts later (which will not be noticed with I<--test>).
 
-=item * B<--uc>
+=item * B<--uc> OR B<--upper>
 
 Force filenames entirely to upper-case.
 This does not affect extensions.
@@ -474,7 +474,6 @@ Date formats should be more flexible, controllable, and localizable.
 
 There should be an option to remove a matched date, not just copy it to
 the front.
-
 
 =head2 Security implications
 
@@ -706,6 +705,8 @@ But now notices and reports them, at least.
 
 =item * 2022-09-29: Add "git mv" support via my C<versionStatus.py>.
 
+=item * 2022-12-08: Clean up help text and file-system spec table.
+
 =back
 
 
@@ -747,7 +748,7 @@ my $date4expr = qr/\b([12]\d\d\d)-([01]\d)-([0123]\d)\b\s*/;
 my $date5expr = qr/\b([12]\d\d\d)([01]\d)([0123]\d)\b\s*/;
 
 # Names and indexes of the fields of a file stat block.
-# Strings user can use to specify what to add with --addStat
+# Strings that user can use to specify what to add with --addStat.
 #
 my %statKeys = (
       0          => 0,
@@ -766,12 +767,12 @@ my %statKeys = (
     "adate"      => 8,
     "cdate"      => 10,
     "mdate"      => 9,
-#    "atime"   => 8,
-#    "ctime"   => 10,
-#    "mtime"   => 9,
-#    "adatetime" => 8,
-#    "cdatetime" => 10,
-#    "mdatetime" => 9,
+#    "atime"      => 8,
+#    "ctime"      => 10,
+#    "mtime"      => 9,
+#    "adatetime"  => 8,
+#    "cdatetime"  => 10,
+#    "mdatetime"  => 9,
     "blksize"    => 11,
     "blocks"     => 12,
     "dev"        => 0,
@@ -789,7 +790,7 @@ my %statKeys = (
 # Planning to add a way to reference these in --expr RHS.
 #
 my %macMeta = (
-    # Name                             Example value
+    # Name                              Example value
     "kMDItemContentCreationDate"     => "2015-03-17 15:28:56 +0000",
     "kMDItemContentModificationDate" => "2015-03-17 15:28:56 +0000",
     "kMDItemContentType"             => "public.tab-separated-values-text",
@@ -803,6 +804,7 @@ my %macMeta = (
     ],
     "kMDItemDateAdded"               => "2015-03-17 15:28:56 +0000",
     "kMDItemDisplayName"             => "lexicon.tsv",
+
     "kMDItemFSContentChangeDate"     => "2015-03-17 15:28:56 +0000",
     "kMDItemFSCreationDate"          => "2015-03-17 15:28:56 +0000",
     "kMDItemFSCreatorCode"           => "",
@@ -818,7 +820,8 @@ my %macMeta = (
     "kMDItemFSOwnerUserID"           => "501",
     "kMDItemFSSize"                  => "15957",
     "kMDItemFSTypeCode"              => "",
-    "kMDItemKind"                    => "Plain Text Document",
+
+    "kMDItemKind"                    => "Plain Text Document", # see below
     "kMDItemLogicalSize"             => "15957",
     "kMDItemPhysicalSize"            => "16384",
 
@@ -857,67 +860,134 @@ my %macMeta = (
     "kMDItemScreenCaptureType"       => "selection",
 );
 
+# Some values, there are many more. Some of these seem redundant or
+# inconsistent. Where do they actually come from?
+#
+my @kMDItemKind_values = (
+    "Alias",
+    "Disk Image",
+    "Folder",
+    "gzip compressed archive",
+    "ZIP archive",
+
+    # Code
+    "C Source",
+    "C++ Source",
+    "Emacs Lisp Source File",
+    "JavaScript script",
+    "Objective-C++ Source",
+    "Perl Source",
+    "PHP Script",
+    "Python Bytecode Document",
+    "Python Script",
+    "Python Source",
+    "Script",
+    "Shell Script",
+    "Unix Executable File",
+
+    # Document-ish
+    "BBEdit text document",
+    "CSS style sheet",
+    "CSV Document",
+    "Document Type Definition",
+    "Document",
+    "HTML document",
+    "Markdown Document",
+    "JSON Document",
+    "Keynote Presentation",
+    "Microsoft Excel Document",
+    "Microsoft Word Document",
+    "OpenDocument Text (.odt) Document",
+    "Oxygen XML Editor project",
+    "Pages Document",
+    "Rich Text Document",
+    "SimpleText Document",
+    "Text",
+    "TSV Document",
+    "vCard",
+    "XML document",
+    "XML Document",
+    "XML Schema Document",
+
+    # Image-ish
+    "ConceptDraw CDDZ Document",
+    "Graph Markup Language",
+    "JPEG image",
+    "Panasonic raw image",
+    "PDF document",
+    "Plain Text Document",
+    "PNG image",
+    "PostScript document",
+    "PostScript",
+);
+
 # See https://en.wikipedia.org/wiki/Comparison_of_file_systems
 #
 my $BY = "bytes"; my $UC = "UChar";
 my $AS = "ASCII"; my $MS = "cp1252";
 my $U8 = "UTF-8"; my $U2 = "UCS-2"; my $U6 = "UTF-16";
-my $XX = 0;
+my $XX = 0;  # Unknown or unspecified value
 my $KB = 1<<9; my $MB = 1<<19; my $GB = 1<<29;
 my $TB = 1<<39; my $PB = 1<<49; my $EB = 1<<59; my $ZB = 1<<69;
 my $UNLIM = -1;
+# Expressions for banned characters
 my $NULL = "[\\x00]";
 my $NULLSOL = "[\\x00/]";
+my $CPMBAN = "[<>.,;:=?*\\[\\]]";
 my $FAT16BAN = "[\\x00-\\x1F \"*+,./:;<=>?\\\\[\\]]";
 my $FAT16LFN = "[\\x00\"*/:<>?\\\\|]";
 my $GEMBAN = "[\\x00-\\x1F *./:?\\\\{}]";
+my $NSFW32BAN = "[\\x00/\\:*\"?<>|]";
 
+# Column numbers for the data items below
+#
 my $FS_MAXNAME = 0;      # If not an int, fractional part is extension limit (always 3?)
 my $FS_CASE_REGARD = 1;  # Does it regard case?
 my $FS_UNIT = 2;         # Is FS_MAXNAME measured in bytes or chars?
 my $FS_ENCODING = 3;
-my $FS_BANCHARS = 4;     # Characters just not permitted.
-my $FS_MAXPATH = 5;      # Max char/bytes length of entire path (not # components)
-my $FS_MAXFILE = 6;      # Max supported filesize
-my $FS_MAXVOL = 7;       # Max supported volume size
+my $FS_MAXPATH = 4;      # Max char/bytes length of entire path (not # components)
+my $FS_MAXFSIZE = 5;     # Max supported filesize
+my $FS_MAXVOL = 6;       # Max supported volume size
+my $FS_BANCHARS = 7;     # Characters just not permitted.
+
 my %filesystemsAvailable = (
-    # Name =>  MaxFname,case,unit,Enc,BannedChars, MaxPath,  MaxFile, MaxVol
-    "BeeGFS" =>     [ 255, 1, $BY,$XX,$XX,   16*$EB, 16*$EB, $NULL ],
-    "CP/M" =>       [ 8.3, 1, $BY,$AS,0,     32*$MB,512*$MB, "[<>.,;:=?*\\[\\]]" ],
-    "RT-11 " =>     [ 6.3, 0, $BY,$AS,0,     32*$MB, 32*$MB, "[^A-Z0-9\$]" ],
-    "V6FS" =>       [  14, 1, $BY,$XX,$XX,   16*$MB, 32*$MB, $NULLSOL ],
-    "CBM DOS" =>    [  16, 1, $BY,$XX,0,     16*$MB, 16*$MB, $NULL ],
-    "V7FS" =>       [  14, 1, $BY,$XX,$XX,    1*$GB,  2*$TB, $NULLSOL ],
-    "exFAT" =>      [ 255, 1, $UC,$XX,32760, 16*$EB, 64*$ZB, $XX ],
-    "FAT8" =>       [ 6.3, 1, $BY,$AS,0,        $XX,    $XX, "^[\\x00\\xFF]" ],
-    "FAT16 base" => [ 8.3, 1, $BY,$MS,$XX,   32*$MB, 32*$MB, $FAT16BAN ],
-    "FAT16 LFN" =>  [ 255, 1, $UC,$XX,$XX,    4*$GB, 32*$MB, $FAT16LFN ],
-    "FAT16B" =>     [ 8.3, 1, $BY,$MS,$XX,    2*$GB,  4*$GB, $XX ],
-    "FAT32" =>      [ 8.3, 1, $BY,$MS,32760,  4*$GB, 16*$TB, $XX ],
-    "FATX" =>       [  42, 1, $BY,$AS,$XX,    2*$GB,  2*$GB, $XX ],
-    "GEMDOS" =>     [ 8.3, 1, $BY,$AS,$XX,      $XX,    $XX, $GEMBAN ],
-    "APFS" =>       [ 255, 1, $UC,$U8,$XX,    8*$EB,    $XX, $XX ],
-    "F2FS" =>       [ 255, 1, $BY,$XX,$XX, 3.94*$TB, 16*$TB, $NULLSOL ],
-    "MFS" =>        [ 255, 1, $BY,$XX,0,    256*$MB,256*$MB, ":" ],
-    "HFS" =>        [  31, 1, $BY,$XX,$UNLIM, 2*$GB,  2*$TB, ":" ],
-    "HPFS" =>       [ 255, 1, $BY,$XX,$XX,    2*$GB,  2*$TB, $NULL ],
-    "NTFS_Win32" => [ 255, 0, $UC,$U6,32767, 16*$EB, 16*$EB, "[\\x00/\\:*\"?<>|]" ],
-    "NTFS_POSIX" => [ 255, 1, $UC,$U6,32767, 16*$EB, 16*$EB, "[\\x00/]" ],
-    "HFS Plus" =>   [ 255, 1, $UC,$U6,$UNLIM, 8*$EB,  8*$EB, $XX ],
-    "UFS1" =>       [ 255, 1, $BY,$XX,$XX,  256*$TB, 16*$EB, $NULL ],
-    "UFS2" =>       [ 255, 1, $BY,$XX,$XX,   32*$PB,512*$ZB, $NULL ],
-    "ext" =>        [ 255, 1, $BY,$XX,$XX,    2*$GB,  2*$GB, $NULL ],
-    "ext2" =>       [ 255, 1, $BY,$XX,$XX,    2*$TB, 32*$TB, $NULL ],
-    "ext3" =>       [ 255, 1, $BY,$XX,$XX,    2*$TB, 32*$TB, $NULL ],
-    "ext4" =>       [ 255, 1, $BY,$XX,$XX,   16*$TB,  1*$EB, $NULL ],
-    "ISO9660:881" =>[ 8.3, 1, $XX,$XX,$XX,    4*$GB,  8*$TB, $XX ],
-    "ISO9660:882" =>[ 180, 1, $XX,$XX,$XX,    4*$GB,  8*$TB, $XX ],
-    "ISO9660:883" =>[ 180, 1, $XX,$XX,$XX,    8*$TB,    $XX, $XX ],
-    "Joliet_CDFS" =>[  64, 1, $UC,$U2,$XX,    8*$TB,  8*$TB, "[*/\\:;?]" ],
-    "Rock Ridge" => [ 255, 1, $BY,$XX,$XX,    8*$TB,  8*$TB, $NULLSOL ],
-    "UniFS" =>      [ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
-    "ISO9660:1999"=>[ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
-    "HighSierra" => [ $XX, 1, $XX,$XX,$XX,      $XX,    $XX, $XX ],
+    # Name =>      MxName,cs,unit, Enc,MxPath,MxFSize,  MxVol, BanChars
+    "BeeGFS" =>     [ 255, 1, $BY, $XX, $XX,   16*$EB, 16*$EB, $NULL ],
+    "CP/M" =>       [ 8.3, 1, $BY, $AS, 0,     32*$MB,512*$MB, $CPMBAN ],
+    "RT-11 " =>     [ 6.3, 0, $BY, $AS, 0,     32*$MB, 32*$MB, "[^A-Z0-9\$]" ],
+    "V6FS" =>       [  14, 1, $BY, $XX, $XX,   16*$MB, 32*$MB, $NULLSOL ],
+    "CBM DOS" =>    [  16, 1, $BY, $XX, 0,     16*$MB, 16*$MB, $NULL ],
+    "V7FS" =>       [  14, 1, $BY, $XX, $XX,    1*$GB,  2*$TB, $NULLSOL ],
+    "exFAT" =>      [ 255, 1, $UC, $XX, 32760, 16*$EB, 64*$ZB, $XX ],
+    "FAT8" =>       [ 6.3, 1, $BY, $AS, 0,        $XX,    $XX, "^[\\x00\\xFF]" ],
+    "FAT16 base" => [ 8.3, 1, $BY, $MS, $XX,   32*$MB, 32*$MB, $FAT16BAN ],
+    "FAT16 LFN" =>  [ 255, 1, $UC, $XX, $XX,    4*$GB, 32*$MB, $FAT16LFN ],
+    "FAT16B" =>     [ 8.3, 1, $BY, $MS, $XX,    2*$GB,  4*$GB, $XX ],
+    "FAT32" =>      [ 8.3, 1, $BY, $MS, 32760,  4*$GB, 16*$TB, $XX ],
+    "FATX" =>       [  42, 1, $BY, $AS, $XX,    2*$GB,  2*$GB, $XX ],
+    "GEMDOS" =>     [ 8.3, 1, $BY, $AS, $XX,      $XX,    $XX, $GEMBAN ],
+    "APFS" =>       [ 255, 1, $UC, $U8, $XX,    8*$EB,    $XX, $XX ],
+    "F2FS" =>       [ 255, 1, $BY, $XX, $XX, 3.94*$TB, 16*$TB, $NULLSOL ],
+    "MFS" =>        [ 255, 1, $BY, $XX, 0,    256*$MB,256*$MB, ":" ],
+    "HFS" =>        [  31, 1, $BY, $XX, $UNLIM, 2*$GB,  2*$TB, ":" ],
+    "HPFS" =>       [ 255, 1, $BY, $XX, $XX,    2*$GB,  2*$TB, $NULL ],
+    "NTFS_Win32" => [ 255, 0, $UC, $U6, 32767, 16*$EB, 16*$EB, $NSFW32BAN ],
+    "NTFS_POSIX" => [ 255, 1, $UC, $U6, 32767, 16*$EB, 16*$EB, $NULLSOL ],
+    "HFS Plus" =>   [ 255, 1, $UC, $U6, $UNLIM, 8*$EB,  8*$EB, $XX ],
+    "UFS1" =>       [ 255, 1, $BY, $XX, $XX,  256*$TB, 16*$EB, $NULL ],
+    "UFS2" =>       [ 255, 1, $BY, $XX, $XX,   32*$PB,512*$ZB, $NULL ],
+    "ext" =>        [ 255, 1, $BY, $XX, $XX,    2*$GB,  2*$GB, $NULL ],
+    "ext2" =>       [ 255, 1, $BY, $XX, $XX,    2*$TB, 32*$TB, $NULL ],
+    "ext3" =>       [ 255, 1, $BY, $XX, $XX,    2*$TB, 32*$TB, $NULL ],
+    "ext4" =>       [ 255, 1, $BY, $XX, $XX,   16*$TB,  1*$EB, $NULL ],
+    "ISO9660:881" =>[ 8.3, 1, $XX, $XX, $XX,    4*$GB,  8*$TB, $XX ],
+    "ISO9660:882" =>[ 180, 1, $XX, $XX, $XX,    4*$GB,  8*$TB, $XX ],
+    "ISO9660:883" =>[ 180, 1, $XX, $XX, $XX,    8*$TB,    $XX, $XX ],
+    "Joliet_CDFS" =>[  64, 1, $UC, $U2, $XX,    8*$TB,  8*$TB, "[*/\\:;?]" ],
+    "Rock Ridge" => [ 255, 1, $BY, $XX, $XX,    8*$TB,  8*$TB, $NULLSOL ],
+    "UniFS" =>      [ $XX, 1, $XX, $XX, $XX,      $XX,    $XX, $XX ],
+    "ISO9660:1999"=>[ $XX, 1, $XX, $XX, $XX,      $XX,    $XX, $XX ],
+    "HighSierra" => [ $XX, 1, $XX, $XX, $XX,      $XX,    $XX, $XX ],
 );
 
 
@@ -990,7 +1060,7 @@ my %getOptHash = (
     "dropOriginal!"    => \$dropOriginal,
     "dry-run|dryrun!"  => \$test,
     "e|expr=s"         => \$expr,
-    "ePad=n"           => \$ePad,
+    "ePad=o"           => \$ePad,
     "ePadChar=s"       => \$ePadChar,
     "extChanges|extensions!" => \$extChanges,
     "filesystem=s"     => \$filesystem,
@@ -998,8 +1068,9 @@ my %getOptHash = (
     "h|help"           => sub { system "perldoc $0"; exit; },
     "help-filesystem"  => sub {
         warn "File system properties:\n";
+        warn "    (see https://en.wikipedia.org/wiki/Comparison_of_file_systems)\n";
         warn "Name      MaxFname case unit   Encod   MaxPath  " .
-          " MaxFile    MaxVol BannedChars\n";
+          " MaxFileSz  MaxVol BannedChars\n";
         my $fmt="%-12s %5d %4s %-6s %-6s %8s %8sB %8sB %s\n";
         for my $x (sort keys %filesystemsAvailable) {
             my @f = @{$filesystemsAvailable{$x}};
@@ -1030,21 +1101,21 @@ my %getOptHash = (
         }
         exit;
     },
-    "lc!"              => \$lc,
+    "lc|lower!"        => \$lc,
     "lcExtensions|lowerExtensions!" => \$lcExtensions,
     "onlyExtensions!"  => \$onlyExtensions,
-    "pad=n"            => \$padWidth,
-    "pull=n"           => \$pull,
+    "pad=o"            => \$padWidth,
+    "pull=o"           => \$pull,
     "pullContent!"     => \$pullContent,
     "pullNoEntities!"  => \$pullNoEntities,
-    "pullURI=n"        => \$pullURI,
+    "pullURI=o"        => \$pullURI,
     "q|quiet!"         => \$quiet,
     "r|recursive!"     => \$recursive,
     "resolve!"         => \$resolve,
     "separator=s"      => \$separator,
     "test!"            => \$test,
     "toEnd!"           => \$toEnd,
-    "uc!"              => \$uc,
+    "uc|upper!"        => \$uc,
     "unescapeURI!"     => \$unescapeURI,
     "unroman!"         => \$unroman,
     "v|verbose+"       => \$verbose,
@@ -1549,7 +1620,7 @@ sub extensionJoin {
 }
 
 # FS_MAXNAME, FS_CASE_REGARD(UNUSED), FS_UNIT(TODO), FS_ENCODING,
-# FS_BANCHARS, FS_MAXPATH, FS_MAXFILE(UNUSED), FS_MAXVOL(UNUSED).
+# FS_BANCHARS, FS_MAXPATH, FS_MAXFSIZE(UNUSED), FS_MAXVOL(UNUSED).
 # What do filesystems do about Unicode canonical forms?
 #
 
@@ -1630,7 +1701,7 @@ sub doRename {
         return(0);
     }
     if ($test) { return(1); }
-    
+
     my $gitStatus = system("versionStatus.py --nosystem '$fp1'");
     if ($gitStatus =~ /^NOT_MINE/) {
         my $rc = rename($fp1, $fp2);

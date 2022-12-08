@@ -3,6 +3,9 @@
 This repo contains utilities that are useful for managing files in crowded
 directory subtrees, as happens a lot in corpus linguistics.
 
+My favorite item is ''renamefiles'', which can do an awful lot of fancy
+things with filenames.
+
 ''bigDirTimer'' (Python) -- test your filesystem(s) for how badly they slow down on
 directories with very many files in them. Many slow down a lot.
 
@@ -11,13 +14,17 @@ useful if you don't have a GUI tools for this, like meld, BeyondCompare, etc.
 
 ''countExtensions'' (bash) -- Inventory the file-extensions that occur in a given subtree.
 
-''findAncestorDirectory'' --
+''findAncestorDirectory'' -- This looks upwards to find the nearest containing
+directory that contains a given file, or is named a certain way. It's handy
+for finding where an "inheritable" files lives, such as .gitconfig, .venv,
+or similar.
 
 ''findDuplicateFiles'' (Python) -- Unpolished tool to search a subtree for duplicates.
 
-''fixPermissions'' -- Check file extensions and if inidcated, update the files'
-"execute" permission to match. For example, if you download or mount some .py (Python) files,
-this will make it executable, and so on. No easier than using `chmod` if you only
+''fixPermissions'' -- Check file extensions and if indicated, update the files'
+"execute" permission to match. For example, if you download or mount
+some .py (Python) files,
+this will make them executable. No easier than using `chmod` if you only
 have one such file, but very useful if you have a lot, with a mix of extensions.
 It should, but does not yet, also test via the `file` command.
 
@@ -32,16 +39,17 @@ parts of their names, such as by ignoring any final digits. It can also normaliz
 extensions (htm vs. html), remove unusual characters from names, etc.
 
 ''lowerExtension'' (bash) -- force the extension of a file(s) to lower case.
+You can also do this with my ''renamefiles'', with a regex that uses \\L.
 
-''lscount'' (Perl) -- Report the number of files that match the list criteria.
+''lscount'' (Perl) -- Report the number of files that match.
 With no arguments, reports the number of files in the current directory.
 
 ''lscruft'' (Perl) -- List files whose names suggest they are temp files, such as
 being named `.bak`, `~x`, `#foo#`, `Backup 3 of X`, etc.
 
-''lsoutline'' (Perl) -- A form of `ls`, but displays directory subtrees as outline. Can
-include or omit the common leading portion. Also has various options such as
-including only directories, to write the output as HTML nested lists or graphviz
+''lsoutline'' (Perl) -- Like `ls` but displays directory subtrees as outlines.
+Can include or omit the common leading portion. Also has various options such as
+including only directories, writing the output as HTML nested lists or graphviz
 diagrams, etc.
 
 ''lss'' (Python) -- (unfinished `ls++`)

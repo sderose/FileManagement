@@ -46,7 +46,7 @@ my $result = GetOptions(
     "n|nPrefix=i"             => \$nPrefix,
     "outputDir=s"             => \$out,
     "q!"                      => \$quiet,
-    "tick=i"                  => \$tickInterval,
+    "tickInterval=o"          => \$tickInterval,
     "unorm!"                  => \$unorm,
     "v+"                      => \$verbose,
     "version"                 => sub {

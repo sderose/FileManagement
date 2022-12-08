@@ -33,7 +33,8 @@ use Cwd 'abs_path';
 finderInfo [options] files
 
 Extract and diplay the 'finderInfo' for a given file, mostly using C<xattr>.
-Also shows UUID for the partition, volume, and host (I hope).
+Intended to be more readable than the usual.
+Also shows UUID for the partition, volume, and host.
 
 
 =head1 Options
@@ -334,9 +335,9 @@ sub doOneFile {
         }
     }
 
-    print("Partition UUID: %s", getPartitionID($file))
-    print("Volume UUID: %s", getVolumeID($file))
-    print("Host UUID: %s", getHostID($file))
+    print("Partition UUID: %s", getPartitionID($file));
+    print("Volume UUID: %s", getVolumeID($file));
+    print("Host UUID: %s", getHostID($file));
 }
 
 sub getPartitionID {
