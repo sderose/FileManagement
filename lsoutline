@@ -6,6 +6,7 @@
 use strict;
 use Getopt::Long;
 use sjdUtils;
+use alogging;
 
 our %metadata = (
     'title'        => "laoutline",
@@ -339,8 +340,7 @@ my $result = GetOptions(
 
 # Validate and default options
 #
-sjdUtils::setColors($color);
-sjdUtils::setVerbose($verbose);
+alogging::setLogVerbose($verbose);
 
 if ($count) { $files = 0; }
 
@@ -351,7 +351,7 @@ my $cBlack = my $cRed = my $cGreen = my $cYellow = my $cBlue
 if ($color) {
     %extensionColorMap = %{readDirColors()};
 
-    sjdUtils::setColors(1);
+    sjdUtils::setColors($color);
     $cBlack   = sjdUtils::getColorString("black");
     $cRed     = sjdUtils::getColorString("red");
     $cGreen   = sjdUtils::getColorString("green");

@@ -1,15 +1,18 @@
 #!/usr/bin/env perl -w
 #
-# compareDirTrees.
+# compareDirTrees: Rudimentary directory content comparison.
+# 2007: Written by Steven J. DeRose.
 #
 use strict;
 use Getopt::Long;
 use File::stat;
 use POSIX qw( strftime );
 use sjdUtils;
+use alogging;
 
 our %metadata = (
     'title'        => "compareDirTrees",
+    'description'  => "Rudimentary directory content comparison.",
     'rightsHolder' => "Steven J. DeRose",
     'creator'      => "http://viaf.org/viaf/50334488",
     'type'         => "http://purl.org/dc/dcmitype/Software",
@@ -20,10 +23,6 @@ our %metadata = (
     'license'      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
 our $VERSION_DATE = $metadata{'modified'};
-
-
-###############################################################################
-#
 
 =pod
 
@@ -288,7 +287,7 @@ Getopt::Long::Configure ("ignore_case");
 GetOptions(%getoptHash) || die("Bad options.\n");
 
 sjdUtils::setColors($color);
-sjdUtils::setVerbose($verbose);
+alogging::setLogVerbose($verbose);
 
 if (!$all) {
     my $dftExclude = '(~|#|\.bak|\.bck|\.pyc)$';
