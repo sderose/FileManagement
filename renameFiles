@@ -565,6 +565,8 @@ L<http://www.skytag.com/filebuddy/en/index.html> if interested.
 options (not just --pullContent), that similarly apend brand-new,
 likely-unique strings to the filenames.
 
+=item * Warn/fix hyphen-initial filenames, names w/ spaces (for *nix).
+
 =item * Port to Python and integrate PowerWalk.py.
 
 =item * Options to set properties on files, like Mac OS label? (see list below)
@@ -1728,7 +1730,7 @@ sub report {
     warn sprintf($fmt, "Rename attempts",   $simpleCount+$resolveCount);
     warn sprintf($fmt, sjdUtils::colorize("green/bold", "Simple renames")
         . "      ", $simpleCount);  # Allow for the color escapes
-    warn sprintf($fmt, "git renames",       $gitCount);
+    warn sprintf($fmt, "git mv's (not yet)", $gitCount);
     warn sprintf($fmt, "Extensions fixed",  $extFixes);
     warn sprintf($fmt, "Not found",         $notFoundCount);
     warn sprintf($fmt, "No net change",     $unchanged);

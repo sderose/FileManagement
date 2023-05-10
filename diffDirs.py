@@ -11,6 +11,7 @@ import re
 import argparse
 import subprocess
 import stat
+import codecs
 
 from alogging import ALogger
 from PowerWalk import isHidden, isBackup, isGenerated
@@ -23,7 +24,7 @@ __metadata__ = {
     'type'         : "http://purl.org/dc/dcmitype/Software",
     'language'     : "Python 3.7",
     'created'      : "2014-06-27",
-    'modified'     : "2020-09-23",
+    'modified'     : "2023-05-01",
     'publisher'    : "http://github.com/sderose",
     'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
@@ -68,6 +69,7 @@ See https://stackoverflow.com/questions/1446549/
 * 2020-08-21: Fix handling of binary files and EOF conditions.
 * 2020-09-23: Drop sjdUtils.
 * 2022-08-03: Drop obsolete alogging calls.
+* 2023-05-01: Side-by-side listing feature. simplify reporting logic.
 
 
 =To do=
@@ -156,20 +158,22 @@ def stat2print(statValue):
 def firstMismatch(path1, path2):
     """Find the first difference between two files (can ignore comments)
     Return (linenumber1, linenumber2, line1, line2) of first diff.
+    Return (0, 0, "", "") if the files do not differ.
     NOTE: Only works for text files....
     """
-    fh1 = open(path1, 'rb')
-    fh2 = open(path2, 'rb')
+    fh1 = codecs.open(path1, 'rb', encoding="utf-8")
+    fh2 = codecs.open(path2, 'rb', encoding="utf-8")
     recnum1 = recnum2 = 0
 
     lg.vMsg(2, "Comparing %s..." % (os.path.basename(path1)))
     while (1):
         rec1, nRecs1 = advanceFile(fh1, recnum1)
         recnum1 += nRecs1
-        if (rec1 is None):
-            return recnum1, recnum2, "", ""
         rec2, nRecs2 = advanceFile(fh2, recnum2)
         recnum2 += nRecs2
+
+        if (rec1 is None):  # Decode Error
+            return recnum1, recnum2, "", ""
         if (rec2 is None):
             return recnum1, recnum2, "", ""
 
@@ -186,7 +190,9 @@ def firstMismatch(path1, path2):
     return 0, 0, "", ""
 
 def advanceFile(fh0, recnum):
-    """Returns None on decoding error.
+    """Read and return the next non-ignorable line of the file. Skip right
+    past comments, blank lines, etc.
+    Returns None on decoding error.
     """
     nRecsRead = 0
     while (1):
@@ -225,7 +231,7 @@ def compareDirs(path1, path2, depth:int=0):
     (specifically, the number of differing/missing files found).
     @globals Bumps counters for a bunch of things.
     """
-    global total1, total2, missing1, missing2, uncheckedDirs, depth
+    global total1, total2, missing1, missing2, uncheckedDirs, differ, same
     p1 = os.path.abspath(path1)
     d1 = filteredListdir(p1)
 
@@ -238,55 +244,83 @@ def compareDirs(path1, path2, depth:int=0):
     lg.vMsg(0, "    %s\n    %s\n" % (p1, p2))
 
     nSubsDifferent = 0
+    differ = 0
+    diffLine = ""
     for curName in dUnion:
         lg.vMsg(1, "Comparing '%s'." % (curName))
-        #print("Comparing '%s'." % (curName))
         file1 = os.path.join(path1, curName)
         file2 = os.path.join(path2, curName)
+
+        color = "red"
         if (not os.path.exists(file1)):
             lg.vMsg(1, "    Missing from dir 1: " + path1)
-            #print("    Missing from dir 1: " + path1)
+            total2 += 1
             missing1 += 1
             nSubsDifferent += 1
+            sep = ">>ONLY>>"
         elif (not os.path.exists(file2)):
             lg.vMsg(1, "    Missing from dir 2: " + path1)
+            total1 += 1
             missing2 += 1
             nSubsDifferent += 1
-        elif (os.path.isdir(file1) and os.path.isdir(file2)):
-            if (args.recursive):
-                lg.vMsg(2, "    Descending into %s/" % (curName))
-                subDiffs = compareDirs(file1, file2, depth=depth+1)
-                if (subDiffs): nSubsDifferent += 1
-            else:
-                uncheckedDirs += 1
-        elif (os.path.isdir(file1) or os.path.isdir(file2)):
-            lg.vMsg(0, "Dir/file mismatch: %s and %s" % (file1, file2))
-            nSubsDifferent += 1
+            sep = "<<ONLY<<"
         else:
             total1 += 1
             total2 += 1
-            fDiff = compareFiles(file1, file2, depth=depth+1)
-            if (fDiff): nSubsDifferent += 1
+            if (os.path.isdir(file1) and os.path.isdir(file2)):
+                if (args.recursive):
+                    lg.vMsg(2, "    Descending into %s/" % (curName))
+                    subDiffs = compareDirs(file1, file2, depth=depth+1)
+                    if (subDiffs): nSubsDifferent += 1
+                else:
+                    uncheckedDirs += 1
+            elif (os.path.isdir(file1)):
+                lg.vMsg(0, "Dir/file mismatch: %s and %s" % (file1, file2))
+                nSubsDifferent += 1
+                sep = "DIR--FIL"
+            elif (os.path.isdir(file2)):
+                lg.vMsg(0, "File/Dir mismatch: %s and %s" % (file1, file2))
+                nSubsDifferent += 1
+                sep = "FIL--DIR"
+            else:
+                isDifferent, diffLine, stat1, stat2 = compareFiles(file1, file2, depth=depth+1)
+                if (isDifferent):
+                    nSubsDifferent += 1
+                    differ += 1  # TODO Remember what this was to be used for....
+                    sep = "!!DIFF!!"
+                else:
+                    same += 1
+                    if (not args.report_identical_files): return nSubsDifferent
+                    color = "green"
+                    sep = "      "
+
+        pcols(curName, diffLine, color1=color, sep=sep, depth=depth)
+        if (args.showDiffs):
+            lg.vMsg(0, stat1)
+            lg.vMsg(0, stat2)
+
     return nSubsDifferent
 
-def compareFiles(fp1, fp2, depth:int=0):
+fmt = "        size %10d, time %-20s, md5 %-32s, perm %s"
+
+def compareFiles(path1, path2, depth:int=0):
     """Compare two *files* (not dirs).
-    @return isDifferent: 0 if the files completely match, else 1.
+    @return
+        isDifferent: 0 if the files completely match, else 1.
+        diffLine: text showing the difference
+        stat1, stat2: fstat info on the files
     @globals Bumps counters for a bunch of things.
     """
-    #global total1, total2, missing1, missing2, uncheckedDirs, ignored1, ignored2,
-    global same, differ
-
-    if (os.path.isdir(fp1) or os.path.isdir(fp2)):
+    if (os.path.isdir(path1) or os.path.isdir(path2)):
         raise ValueError("compareFiles called for a directory.")
 
     diffLine = ""
     isDifferent = 0
 
-    size1 = os.path.getsize(fp1)
-    size2 = os.path.getsize(fp2)
-    time1 = os.path.getmtime(fp1)
-    time2 = os.path.getmtime(fp2)
+    size1 = os.path.getsize(path1)
+    size2 = os.path.getsize(path2)
+    time1 = os.path.getmtime(path1)
+    time2 = os.path.getmtime(path2)
     stat1 = stat2 = 'N/A'
     md51 = md52 = 'N/A'
 
@@ -299,16 +333,16 @@ def compareFiles(fp1, fp2, depth:int=0):
         isDifferent = True
 
     if (args.permissions):
-        stat1 = stat2print(os.stat(fp1))
-        stat2 = stat2print(os.stat(fp2))
+        stat1 = stat2print(os.stat(path1))
+        stat2 = stat2print(os.stat(path2))
         if (stat1 != stat2):
             diffLine += " PERM"
             isDifferent = True
 
     if (args.md5):
         # Could use hashlib.md5()
-        out1 = subprocess.check_output(["md5sum", fp1])
-        out2 = subprocess.check_output(["md5sum", fp2])
+        out1 = subprocess.check_output(["md5sum", path1])
+        out2 = subprocess.check_output(["md5sum", path2])
         md51 = re.sub(r'\s+.*', '', out1)
         md52 = re.sub(r'\s+.*', '', out2)
         if (md51 != md52):
@@ -318,14 +352,14 @@ def compareFiles(fp1, fp2, depth:int=0):
     if (args.diff):
         # Check if they're binary or text...
         #
-        lineNum1, lineNum2, rec1, rec2 = firstMismatch(fp1,fp2)
+        lineNum1, lineNum2, rec1, rec2 = firstMismatch(path1, path2)
         if (lineNum1):
-            diffLine += " DIFF(line %d vs %d)" % (lineNum1,lineNum2)
+            diffLine += " DIFF(line %d vs %d)" % (lineNum1, lineNum2)
             isDifferent = True
             if (args.showLines):
                 lg.vMsg(0, "    < %s\n    > %s" % (rec1, rec2))
     elif (args.diffq):
-        cmd = "diff -q '%s' '%s'" % (fp1,fp2)
+        cmd = "diff -q '%s' '%s'" % (path1,path2)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
         _output, _err = p.communicate()
         p_status = p.wait()
@@ -333,29 +367,9 @@ def compareFiles(fp1, fp2, depth:int=0):
             diffLine += " DIFF-Q"
             isDifferent = True
 
-    # Report file difference
-    if (args.report_identical_files):
-        same += 1
-        pcols(fp1, diffInfo='', sep="======", depth=depth)
-        if (args.showDiffs):
-            fmt = "        size %12d time %-12s md5 %-32s perm %s"
-            lg.vMsg(0, fmt % (size1, time1, md51, stat1))
-            lg.vMsg(0, fmt % (size2, time2, md52, stat2))
-    elif (isDifferent):
-        differ += 1
-        sep = "!!!!!!"
-        color = "red"
-        pcols(os.path.basename(fp1), diffLine, color1=color, sep=sep, depth=depth)
-        if (args.showDiffs):
-            fmt = "        size %10d, time %-20s, md5 %-32s, perm %s"
-            lg.vMsg(0, fmt % (size1, time1, md51, stat1))
-            lg.vMsg(0, fmt % (size2, time2, md52, stat2))
-    else:
-        sep = "======"
-        color="green"
-        same += 1
-
-    return isDifferent
+    stat1 = fmt % (size1, time1, md51, stat1)
+    stat2 = fmt % (size2, time2, md52, stat2)
+    return isDifferent, diffLine, stat1, stat2
 
 
 ###############################################################################
@@ -465,7 +479,7 @@ if __name__ == "__main__":
     #
     args = processOptions()
 
-    lg = ALogger(1)
+    lg = ALogger(args.verbose)
 
     if (args.all):
         args.backups = args.hidden = True
