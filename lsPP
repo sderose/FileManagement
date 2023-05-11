@@ -658,8 +658,8 @@ def processOptions():
         "--interleave",       action="store_true",
         help="Sort directories and files together, not separately")
     parser.add_argument(
-        "--oformat",          type=str, metavar="F",
-        choices=[ "TSV", "CSV", "JSON", "XSV", "ARRAY" ],
+        "--oformat", "--outputFormat", "--output-format",
+        type=str, metavar="F", choices=[ "TSV", "CSV", "JSON", "XSV", "ARRAY" ],
         help="Use this format for output data.")
     parser.add_argument(
         "--paths",            type=str, metavar="P",
