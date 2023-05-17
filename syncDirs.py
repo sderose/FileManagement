@@ -81,7 +81,7 @@ For the most recent version, see [http://www.derose.net/steve/utilities] or
 =Options=
 """
 
-def warn(lvl, msg):
+def warning(lvl, msg):
     if (args.verbose >= lvl):
         sys.stderr.write(msg+"\n")
 
@@ -91,20 +91,17 @@ def warn(lvl, msg):
 def doOneFile(dirpath, filename, top=""):
     """Read and deal with one individual file.
     """
-    #warn(1, "dir %s, file %s." % (dirpath, filename))
+    #warning(1, "dir %s, file %s." % (dirpath, filename))
     path = os.path.join(dirpath, filename)
     expectAt = os.path.join(args.baseDir, filename)
-
     if (os.path.exists(expectAt)):
         if (not isDifferent(path, expectAt)):
             return False
-        warn(0, "Files differ:\n    %s\n    %s" % (path, expectAt))
+        warning(0, "Files differ:\n    %s\n    %s" % (path, expectAt))
     else:
-        warn(0, "File not at expected path: %s" % (expectAt))
+        warning(0, "File not at expected path: %s" % (expectAt))
         reportCandidates(dirpath, filename, top=top)
-
     return True  # Some issue
-
 
 def isDifferent(f1, f2):
     """Use 'diff' to compare 2 files, and return True if they differ.
@@ -126,12 +123,12 @@ def reportCandidates(dirpath, filename, top=""):
         return 0
     files = buf.strip().split(sep="\n")
     if (len(files) == 0):
-        warn(0, "    No candidates found: '%s'" % (filename))
+        warning(0, "    No candidates found: '%s'" % (filename))
         return 0
 
     for f in files:
         short = re.sub(args.baseDir, '', f)
-        warn(0, "    ??? %s" % (short))
+        warning(0, "    ??? %s" % (short))
     return len(files)
 
 
@@ -179,11 +176,10 @@ if __name__ == "__main__":
             dftEnvVar = 'sjdUtilsDir'
             if (dftEnvVar in os.environ):
                 args0.baseDir = os.environ[dftEnvVar]
-                if (args0.verbose):
-                    print("Defaulting --baseDir to $%s: '%s' ."
+                warning(1, "Defaulting --baseDir to $%s: '%s' ."
                         % (dftEnvVar, args0.baseDir))
             else:
-                print("No --baseDir given, and no env var $%s." % (dftEnvVar))
+                warning(0, "No --baseDir given, and no env var $%s." % (dftEnvVar))
                 sys.exit()
 
         return(args0)
@@ -194,11 +190,11 @@ if __name__ == "__main__":
     args = processOptions()
 
     if (len(args.files) == 0):
-        warn(0, "No directory specified....\n")
+        warning(0, "No directory specified....\n")
         sys.exit()
     topDir = args.files[0]
     if (not os.path.isdir(topDir)):
-        warn(0, "Directory not found: %s\n" % (topDir))
+        warning(0, "Directory not found: %s\n" % (topDir))
         sys.exit()
 
     nDiffsTotal = 0
@@ -208,7 +204,7 @@ if __name__ == "__main__":
             filenames = [f for f in filenames if not f[0] == '.']
             dirnames[:] = [d for d in dirnames if not d[0] == '.']
             dirnames[:] = [d for d in dirnames if not d == '__pycache__']
-        warn(0, "*** At dir %s" % (dirpath0))
+        warning(0, "*** At dir %s" % (dirpath0))
         nDiffsHere = 0; nSameHere = 0
         for filename0 in filenames:
             fullPath = os.path.join(dirpath0, filename0)
