@@ -121,6 +121,7 @@ stash all absolute paths in the notes file? or just ignore for now?
     * Alternate backup methods? git branch or stash; mailto; rsync?
 Esp. for rsync, support remote destination.
     * Add --warn-extension and/or --exclude? Use .gitignore?
+    * Add option to choose whether/where to create the 'latest' symlink.
     
 
 =head1 History
