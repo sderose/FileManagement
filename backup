@@ -14,7 +14,7 @@ our %metadata = (
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12",
-    "modified"     => "2022-04-27",
+    "modified"     => "2023-10-04",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -45,12 +45,29 @@ The backup subdirectories are organized by year and month, for example:
 
 Options can be specified for the C<cp> command via the I<--cpOptions> option.
 
+To retrieve all backed-up versions of a given filename, do:
+    backup --fetch [filename]
+
+This will generate a list of the full paths. Send that list to I<cp> or I<ls -l> or
+whatever, like this ([filename] may include glob characters as for I<find>):
+    ls -l `backup --fetch [filename]`
+    
+If you're a BBEdit user, you can use I<--bbopen> to open the BBEDIT backup directory,
+rather than using the menus in the app.
+
 
 =head1 Options
 
 (prefix 'no' to negate where applicable)
 
 =over
+
+=item * B<--bbopen>
+
+Just open the directory where the BBEdit editor puts automatic backups.
+This is included because (a) the author uses it a lot, and (b) most other editors just
+put backups in the same directory as the original, so such a function is not as
+important for them. If you don't use BBEdit, just ignore this option.
 
 =item * B<--cpOptions> I<opts>
 
@@ -62,6 +79,11 @@ the timestamps, permissions, etc. of the copied file(s).
 
 Show the files that would be backed up, and the generated note; but do not
 actually copy anything. At present, however, the target directory is still created.
+
+=item * B<--fetch>
+
+Display a list of all the backup files matching the given filename (which may include
+glob characters as for the I<find> command).
 
 =item * B<--gitdiff>
 
@@ -101,6 +123,13 @@ Show version info and exit.
 =back
 
 
+=head1 Related Commands
+
+BBEdit can be set to make backups whenever you save, but they go into a "BBEdit Backups" 
+folder that you wouldn't normally see (including via Spotlight search).
+It lives in BBEdit's sandbox container, within the "Documents" folder. 
+See the BBEdit application menu, "Folders", "Document Backups"
+
 =head1 Known Bugs and Limitations
 
 The generated note file isn't smart if you specify multiple directories
@@ -110,17 +139,16 @@ git root, commit id, and diff won't be generated for all of them.
 
 =head1 To Do
 
-    * Option to retrieve the list of backed-up copies of a given file(s?).
+    * Option to refile I<--fetch>.
 Perhaps show amount of difference, fetch latest that has some content, or before
-a given date, etc. Problem of distinguishing like-named files -- perhaps should
-stash all absolute paths in the notes file? or just ignore for now?
+a given date, etc.
     * Save git commit and branch info if applicable, or other VCS info.
         git rev-parse --show-toplevel
         git log -n 1 [file]
     * Apply .gitignore, and/or add own --ignore option?
     * Alternate backup methods? git branch or stash; mailto; rsync?
 Esp. for rsync, support remote destination.
-    * Add --warn-extension and/or --exclude? Use .gitignore?
+    * Add --warn-extension and/or --exclude?
     * Add option to choose whether/where to create the 'latest' symlink.
     
 
@@ -138,6 +166,7 @@ Esp. for rsync, support remote destination.
     2022-04-27: Improve git info inserted into note.
     2022-05-09: Actually implement dry-run.
     2022-07-25f: Add --noteFile option, --list. Fix some messages.
+    2023-10-04: Add --bbopen, --fetch.
    
 
 =head1 Rights
@@ -157,9 +186,11 @@ L<https://github.com/sderose>.
 ###############################################################################
 # Options
 #
+my $bbopen    = 0;
 my $bdir = $ENV{BACKUP_DIR} || "$ENV{HOME}/backups";
 my $cpOptions = '-a';
 my $dryRun    = 0;
+my $fetch     = 0;
 my $gitdiff   = 1;
 my $list      = 0;
 my $message   = '';
@@ -168,9 +199,11 @@ my $quiet     = 0;
 my $verbose   = 0;
 
 my %getoptHash = (
+    "bbopen!"         => \$bbopen,
     "bdir=s"          => \$bdir,
     "cpOptions=s"     => \$cpOptions,
     "dryRun|dry-run!" => \$dryRun,
+    "fetch!"          => \$fetch,
     "gitdiff!"        => \$gitdiff,
     "h|help"          => sub {
         system "perldoc $0";
@@ -189,6 +222,18 @@ my %getoptHash = (
 Getopt::Long::Configure ("ignore_case");
 GetOptions(%getoptHash) || die "Bad options.\n";
 
+if ($bbopen) {
+    my $bbd = $ENV{HOME} . "/Library/Application Support/BBEdit/BBEdit Backups";
+    if (-d "$bbd") {
+        ($quiet) || print "Opening directory: $bbd\n";
+        system "open '$bbd'";
+    }
+    else {
+        warn "No such directory: $bbd.\n";
+    }
+    exit;
+}
+
 (scalar(@ARGV)) || die
     "No files specified!\n";
 ($noteFile =~ m|/|) && die
@@ -200,6 +245,11 @@ GetOptions(%getoptHash) || die "Bad options.\n";
 ###############################################################################
 # Main
 #
+if ($fetch) {
+    system "find '$bdir' -name '$ARGV[0]'";
+    exit;
+}
+
 if ($list) {
     for my $f (@ARGV) {
         print("======= matches for '$f' under $bdir:\n");
