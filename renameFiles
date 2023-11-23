@@ -604,9 +604,16 @@ Cf C<nextFilename>.
 =item * "To" vs "_to_" vs "2"?
 
 
-=item * Various data/time improvements:
+=item * Various date/time improvements:
 
 =over
+
+=item * Option to add periodic dates (esp. by month) to a series of files,
+for example downloaded bank statements that the bank just sends as "statement.pdf".
+Just do in the order specified; that works whether they're in dated folders
+(those could also be done via --pull), or all in one with OS-generated
+names like "foo copy 5.pdf". E.g.:
+    renameFiles --startMonth 2022-03 ./bankOfSumeria/statement*.pdf
 
 =item * Add generality of C<strftime> and C<PowerStat.py> to
 format inserted dates and C<stat> items.

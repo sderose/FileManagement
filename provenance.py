@@ -28,7 +28,7 @@ __metadata__ = {
     "type"         : "http://purl.org/dc/dcmitype/Software",
     "language"     : "Python 3.7",
     "created"      : "2021-04-27",
-    "modified"     : "2021-06-14",
+    "modified"     : "2023-11-23",
     "publisher"    : "http://github.com/sderose",
     "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
@@ -205,7 +205,7 @@ def showPartitions() -> None:
         print("\n*** Disk Partion #%d:" % (i))
 
 def doOneFile(path):
-    print("Unfinished!")
+    print("Unfinished doOneFile(%s)." % (path))
 
 
 ###############################################################################

@@ -11,8 +11,10 @@ from subprocess import check_output, CalledProcessError
 import codecs
 from datetime import datetime
 
+from PowerWalk import PowerWalk
 from alogging import ALogger
 lg = ALogger(1)
+
 
 __metadata__ = {
     "title"        : "setEmailFileTime",
@@ -22,7 +24,7 @@ __metadata__ = {
     "type"         : "http://purl.org/dc/dcmitype/Software",
     "language"     : "Python 3.7",
     "created"      : "2019-03-04",
-    "modified"     : "2021-06-18",
+    "modified"     : "2023-11-23",
     "publisher"    : "http://github.com/sderose",
     "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }

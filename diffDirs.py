@@ -132,7 +132,7 @@ def pcols(theFile, diffInfo, color1="off", width=0, sep="", depth:int=0):
     else:
         msg += theFile.ljust(args.nameWidth)
         msg += diffInfo
-    lg.vMsg(0, msg)
+    lg.info0(msg)
 
 def stat2print(statValue):
     """Create a printable list of permissions flags, like 'ls -l' has.
@@ -165,7 +165,7 @@ def firstMismatch(path1, path2):
     fh2 = codecs.open(path2, 'rb', encoding="utf-8")
     recnum1 = recnum2 = 0
 
-    lg.vMsg(2, "Comparing %s..." % (os.path.basename(path1)))
+    lg.info2("Comparing %s..." % (os.path.basename(path1)))
     while (1):
         rec1, nRecs1 = advanceFile(fh1, recnum1)
         recnum1 += nRecs1
@@ -199,12 +199,12 @@ def advanceFile(fh0, recnum):
         try:
             rec = fh0.readline()
         except UnicodeDecodeError as e:
-            lg.vMsg(0, "Bad data at record %d: %s" % (recnum+nRecsRead, e))
+            lg.info0("Bad data at record %d: %s" % (recnum+nRecsRead, e))
             return None, nRecsRead
         if (rec == ""): break
         nRecsRead += 1
         if (args.tickInterval and (recnum+nRecsRead) % args.tickInterval == 0):
-            lg.vMsg(0, "Record %6d..." % (recnum))
+            lg.info0("Record %6d..." % (recnum))
         if (not ignorableLine(rec)): break
     return rec, nRecsRead
 
@@ -240,26 +240,26 @@ def compareDirs(path1, path2, depth:int=0):
 
     dUnion = sorted(list(set(d1).union(set(d2))))
 
-    lg.vMsg(0, "\n***Comparing directories:")
-    lg.vMsg(0, "    %s\n    %s\n" % (p1, p2))
+    lg.info0("\n***Comparing directories:")
+    lg.info0("    %s\n    %s\n" % (p1, p2))
 
     nSubsDifferent = 0
     differ = 0
     diffLine = ""
     for curName in dUnion:
-        lg.vMsg(1, "Comparing '%s'." % (curName))
+        lg.info1("Comparing '%s'." % (curName))
         file1 = os.path.join(path1, curName)
         file2 = os.path.join(path2, curName)
 
         color = "red"
         if (not os.path.exists(file1)):
-            lg.vMsg(1, "    Missing from dir 1: " + path1)
+            lg.info1("    Missing from dir 1: " + path1)
             total2 += 1
             missing1 += 1
             nSubsDifferent += 1
             sep = ">>ONLY>>"
         elif (not os.path.exists(file2)):
-            lg.vMsg(1, "    Missing from dir 2: " + path1)
+            lg.info1("    Missing from dir 2: " + path1)
             total1 += 1
             missing2 += 1
             nSubsDifferent += 1
@@ -269,17 +269,17 @@ def compareDirs(path1, path2, depth:int=0):
             total2 += 1
             if (os.path.isdir(file1) and os.path.isdir(file2)):
                 if (args.recursive):
-                    lg.vMsg(2, "    Descending into %s/" % (curName))
+                    lg.info2("    Descending into %s/" % (curName))
                     subDiffs = compareDirs(file1, file2, depth=depth+1)
                     if (subDiffs): nSubsDifferent += 1
                 else:
                     uncheckedDirs += 1
             elif (os.path.isdir(file1)):
-                lg.vMsg(0, "Dir/file mismatch: %s and %s" % (file1, file2))
+                lg.info0("Dir/file mismatch: %s and %s" % (file1, file2))
                 nSubsDifferent += 1
                 sep = "DIR--FIL"
             elif (os.path.isdir(file2)):
-                lg.vMsg(0, "File/Dir mismatch: %s and %s" % (file1, file2))
+                lg.info0("File/Dir mismatch: %s and %s" % (file1, file2))
                 nSubsDifferent += 1
                 sep = "FIL--DIR"
             else:
@@ -296,8 +296,8 @@ def compareDirs(path1, path2, depth:int=0):
 
         pcols(curName, diffLine, color1=color, sep=sep, depth=depth)
         if (args.showDiffs):
-            lg.vMsg(0, stat1)
-            lg.vMsg(0, stat2)
+            lg.info0(stat1)
+            lg.info0(stat2)
 
     return nSubsDifferent
 
@@ -357,7 +357,7 @@ def compareFiles(path1, path2, depth:int=0):
             diffLine += " DIFF(line %d vs %d)" % (lineNum1, lineNum2)
             isDifferent = True
             if (args.showLines):
-                lg.vMsg(0, "    < %s\n    > %s" % (rec1, rec2))
+                lg.info0("    < %s\n    > %s" % (rec1, rec2))
     elif (args.diffq):
         cmd = "diff -q '%s' '%s'" % (path1,path2)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
@@ -489,7 +489,7 @@ if __name__ == "__main__":
     lg.setColors(args.color)
 
     if (not (args.size or args.time or args.md5 or args.diff)):
-        lg.vMsg(0, "No file comparisons specified (--size --time --md5 --diff)")
+        lg.info0("No file comparisons specified (--size --time --md5 --diff)")
 
     if ("COLUMNS" in os.environ): wid = os.environ["COLUMNS"]
     else: wid = 80
@@ -500,7 +500,7 @@ if __name__ == "__main__":
     if ("COLUMNS" in os.environ):
         wid = int(os.environ["COLUMNS"])
     else:
-        lg.vMsg(0, "Can't find environment variable COLUMNS -- export it?")
+        lg.info0("Can't find environment variable COLUMNS -- export it?")
         wid = 80
 
     if (len(args.dirs) != 2 or
@@ -512,12 +512,12 @@ if __name__ == "__main__":
 
     if (not args.quiet):
         lg.info("====Done, rc %d." % (rc0))
-        lg.vMsg(1, ("Options: b %s, diff %s, i %s, md5 %s,\n" +
+        lg.info1(("Options: b %s, diff %s, i %s, md5 %s,\n" +
                 "           permissions %s, r %s, size %s, time %s.") %
                 (args.b, args.diff, args.ignoreCase, args.md5,
                  args.permissions, args.recursive, args.size, args.time))
 
-        lg.vMsg(0, "    Dirs: %s\n        %s" % (args.dirs[0],  args.dirs[1]))
+        lg.info0("    Dirs: %s\n        %s" % (args.dirs[0],  args.dirs[1]))
         lg.pline("    Total files from 1:",       total1)
         lg.pline("    Total files from 2:",       total2)
         lg.pline("    Missing from 1:",           missing1)

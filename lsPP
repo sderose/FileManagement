@@ -378,32 +378,9 @@ fileCategories = [
     "video",
 ]
 
-# Examples (Ubuntu)
-"""
-ELF 64-bit LSB  executable, x86-64, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=25a272f6d4d35eee58f4967854b99d7daa0381f6, stripped
 
-ELF 64-bit LSB  shared object, x86-64, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24,
-
-      5 setuid ELF 64-bit LSB  executable, x86-64, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24,
-      1 setuid ELF 64-bit LSB  shared object, x86-64, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24,
-    'ASCII text executable',
-    'UTF-8 Unicode text executable',
-    python 2.7 byte-compiled
-    magic text file for file(1) cmd
-    timezone data, version 2, 4 gmt time flags, 4 std time flags, no leap seconds, 235 transition times, 4 abbreviation chars
-      x86 boot sector
-      MS Windows icon resource - 1 icon
-      gzip compressed data, from Unix, last modified: Mon Oct 10 13:03:09 2016
-      FoxPro FPT, blocks size 0, next free block index 33554432
-Netpbm PPM image text Netpbm PPM image text, size = 232 x 1,
-     1 Netpbm PGM image text, size = 4 x 4,
-     1 Non-ISO extended-ASCII text, with very long lines, with LF, NEL line terminators
-GPG key public ring
-Java Jar file data (zip)
-"""
-
-# These are from the 'file' command, which may be controlled by /etc/magic.
-# They fall under some broad categories. Category names can have various
+# Uses the 'file' command, which may be controlled by /etc/magic.
+# Category names can have various
 # modifiers.... There's no evident grammar.
 #
 fileCommandCategories = {
@@ -481,7 +458,6 @@ fileCommandPrefixes = {
         "PNG",
         "X pixmap",
         "JPEG", ###
-        "PNG", ###
     },
 
 }
