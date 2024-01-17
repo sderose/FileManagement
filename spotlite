@@ -33,7 +33,7 @@ binmode(STDERR,"utf8");
 
 spotlite [options] file
 
-Provide a more memorable interface to Spotlight from the shell.
+Provide a more memorable interface to MacOS Spotlight from the shell.
 
 For example, to find all files anywhere under your home
 directory, that are (a) named exactly "foo" or (b) have names containing
@@ -68,7 +68,7 @@ on them with I<--key>.
 It may be useful to create C<alias>es to search
 using whatever combinations you find most useful.
 
-To see a list of attribute names you can test via I<--key k>, use C<spotlite --list>.
+To see a list of attribute names you can test via I<--key k>, use C<spotlite --listKeys>.
 
 The operators are ==, <, >, <=, >=, ||, and &&.
 
@@ -83,7 +83,7 @@ The operators are ==, <, >, <=, >=, ||, and &&.
   --content s    Search file content for s
   --text s       Synonym for --content
   --key k        Search attribute k (you can omit "kMDItem")
-  --list         Display the list of known keys
+  --listKeys     Display the list of known keys
   --invisible    Also include kMDItemFSInvisible items
 
 =head3 Files to search
@@ -110,8 +110,8 @@ will be searched:
   --age        Show days since last modified
   --date       Show file mod date as yyyy-mm-dd
   --days n     Don't show files unless modified in last n days
-  --list       List keys and values
-  --outline    Show the appicable directory tree, with file-counts
+  --listKeys   List keys and values
+  --outline    Show the applicable directory tree, with file-counts
   --size       Show file size
   --terse      Use ~ and . to shorten output paths
 
@@ -144,7 +144,7 @@ To instead filter out files not modified recently, see I<--days>.
 =item * B<--bak>
 
 Include backup files, which are indicated by
-names with ~, #, .bak, Copy (n) of, Backup (n) of;
+having names with ~, #, .bak, Copy (n) of, Backup (n) of;
 having any ancestor directory whose name contains "BBEdit Backups";
 or having any ancestor directory named C<backups> (ignoring case).
 Default (use I<--nobak> to turn off).
@@ -351,16 +351,16 @@ Mac OS X C<mdfind>, C<mdutil>, C<xattr>, C<mdls>.
 
 =head1 To do
 
-    Add git support, including searching (or not) prior versions, and maybe
-mapping the filenames back from hashes to readables.
-    Color backups in yellow?
+    Add options named the same as the Finder "Find" properties menu
+    Add git support, including searching (or not) prior versions,
+excluding .git/, and maybe mapping the filenames back from hashes to readables
+    Colorize backups in yellow?
     Don't break out single-digit mail subdirs?
-    or perhaps, any dir w/ same number of files as child?
-    Support Spotlight operators
-    --count, --live, --interpret -- as for mdfind.
+    Support more Spotlight operators
+    --count, --live, --interpret -- as for mdfind
     --path, --links, interface to diff
-    option to write output as HTML expandable outline and send to browser
-    option to move, copy, or link all found files
+    Option to write output as HTML expandable outline and send to browser
+    Option to move, copy, or link all found files
     Add some env variables for BACKUPPATH, MAILPATH, etc?
 
 
@@ -550,7 +550,7 @@ if (!scalar(@files)) {
 
 if ($outline && !$quiet) {
     print "\n======= File system path outline =======\n";
-    printPathOUtline();
+    printPathOutline();
 }
 
 exit;
@@ -638,7 +638,7 @@ sub report {
     } # for
 } # report
 
-
+# Arrange items into a multi-column list similar to 'ls'.
 sub wrap {
     my ($s, $indent, $width, $breakChar) = @_;
     if (!$width)     { $width = $ENV{COLUMNS} || 80; }
@@ -681,7 +681,6 @@ sub isBackup {
     return(0);
 }
 
-
 BEGIN {
     my $reserved = "#COUNT#";
     my $pathOutline = { $reserved=>0 };
@@ -702,11 +701,11 @@ BEGIN {
         $curNode->{$reserved}++;
     }
 
-    sub printPathOUtline {
-        printPathOUtlineR(0, "", $pathOutline);
+    sub printPathOutline {
+        printPathOutlineR(0, "", $pathOutline);
     }
 
-    sub printPathOUtlineR {
+    sub printPathOutlineR {
         my ($depth, $label, $node) = @_;
         my $pbuf = ($iString x $depth) .
             sprintf("%4d ", $node->{$reserved}) .
@@ -714,7 +713,7 @@ BEGIN {
         print $pbuf . "\n";
         for my $sub (sort(keys(%{$node}))) {
             next if ($sub eq $reserved);
-            printPathOUtlineR($depth+1, $sub, $node->{$sub});
+            printPathOutlineR($depth+1, $sub, $node->{$sub});
         }
     }
 } # END
