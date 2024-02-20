@@ -20,7 +20,7 @@ def info1(msg:str) -> None:
     if (args.verbose >= 1): lg.info(msg)
 def info2(msg:str) -> None:
     if (args.verbose >= 2): lg.info(msg)
-def fatal(msg:str) -> None: 
+def fatal(msg:str) -> None:
     lg.critical(msg); sys.exit()
 
 
@@ -41,7 +41,7 @@ __version__ = __metadata__["modified"]
 descr = """
 =Name=
     """ +__metadata__["title"] + ": " + __metadata__["description"] + """
-    
+
 =Description=
 
 Generate random data.
@@ -64,7 +64,7 @@ programs, or pages owned by the file system or paging system itself, etc.
 
 Well-known but old methods that
 do many alternating writes were designed to be secures across many types of
-disks, including very old ones (with very big bits). These are probably 
+disks, including very old ones (with very big bits). These are probably
 overkill for modern disks, which have much smaller bits for which "echoes" of
 prior write are much harder to detect.
 
@@ -79,8 +79,8 @@ The most important options are:
 * ''--fill'' to keep writing until all available space has been filled
 * ''--clear'' so the filled areas are freed again at the end
 * ''--pattern''to choose what kind of data to write:
-    all 0-bits, 
-    all 1-bits, 
+    all 0-bits,
+    all 1-bits,
     alternating 0 and 1 bits
     alternating 0 and 255 bytes
     lorem ipsum plain text
@@ -118,8 +118,6 @@ or [https://github.com/sderose].
 =Options=
 """
 
-# See sjdUtils.py.
-#
 lorem = "".join([
     "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do ",
      "eiusmod tempor incididunt ut labore et dolore magna aliqua. ",
@@ -163,7 +161,7 @@ letterFreqs = [ # Rough, from Wikipedia
     ('q',      95),
     ('z',      74),
   ]
-  
+
 def randomText1( n:int):
     """Pick characters in accord w/ English first-order frequencies.
     TODO: Swith to GNG data, add punctuation
@@ -209,7 +207,7 @@ def makeRec(n:int, pat:str):
     """
     if (pat == "lorem"):
         return lorem * (n/len(lorem))
-    
+
     buf = ""
     for _i in range(n):
         if(pat == "latin0"):
@@ -217,7 +215,7 @@ def makeRec(n:int, pat:str):
         elif(pat == "english1"):
             buf = randomText1(n)
         #elif(pat == "english2"):
-        #elif(pat == "english3"):    
+        #elif(pat == "english3"):
         else:
             lg.warning("Unexpected pattern choice '%s'.", pat)
             sys.exit()
@@ -234,13 +232,13 @@ def makeReusableBuffer(n:int, pat:str) -> (str, bool):
     elif(pat == "lorem"):      return "0" * n
     return None
 
-                
+
 ###############################################################################
 # Main
 #
 if __name__ == "__main__":
     dftTarget = "/tmp/randomFill.data"
-    
+
     import argparse
     def anyInt(x:str) -> int:
         return int(x, 0)
@@ -257,7 +255,7 @@ if __name__ == "__main__":
             "--fill", action="store_true",
             help="Keep writing until there's no more space.")
         parser.add_argument(
-            "--pattern", type=str, choices=[ 
+            "--pattern", type=str, choices=[
                 "ones", "zeros", "altBits", "altBytes", "lorem",
                 "latin0", "english1", "english2", "english3", ],
             help="What kind of data to write.")
@@ -297,9 +295,9 @@ if __name__ == "__main__":
     ###########################################################################
     #
     args = processOptions()
-    
+
     reusableBuffer = makeReusableBuffer(args.recsize, args.pattern)
-    
+
     if (not args.fill and not args.size):
         lg.warning("Must specify --fill or --size N.")
         sys.exit(99)
@@ -311,12 +309,12 @@ if __name__ == "__main__":
     except IOError as e0:
         lg.warning("Could not open utput file '%s':\n    %s", args.target, e0)
         sys.exit(96)
-        
+
     nBytes = writeOneFile(ofh)
     ofh.close()
-    
+
     if (args.clear):
         subprocess.check_output([ "rm", args.target ])
-    
+
     print("Done. %d bytes written." % (nBytes))
-    
+
