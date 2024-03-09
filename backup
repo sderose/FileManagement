@@ -25,15 +25,25 @@ our $VERSION_DATE = $metadata{"modified"};
 
 =head1 Usage
 
+backup --fetch "*xxx*"
+
+    Search for and report backup files containing the given string xxx.
+Uses C<find -name>, and looks under:
+    * $BACKUP_DIR (which is where C<backup> puts new backups)
+    * BBEdit Backups (in case you use that editor)
+    * Any directories listed in environment variable $BACKUPPATH
+
+It's generally good to include "*" on each end, since various copying tools may
+extend names (for example prefixing "copy 3 of " or suffixing " back 2" or a date).
+
 backup [options] files
 
-Copy file(s) to a time-stamped subdirectory under I<$BACKUP_DIR>.
-
+    Copy file(s) to a time-stamped subdirectory under I<$BACKUP_DIR>.
 If environment variable I<$BACKUP_DIR> is not set, the backups are
 created under I<\$HOME/backups>.
 
-Each use of this command makes a new directory, named with a timestamp.
-The requested I<files> are copied there, along with a note file
+Each backup makes a new directory, named with a timestamp.
+The requested I<files> (and/or directories) are copied there, along with a note
 (named I<_backup_note.txt> by default).
 The note file contains the time of the backup, the original command used,
 the path of the working directory at the time, the hostname,
@@ -43,6 +53,9 @@ The backup subdirectories are organized by year and month, for example:
 
     ~/Documents/BACKUPS/2013/2013-10/2013-10-03T11.09.29/
 
+Clean up the backup area once in a while, for example by
+deleting the directories for old enough years or months.
+
 Options can be specified for the C<cp> command via the I<--cpOptions> option.
 
 To retrieve all backed-up versions of a given filename, do:
@@ -51,9 +64,11 @@ To retrieve all backed-up versions of a given filename, do:
 This will generate a list of the full paths. Send that list to I<cp> or I<ls -l> or
 whatever, like this ([filename] may include glob characters as for I<find>):
     ls -l `backup --fetch [filename]`
-    
-If you're a BBEdit user, you can use I<--bbopen> to open the BBEDIT backup directory,
-rather than using the menus in the app.
+
+If you're a BBEdit user, I<--fetch> will also check under the BBEdit Document Backups
+folder. Also, you can use I<--bbopen> to open the BBEDIT backup directory,
+rather than using the "BBEdit/Folders/Document Backups" menu item in the app.
+As of this writing, that folder is $HOME/Library/Application Support/BBEdit/BBEdit Backups/
 
 
 =head1 Options
@@ -83,7 +98,9 @@ actually copy anything. At present, however, the target directory is still creat
 =item * B<--fetch>
 
 Display a list of all the backup files matching the given filename (which may include
-glob characters as for the I<find> command).
+glob characters as for the I<find> command). This uses C<find> on C<backup>'s
+target (typically \$BACKUP_DIR), any directories listed in \$BACKUPPATH,
+and (if it exists) the BBEdit Backups directory.
 
 =item * B<--gitdiff>
 
@@ -125,10 +142,10 @@ Show version info and exit.
 
 =head1 Related Commands
 
-BBEdit can be set to make backups whenever you save, but they go into a "BBEdit Backups" 
+BBEdit can be set to make backups whenever you save, but they go into a "BBEdit Backups"
 folder that you wouldn't normally see (including via Spotlight search).
-It lives in BBEdit's sandbox container, within the "Documents" folder. 
-See the BBEdit application menu, "Folders", "Document Backups"
+It lives in BBEdit's sandbox container, within the "Documents" folder.
+See the BBEdit application menu, "Folders", "Document Backups".
 
 =head1 Known Bugs and Limitations
 
@@ -150,7 +167,7 @@ a given date, etc.
 Esp. for rsync, support remote destination.
     * Add --warn-extension and/or --exclude?
     * Add option to choose whether/where to create the 'latest' symlink.
-    
+
 
 =head1 History
 
@@ -167,7 +184,8 @@ Esp. for rsync, support remote destination.
     2022-05-09: Actually implement dry-run.
     2022-07-25f: Add --noteFile option, --list. Fix some messages.
     2023-10-04: Add --bbopen, --fetch.
-   
+    2024-03-08: Make --fetch also check BBEdit Backups and $BACKUPPATH.
+
 
 =head1 Rights
 
@@ -186,6 +204,7 @@ L<https://github.com/sderose>.
 ###############################################################################
 # Options
 #
+my $bbeditBackupDir = $ENV{HOME} . "/Library/Application Support/BBEdit/BBEdit Backups";
 my $bbopen    = 0;
 my $bdir = $ENV{BACKUP_DIR} || "$ENV{HOME}/backups";
 my $cpOptions = '-a';
@@ -203,7 +222,7 @@ my %getoptHash = (
     "bdir=s"          => \$bdir,
     "cpOptions=s"     => \$cpOptions,
     "dryRun|dry-run!" => \$dryRun,
-    "fetch!"          => \$fetch,
+    "fetch|find!"     => \$fetch,
     "gitdiff!"        => \$gitdiff,
     "h|help"          => sub {
         system "perldoc $0";
@@ -223,13 +242,12 @@ Getopt::Long::Configure ("ignore_case");
 GetOptions(%getoptHash) || die "Bad options.\n";
 
 if ($bbopen) {
-    my $bbd = $ENV{HOME} . "/Library/Application Support/BBEdit/BBEdit Backups";
-    if (-d "$bbd") {
-        ($quiet) || print "Opening directory: $bbd\n";
-        system "open '$bbd'";
+    if (-d "$bbeditBackupDir") {
+        ($quiet) || print "Opening BBEdit backup directory: $bbeditBackupDir\n";
+        system "open '$bbeditBackupDir'";
     }
     else {
-        warn "No such directory: $bbd.\n";
+        warn "BBEdit backup directory not found at $bbeditBackupDir.\n";
     }
     exit;
 }
@@ -245,8 +263,17 @@ if ($bbopen) {
 ###############################################################################
 # Main
 #
+my @BDIRS = ();
+if ($ENV{BACKUPPATH}) { @BDIRS = split(":", $ENV{BACKUPPATH}); }
+if (-d "$bbeditBackupDir") { push(@BDIRS, $bbeditBackupDir); }
+
 if ($fetch) {
     system "find '$bdir' -name '$ARGV[0]'";
+    foreach my $bdir (@BDIRS) {
+        (-d "$bdir") || next;
+        print "*** Checking under $bdir\n";
+        system "find '$bdir' -name '$ARGV[0]' | sed 's|$bdir|    |'";
+    }
     exit;
 }
 
@@ -259,14 +286,14 @@ if ($list) {
     }
     exit;
 }
-    
+
 for my $f (@ARGV) {
     chomp $f;
     if (!-e $f) {
         warn "'$f' not found!\n";
     }
     elsif (-d $f && $cpOptions !~ m/-r/) {
-        ($verbose) && warn 
+        ($verbose) && warn
             "'$f' is a directory, and you didn't specify '-r' in --cpOptions.\n";
     }
 }
@@ -317,7 +344,7 @@ else {
     my $cmd = "cp $cpOptions $qArgs $subdir/";
     ($verbose) && warn "Running: $cmd\n";
     system $cmd || die "*** BACKUP FAILED ***\n";
-    
+
     # Make a convenient link from 'latest'
     my $link = "$bdir/latest";
     if (-e $link) { system "rm $link"; }
@@ -331,7 +358,7 @@ exit;
 # Generate a note, to preserve source path and other state info:
 #
 sub makeNote {
-    my ($date, $args, $message) = @_;   
+    my ($date, $args, $message) = @_;
     my $host = `hostname`;
     my $note = qq@
     Time was:
@@ -343,7 +370,7 @@ sub makeNote {
     PWD at the time was:
         $ENV{PWD}
     @;
-    
+
     my $gitRoot = `git rev-parse --show-toplevel 2>/dev/null`;
     if ($? == 128) {
         $gitRoot = "[not in a git repo]";
@@ -354,7 +381,7 @@ sub makeNote {
     else {
         $gitRoot .= "\n" . `git log -n 1`;
         if ($gitdiff) { $gitRoot .=  `git diff --stat`; }
-    }    
+    }
     $note .= "Git repo:\n        $gitRoot\n";
 
     if ($message) { $note .= "Message:\n    $message\n"; }

@@ -3,7 +3,6 @@
 # randomFill.py: Fill space with random data.
 # 2022-03-18: Written by Steven J. DeRose.
 #
-from __future__ import print_function
 import sys
 import os
 import codecs

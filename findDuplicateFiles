@@ -3,7 +3,6 @@
 # findDuplicateFiles: "Scan directory subtrees for duplicate files."
 # 2014-09-12: Written by Steven J. DeRose.
 #
-from __future__ import print_function
 import sys
 import os
 import re
@@ -163,56 +162,56 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--checksum",         action="store_true",
+            "--checksum", action="store_true",
             help="Calculate a checksum and compare.")
         parser.add_argument(
-            "--color",            action="store_true",
+            "--color", action="store_true",
             help="Colorize the output.")
         parser.add_argument(
-            "--nocolor",          action="store_false", dest="color",
+            "--nocolor", action="store_false", dest="color",
             help="Turn off colorizing.")
         parser.add_argument(
-            "--hidden",           action="store_true",
+            "--hidden", action="store_true",
             help='Include files/dirs whose names start with ".".')
         parser.add_argument(
-            "--iencoding",        type=str, metavar="E",
+            "--iencoding", type=str, metavar="E",
             help="Assume this character set for input files.")
         parser.add_argument(
             "--ignoreCase", "-i", action="store_true",
             help="Disregard case distinctions.")
         parser.add_argument(
-            "--minDups",          type=int, default=2,
+            "--minDups", type=int, default=2,
             help="Only report sets with more than this many duplicates.")
         parser.add_argument(
-            "--normalize",        action="store_true",
+            "--normalize", action="store_true",
             help="Ignore copy 4 of, Backup of backup of, ~, #, .bak. etc.")
         parser.add_argument(
-            "--ndates",           action="store_true",
+            "--ndates", action="store_true",
             help="Ignore date and time fields in names.")
         parser.add_argument(
-            "--nextensions",      action="store_true",
+            "--nextensions", action="store_true",
             help="Ignore differences like .jpeg/.jpg, .html/.htm.")
         parser.add_argument(
-            "--nserials",         action="store_true",
+            "--nserials", action="store_true",
             help="Ignore trailing numbers before an extension.")
         parser.add_argument(
-            "--oencoding",        type=str, metavar="E",
+            "--oencoding", type=str, metavar="E",
             help="Assume this character set for output files.")
         parser.add_argument(
-            "--quiet", "-q",      action="store_true",
+            "--quiet", "-q", action="store_true",
             help="Suppress most messages.")
         parser.add_argument(
-            "--unicode",          action="store_const",  dest="iencoding",
+            "--unicode", action="store_const", dest="iencoding",
             const="utf8", help="Assume utf-8 for input files.")
         parser.add_argument(
-            "--verbose", "-v",    action="count",       default=0,
+            "--verbose", "-v", action="count", default=0,
             help="Add more messages (repeatable).")
         parser.add_argument(
             "--version", action="version", version="Version of "+__version__,
             help="Display version information, then exit.")
 
         parser.add_argument(
-            "files",             type=str,
+            "files", type=str,
             nargs=argparse.REMAINDER,
             help="Path(s) to input file(s)")
 

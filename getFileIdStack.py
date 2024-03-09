@@ -3,7 +3,6 @@
 # getFileIdStack.py: Show inode, partition id, volume id, etc.
 # 2021-06-14: Written by Steven J. DeRose.
 #
-from __future__ import print_function
 import sys
 import os
 import re
