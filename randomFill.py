@@ -13,16 +13,6 @@ from typing import IO
 import logging
 lg = logging.getLogger("randomFill.py")
 
-def info0(msg:str) -> None:
-    if (args.verbose >= 0): lg.info(msg)
-def info1(msg:str) -> None:
-    if (args.verbose >= 1): lg.info(msg)
-def info2(msg:str) -> None:
-    if (args.verbose >= 2): lg.info(msg)
-def fatal(msg:str) -> None:
-    lg.critical(msg); sys.exit()
-
-
 __metadata__ = {
     "title"        : "randomFill",
     "description"  : "Fill space with random data.",
@@ -316,4 +306,3 @@ if __name__ == "__main__":
         subprocess.check_output([ "rm", args.target ])
 
     print("Done. %d bytes written." % (nBytes))
-

@@ -16,16 +16,16 @@ import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
 __metadata__ = {
-    'title'        : "checkSumDirs",
-    'description'  : "Run a checksum on a directory or tree.",
-    'rightsHolder' : "Steven J. DeRose",
-    'creator'      : "http://viaf.org/viaf/50334488",
-    'type'         : "http://purl.org/dc/dcmitype/Software",
-    'language'     : "Python 3.7",
-    'created'      : "2020-05-09",
-    'modified'     : "2020-08-08",
-    'publisher'    : "http://github.com/sderose",
-    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
+    "title"        : "checkSumDirs",
+    "description"  : "Run a checksum on a directory or tree.",
+    "rightsHolder" : "Steven J. DeRose",
+    "creator"      : "http://viaf.org/viaf/50334488",
+    "type"         : "http://purl.org/dc/dcmitype/Software",
+    "language"     : "Python 3.7",
+    "created"      : "2020-05-09",
+    "modified"     : "2020-08-08",
+    "publisher"    : "http://github.com/sderose",
+    "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
 __version__ = __metadata__['modified']
 
