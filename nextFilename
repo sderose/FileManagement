@@ -7,20 +7,19 @@ import sys
 import os
 import re
 import argparse
-#import string
 from collections import defaultdict
 
 __metadata__ = {
-    'title'        : "nextFilename",
+    "title"        : "nextFilename",
     "description"  : "Find the next available serial-numbered filename.",
-    'rightsHolder' : "Steven J. DeRose",
-    'creator'      : "http://viaf.org/viaf/50334488",
-    'type'         : "http://purl.org/dc/dcmitype/Software",
-    'language'     : "Python 3.7",
-    'created'      : "2014-11-04",
-    'modified'     : "2022-04-27",
-    'publisher'    : "http://github.com/sderose",
-    'license'      : "https://creativecommons.org/licenses/by-sa/3.0/"
+    "rightsHolder" : "Steven J. DeRose",
+    "creator"      : "http://viaf.org/viaf/50334488",
+    "type"         : "http://purl.org/dc/dcmitype/Software",
+    "language"     : "Python 3.7",
+    "created"      : "2014-11-04",
+    "modified"     : "2022-04-27",
+    "publisher"    : "http://github.com/sderose",
+    "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
 __version__ = __metadata__['modified']
 
@@ -33,24 +32,24 @@ by using (or adding) serial numbers within the name. For example,
 
     nextFilename myFile0205.txt
 
-would return "myFile0206.txt". 
+would return "myFile0206.txt".
 
 * By default, neither the mentioned file nor the
 constructed incremental file needs to exist or not exist.
 * Generated numbers are padded to at least `--width` digits.
 * If there are no digits in a supplied filename, 1 (as padded) is appended
-immediately preceding the extension (if any). 
+immediately preceding the extension (if any).
 * If there are noncontiguous digits, the last sequence is used.
 * If there are leading path components, they are retained.
 
 To get the next `available` filename,
 use `--mustBeAvailable` (or either of the synonyms `--available` or `-a`).
 In that case, if the file named by the argument does not exist, that name is returned
-unchanged. Otherwise, the first natural number is used that yields 
-a filename that does not represent an extant file. 
+unchanged. Otherwise, the first natural number is used that yields
+a filename that does not represent an extant file.
 
-''Note'': A reasonable alternative is 
-to want the number one past the highest one that does exist. That is not yet 
+''Note'': A reasonable alternative is
+to want the number one past the highest one that does exist. That is not yet
 implemented.
 
 ==Number padding==
@@ -60,7 +59,7 @@ if there are no digits already present. That means that
 
     nextFilename myFile205.txt
 
-will also return "myFile0206.txt" (note the added "0"). 
+will also return "myFile0206.txt" (note the added "0").
 For testing existence, "myFile205.txt" does not
 (yet, at least) block the script from returning "myFile0205.txt", because they are
 not properly "the same filename" (at least for any OS I can think of).
@@ -132,7 +131,7 @@ contains more than about 1,000 files (see `bigDirTimer` to test yours).
 * 2020-09-15: New layout. Default to test existence.
 * 2022-04-27: Improve help. Better handling of --available. Start smarter
 handling of varying widths, numbering gaps, etc.
-* 2022-07-13: Improve help, describe various edge cases. Fix bug that 
+* 2022-07-13: Improve help, describe various edge cases. Fix bug that
 prepended "/" even when there was no prior path. Add type hinting.
 
 
@@ -154,8 +153,8 @@ or [https://github.com/sderose].
 ###############################################################################
 #
 def getNumberedFiles(orig:str) -> (int, list, list):
-    """Locate all filenames in the directory that differ from the given 
-    one only in the last set of digits (immediately before the extension). 
+    """Locate all filenames in the directory that differ from the given
+    one only in the last set of digits (immediately before the extension).
     Return the maximum integer value found for those numbers, the list of
     names, and a histogram of widths (hopefully there's only one width).
     """
@@ -164,7 +163,7 @@ def getNumberedFiles(orig:str) -> (int, list, list):
     if (not re.match(r"\d", nam)):
         sys.stderr.write("No digits found in '%s'." % (nam))
         return None
-    
+
     widths = defaultdict(int)
     nameList = []
     maxValue = 0
@@ -178,7 +177,7 @@ def getNumberedFiles(orig:str) -> (int, list, list):
             numValue = int(numPart)
             if (numValue > maxValue): maxValue = numValue
     return maxValue, nameList, widths
-    
+
 def getNewPath(orig:str, mustBeAvailable:bool=True, maxTries:int=100) -> str:
     """Split up the path, then try numbers as long as needed.
     Return the end result.

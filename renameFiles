@@ -292,6 +292,10 @@ go over 255, in which case copying to ext4 seems to fail.
 Overwrite conflicting output files with prejudice. Experimental.
 This is not intended to overwrite output directories.
 
+=item * B<--gitMoves>
+
+Do "git move" instead of regular mv.
+
 =item * B<--ignoreCase> OR I<-i>
 
 Add the "i" option to the regex change specified by I<--expr>,
@@ -435,9 +439,9 @@ See also I<--addExtension> and I<--extChanges>.
 
 =head1 Known bugs and limitations
 
-Add a conflict resolution suffix for case-insensitive file systems if the rename
-only changes case (and thus looks different to the code, but not to a case-insensitive
-filesystem).
+Add a conflict resolution suffix for case-insensitive file systems if the
+rename only changes case (and thus looks different to the code, but not to a
+case-insensitive filesystem).
 
 I<--filesystem> is unfinished.
 
@@ -586,8 +590,6 @@ PyPDF2, cb2bib, TET, Cermine.
 
 =item * checksum of the file
 
-=back
-
 =item * C<--clean> should also do C<--addExtension> 'txt' (for non-dirs).
 
 =item * Feature to increment, or make contiguous, numeric portions of filenames?
@@ -602,7 +604,6 @@ Cf C<nextFilename>.
 =item * Unicode issues, esp nbsp with C<--dates>.
 
 =item * "To" vs "_to_" vs "2"?
-
 
 =item * Various date/time improvements:
 
@@ -625,8 +626,6 @@ format inserted dates and C<stat> items.
 =item * Add times and datetimes to C<--addstat>.
 
 =item * Option to extract MIME "Date:" from .eml files.
-
-=back
 
 =back
 
@@ -1024,6 +1023,7 @@ my $ePadChar        = "0";
 my $extChanges      = 0;
 my $filesystem      = '';
 my $force           = 0;
+my $gitMoves        = 0;
 my $ignoreCase      = 0;
 my $xattrAdd        = "";
 my $lc              = 0;
@@ -1074,6 +1074,7 @@ my %getOptHash = (
     "extChanges|extensions!" => \$extChanges,
     "filesystem=s"     => \$filesystem,
     "force!"           => \$force,
+    "gitMoves!"        => \$gitMoves,
     "h|help"           => sub { system "perldoc $0"; exit; },
     "help-filesystem"  => sub {
         warn "File system properties:\n";

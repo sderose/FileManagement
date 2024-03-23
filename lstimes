@@ -25,7 +25,7 @@ __metadata__ = {
 __version__ = __metadata__["modified"]
 
 
-descr="""
+descr = """
 =Description=
 
 UNFINISHED
@@ -75,7 +75,7 @@ def warn(lvl, msg):
 
 def convTime(epochTime):
     return time.ctime(epochTime)
-    
+
 # Format is a list of tuples of (fieldName, displayName, sprintfCode).
 #
 scode = "%30s"
@@ -107,8 +107,8 @@ def formatInfo(theDict, theFormat):
             if (args.convert and conv is not None): fieldValue = conv(fieldValue)
         buf += thisFmt % (displayName, fieldValue)
     return buf
-    
-    
+
+
 ###############################################################################
 #
 def tryOneItem(path, theFormat):
