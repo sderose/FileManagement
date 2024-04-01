@@ -25,7 +25,7 @@ use Cwd "abs_path";
 (my $thisPath = abs_path($0)) =~ s|/[^/]*$||;
 # Used to keep keys in: $ENV{HOME}/bin/tupleSets/
 
-binmode(STDERR,"utf8");
+binmode(STDERR, ":encoding(utf8)");
 
 =pod
 
