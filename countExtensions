@@ -14,8 +14,9 @@ fi
 command ls -R |\
     grep -v ':$' |\
     sed 's/^.*\///' |\
-    grep '\.' |\
+    grep -E '\.[a-zA-Z][.a-zA-Z0-9_]{0,12}$' |\
     sed 's/^.*\././' |\
+    grep -v '[^.a-zA-Z0-9_]' |\
     sort |\
     uniq -c |\
     sort -rn

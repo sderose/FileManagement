@@ -629,6 +629,8 @@ format inserted dates and C<stat> items.
 
 =back
 
+=back
+
 
 =head1 History
 
@@ -1834,24 +1836,33 @@ sub insertBeforeExtension {
 # Make a hash that maps extensions to their preferred form (unused).
 #     docx docm dotm dotx potm potx ppsm ppsx pptm pptx sldm sldx
 #     xlsb xlsm xlsx xltm xltx
+#     emlx mbox mail epub icns
+#     sfil webp itdb plist gzip yaml
+#     prop (github stuff)
+#     make scad java data sexp perl
 #
 sub makeExtensionMap {
     %extensionMap = ( # All lower case!
+        # Image
         "aiff"   => "aif",
-        "gml"    => "sgm",
-        "html"   => "htm",
         "jpeg"   => "jpg",
-        "mime"   => "mim",
         "moov"   => "mov",
         "mpeg"   => "mpg",
         "pict"   => "pct",
-        "sgml"   => "sgm",
-        "text"   => "txt",
         "tiff"   => "tif",
+        # Audio
         "wave"   => "wav",
+        # Markup
+        "gml"    => "sgm",
+        "html"   => "htm",
+        "sgml"   => "sgm",
         "xhtm"   => "xht",
         "xhtml"  => "xht",
         "xslt"   => "xsl",
+        # Other
+        "mime"   => "mim",
+        "text"   => "txt",
+        "json"   => "jsn",
         );
 }
 
