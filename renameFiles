@@ -128,7 +128,7 @@ See also I<--extChanges>.
 Prefix a piece of file-system information (from C<stat>) to the filename.
 For example, specify I<mtime> or I<9> to insert the modification date
 of the file (see the following list).
-Times will be converted to dates in yyyy-mm-dd form
+Times are converted to dates in yyyy-mm-dd form
 (time and datetime will likely be added as well).
 See also I<--dates>, which can be used to normalize date formats in filenames.
 
@@ -172,7 +172,7 @@ See also I<--camelize>.
 
 Remove whitespace runs from names, but capitalize the character following each.
 For example, "Todays news headlines" becomes "TodaysNewsHeadlines".
-If you also specify I<--lc>, I<--lc> will be done first.
+If you also specify I<--lc>, I<--lc> is done first.
 See also I<--bactrianize>.
 
 =item * B<--clean>
@@ -259,7 +259,7 @@ With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
 =item * B<--expr> I<'s/lhs/rhs/'> OR B<-e> I<'s/lhs/rhs/'>
 
 Apply the given regex to filenames (several example are given near the start of
-this help). All matches will be changed, not just the first.
+this help). All matches are changed, not just the first.
 
 This uses PERL regexes, and respects the I<--ignorecase> option.
 To use a capture, use $1 etc. on the right-hand side, not \\1.
@@ -332,8 +332,7 @@ Experimental. See also I<--extChanges>.
 =item * B<--pad> I<num>
 
 With I<--resolve>, left-pad the number to a minimum of I<num> digits.
-In case of name conflicts, padded numbers will be tried,
-from 0 up to 10**I<num>.
+In case of name conflicts, padded numbers are tried, from 0 up to 10**I<num>.
 If no filename in that range is available, the rename fails.
 
 <Note>: See also I<--ePad>, to pad the "to" side of an I<--expr> change.
@@ -371,7 +370,7 @@ obtained via the C<xattrs> command).
 Then add the names of the last I<n> directories from the URI (assuming
 it's a directory-style URI) into the filename proper
 (see also I<--ancestor> and I<--pull>, and the C<whereFrom> command).
-The directory names will be separated by the I<--separator> value
+The directory names are separated by the I<--separator> value
 (since a literal "/" would be at least inconvenient).
 
 =item * B<--quiet> OR B<-q>
