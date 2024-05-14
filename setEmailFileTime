@@ -4,16 +4,15 @@
 # to match the MIME header "Date:" field.
 # 2019-03-04: Written by Steven J. DeRose.
 #
-#import sys
 import argparse
 import re
 from subprocess import check_output, CalledProcessError
 import codecs
 from datetime import datetime
+import logging
 
 from PowerWalk import PowerWalk
-from alogging import ALogger
-lg = ALogger(1)
+lg = logging.getLogger()
 
 
 __metadata__ = {
@@ -24,7 +23,7 @@ __metadata__ = {
     "type"         : "http://purl.org/dc/dcmitype/Software",
     "language"     : "Python 3.7",
     "created"      : "2019-03-04",
-    "modified"     : "2023-11-23",
+    "modified"     : "2024-05-14",
     "publisher"    : "http://github.com/sderose",
     "license"      : "https://creativecommons.org/licenses/by-sa/3.0/"
 }
@@ -135,20 +134,20 @@ def doOneFile(path:str) -> None:
     try:
         dtObject = datetime.strptime(dateValue)
     except ValueError as e:
-        lg.error(0, "Unparseable time '%s':\n    %s" % (dateValue, e))
+        lg.error("Unparseable time '%s':\n    %s", dateValue, e)
 
     # Format the time to what `touch` wants
     try:
         ftime = dtObject.strftime(touchTimeFormat)
     except ValueError as e:
-        lg.warning(0, "strftime could not convert to format '%s':\n    %s" %
-            (touchTimeFormat, e))
+        lg.warning("strftime could not convert to format '%s':\n    %s",
+            touchTimeFormat, e)
 
     if (not args.dry_run):
         try:
             check_output([ 'touch', '-mt', '%s' % (ftime) ])
         except CalledProcessError as e:
-            lg.warning(0, "`touch -mt %s` failed:\n    %s" % (ftime, e))
+            lg.warning("`touch -mt %s` failed:\n    %s", ftime, e)
 
 
 ###############################################################################
@@ -203,7 +202,7 @@ if __name__ == "__main__":
     else:
         depth = 0
         pw = PowerWalk(args.files)
-        pw.setOptionsFromArgparse(args)
+        pw.applyOptionsFromArgparse(args)
         for path0 in args.files:
             fh0 = codecs.open(path0, "rb", encoding=args.iencoding)
             doOneFile(path0)

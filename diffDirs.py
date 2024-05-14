@@ -296,11 +296,11 @@ def compareDirs(path1, path2, depth:int=0):
                     if (not args.report_identical_files): return nSubsDifferent
                     color = "green"
                     sep = "      "
+                if (args.showDiffs):
+                    lg.info(stat1)
+                    lg.info(stat2)
 
         pcols(curName, diffLine, color1=color, sep=sep, depth=depth)
-        if (args.showDiffs):
-            lg.info(stat1)
-            lg.info(stat2)
 
     return nSubsDifferent
 

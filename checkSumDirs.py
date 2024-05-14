@@ -131,9 +131,8 @@ or [http://github.com/sderose>].
 =Options=
 """
 
-def warn(lvl, msg):
-    if (args.verbose>=lvl): sys.stderr.write(msg + "\n")
-    if (lvl<0): sys.exit()
+def warning(msg):
+    sys.stderr.write(msg + "\n")
 
 
 ###############################################################################
@@ -249,10 +248,10 @@ def getVolumeID(path):
     from subprocess import check_output
 
     resp = check_output([ 'diskutil', 'list', '-plist' ])
-    warn(2, "resp: %s" % (resp.decode(encoding="utf-8")))
+    warning("resp: %s" % (resp.decode(encoding="utf-8")))
     data = plistlib.loads(resp)
     diskNames = data['WholeDisks']  # ['disk0', 'disk1', 'disk2']
-    warn(1, "Disk names: %s" % (diskNames))
+    warning("Disk names: %s" % (diskNames))
 
     allDAP = data['AllDisksAndPartitions']
     assert len(diskNames) == len(allDAP)
@@ -260,7 +259,7 @@ def getVolumeID(path):
     theVolumeID = None
     for diskInfo in allDAP:
         devID = diskInfo['DeviceIdentifier']
-        warn(1, "Disk, devID '%s'" % (devID))
+        warning("Disk, devID '%s'" % (devID))
         parts = diskInfo['Partitions']
         for part in parts:
             # part should be like: {
@@ -273,18 +272,18 @@ def getVolumeID(path):
             #   'MountPoint': '/System/Volumes/Data'  # Only if mounted
             # }
             if ('VolumeName' in part):
-                warn(1, "    VolumeUUID '%s'" % (part['VolumeUUID']))
+                warning("    VolumeUUID '%s'" % (part['VolumeUUID']))
                 availableID = 'VolumeUUID'
             elif ('DiskUUID' in part):
-                warn(1, "    DiskUUID '%s'" % (part['DiskUUID']))
+                warning("    DiskUUID '%s'" % (part['DiskUUID']))
                 availableID = 'DiskUUID'
             else:
-                warn(0, "    No VolumeName or DiskUUID in: %s" % (pp.pprint(part)))
+                warning("    No VolumeName or DiskUUID in: %s" % (pp.pprint(part)))
                 continue
             if ('MountPoint' in part):
-                warn(1, "        ==> MountPoint '%s'" % (part['MountPoint']))
+                warning("        ==> MountPoint '%s'" % (part['MountPoint']))
                 if (path.startswith(part['MountPoint'])):
-                    warn(1, "            MATCH: ID '%s'\nfrom:" %
+                    warning("            MATCH: ID '%s'\nfrom:" %
                         (part[availableID]))
                     if (args.verbose): pp.pprint(part)
                     theVolumeID = part[availableID]
@@ -354,7 +353,7 @@ def get_str_digest(s):
 #
 if __name__ == "__main__":
     import argparse
-    
+
     def processOptions():
         try:
             from BlockFormatter import BlockFormatter

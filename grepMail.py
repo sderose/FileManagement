@@ -9,13 +9,17 @@ import codecs
 import re
 import datetime
 import time
+import logging
 from xml.dom import minidom
 from xml.dom.minidom import Node
 from xml.parsers.expat import ExpatError
 
 from PowerWalk import PowerWalk, PWType
-from alogging import ALogger
-lg = ALogger(1)
+lg = logging.getLogger("grepMail")
+
+def fatal(m:str):
+    lg.criticllogginga(m)
+    sys.exit()
 
 __metadata__ = {
     "title"        : "grepMail",
@@ -152,14 +156,6 @@ or [https://github.com/sderose].
 =Options=
 """
 
-def log(lvl, msg):
-    if (args.verbose >= lvl): sys.stderr.write(msg + "\n")
-def warning0(msg): log(0, msg)
-def warning1(msg): log(1, msg)
-def warning2(msg): log(2, msg)
-def fatal(msg): log(0, msg); sys.exit()
-warn = log
-
 # MIME header fields we don't care about.
 # Note: We do all lookups in lower-case in order to ignore case.
 discardList = [
@@ -206,9 +202,9 @@ def readMimeHeader(ifh, path:str, discards=None, discardX=True) -> dict:
         rec = ifh.readline()
         if (re.match(r"\d+\s*$", rec)):  # Apple mail hack
             appleContentSize = int(rec)
-            warning1("Skipped Apple content-size line (%d)." % (appleContentSize))
+            lg.warning("Skipped Apple content-size line (%d).", appleContentSize)
         else:
-            lg.error("Bad first record in .emlx file: '%s'." % (rec))
+            lg.error("Bad first record in .emlx file: '%s'.", rec)
 
     fields = {}
     curKey = ""
@@ -255,14 +251,13 @@ def doOneFile(path:str) -> dict:
     try:
         fh = codecs.open(path, "rb", encoding=args.iencoding)
     except IOError as e:
-        warning0("Cannot open '%s':\n    %s" % (path, e))
+        lg.warning("Cannot open '%s':\n    %s", path, e)
         return 0
 
     fields = readMimeHeader(fh, path, discards=discardList)
     #for k, v in fields.items():
     #    print("Header field '%s' = '%s'" % (k, v))
 
-    #print(lg.formatRec(msgObj))
     if (fails(args.subject, fields, "subject")):
         return None
     if (fails(args.fr, fields, "from")):
@@ -474,7 +469,7 @@ def convertNode(node:Node, depth=0):
             if (dsub.nodeName == "key"):
                 lastKey = dsub.innerText().strip()
                 if (lastKey in rc):
-                    lg.error("Key '%s' already in dict: %s" % (lastKey, repr(dict)))
+                    lg.error("Key '%s' already in dict: %s", lastKey, repr(dict))
             else:
                 datum = convertNode(dsub, depth=depth+1)
                 if datum is not None: rc[lastKey] = datum
@@ -562,7 +557,7 @@ if __name__ == "__main__":
 
     if (not (args.content or args.extension or args.fr or args.maxtime or
         args.mintime or args.recipient or args.subject or args.to)):
-        warning0("No filtering option(s) specified.")
+        lg.warning("No filtering option(s) specified.")
 
     if (not args.extension):
         args.extension = [ "emlx", "mbox", "eml" ]
@@ -582,7 +577,7 @@ if __name__ == "__main__":
         fatal("grepMail.py: No files specified....")
 
     pw = PowerWalk(args.files, open=False, close=False)
-    pw.setOptionsFromArgparse(args)
+    pw.applyOptionsFromArgparse(args)
     pw.setOption("recursive", True)
     pw.setOption("excludeDir", "Attachments")
     pw.setOption("includeExtensions", extensionExpr)
@@ -601,5 +596,5 @@ if __name__ == "__main__":
         print("")
 
     if (not args.quiet):
-        warning0("grepMail.py: Done, %d files, %d hits.\n" %
-            (pw.getStat("regular"), nFound))
+        lg.warning("grepMail.py: Done, %d files, %d hits.\n",
+            pw.getStat("regular"), nFound)
