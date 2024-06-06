@@ -6,6 +6,7 @@
 use strict;
 use Getopt::Long;
 use Encode;
+use POSIX qw(strftime);
 
 use sjdUtils;
 use alogging;
@@ -18,7 +19,7 @@ our %metadata = (
     "type"         => "http://purl.org/dc/dcmitype/Software",
     "language"     => "Perl 5.18",
     "created"      => "2006-12-18",
-    "modified"     => "2022-12-08",
+    "modified"     => "2024-06-05",
     "publisher"    => "http://github.com/sderose",
     "license"      => "https://creativecommons.org/licenses/by-sa/3.0/"
 );
@@ -31,13 +32,18 @@ our $VERSION_DATE = $metadata{"modified"};
 renameFiles [options] [regex] [files]
 
 Apply a regular expression, or any of a range of built-in operations,
-to rename a file(s). Can do systematic
-changes such as imposing or removing camel-case, normalizing date strings,
-moving date strings to the front,
-padding sequence numbers, or inserting the values of various file attributes
+to rename a file(s). Can do systematic changes such as (see below for more):
+
+  * imposing or removing camel or other case patterns,
+  * normalizing date strings,
+  * moving date strings to the front for sortability,
+  * getting rid of unwelcome characters (even by file-system type)
+  * padding sequence numbers,
+  * inserting the values of various file attributes
 (date, owner id, or even the source URI when available) into the name.
 
-If a file is under git control, does "git mv" instead of a regular rename.
+For files under git control, set --gitMoves to check status
+and attempt "git mv" instead of a regular rename. B<EXPERIMENTAL>.
 
 =head2 Examples
 
@@ -97,13 +103,12 @@ I<--onlyExtensions>, I<-x>),
 
 =back
 
-
 =head2 Order of changes
 
-Renaming actions happen in the order:
+Renaming actions happen in the order (listed by option names):
 copies, pull, pullURI, xattrAdd, unescapeURI, lc, uc, bactrianize,
-camelize, addStat, dates, expr, clean. Probably, the easiest way to force a
-different order is to use multiple C<renameFiles> commands.
+camelize, addStat, dates, expr, clean. The easiest way to force a
+different order is probably to use multiple C<renameFiles> commands.
 
 
 =head1 Options
@@ -191,22 +196,34 @@ However, nothing is done to ensure that the editions are numbered in
 order by mod date or some other criterion.
 Experimental.
 
+=item * B<--dateOutput> I<formatString>
+
+Change the format that dates are converted to with I<--dates>.
+Takes an argument of the form expected by I<strftime()> (the code uses
+strftime, and accounts for it wanting 0-based days and 1900-based years).
+Default: "%Y-%m-%d", which produces the ISO 8601 date format (yyyy-mm-dd),
+which sorts right, avoids ambiguity between US and UK forms, etc.
+
 =item * B<--dates>
 
 Notice simple dates embedded in names, change them to yyyy-mm-dd form
-(see ISO 8601), and move
-them to the beginning of the filenames. See also I<--addStat>.
+(see ISO 8601), and move them to the beginning of the filenames. See also I<--addStat>.
 
 The formats recognized include:
-    02/28/1492 (US style, but not European style)
-    Feb. 28, 1492
-    28 Feb 92
-    1492-02-28
-    14920228
+    02/28/1776 (US style (mm/dd/yyyy)
+    Feb. 28, 1776
+    28 Feb 1776
+    1776-02-28
+    1776-02 (day defaults to 1)
+    17760228
+    Feb 1776
+
+To recognize European style (dd/mm/yyyy), set I<--uk>.
 
 All matches must begin and end at word boundaries (regex "\\b").
-Month names must be English, but are recognized spelled out in full or
-abbreviated to 3 characters (or "Sept") with an optional following ".".
+Month names are recognized spelled out in full or
+abbreviated, as set for the current C<locale>. Dots, commas, and the amount and type
+of whitespace can be varied.
 
 =item * B<--dateyears>
 
@@ -294,7 +311,7 @@ This is not intended to overwrite output directories.
 
 =item * B<--gitMoves>
 
-Do "git move" instead of regular mv.
+Do "git move" instead of regular mv. B<EXPERIMENTAL>.
 
 =item * B<--ignoreCase> OR I<-i>
 
@@ -391,7 +408,7 @@ Use I<s> (default "_") in place of any characters to be removed
 by I<--clean>, and to separate directory names prepended to
 the filename by I<--ancestor>, I<--pull>, etc.
 
-=item * B<--test> OR B<--dry-run>
+=item * B<--test> OR B<--dry-run> OR B<--dryrun>
 
 Run through and show what would be done, but don't actually rename anything.
 B<Note>: This is not a perfect test, since actual renaming of early files
@@ -401,6 +418,10 @@ might produce conflicts later (which will not be noticed with I<--test>).
 
 Force filenames entirely to upper-case.
 This does not affect extensions.
+
+=item * B<--uk>
+
+Look for dd/mm/yyyy instead of mm/dd/yyyy.
 
 =item * B<--unescapeURI>
 
@@ -596,7 +617,8 @@ Cf C<nextFilename>.
 
 =item * C<--ePad> only allows I<left> padding at present.
 
-=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead of " "
+=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead
+of " " (can do with a regex change in the meantime).
 
 =item * Make C<--bactrianize> not put space after hyphens.
 
@@ -615,9 +637,6 @@ Just do in the order specified; that works whether they're in dated folders
 names like "foo copy 5.pdf". E.g.:
     renameFiles --startMonth 2022-03 ./bankOfSumeria/statement*.pdf
 
-=item * Add generality of C<strftime> and C<PowerStat.py> to
-format inserted dates and C<stat> items.
-
 =item * Access to additional data to pull into name.
 
 =item * Allow localized date formats and month names, or C<strftime> formats.
@@ -625,6 +644,10 @@ format inserted dates and C<stat> items.
 =item * Add times and datetimes to C<--addstat>.
 
 =item * Option to extract MIME "Date:" from .eml files.
+
+=item * Option to normalize date format without moving to start/end.
+
+=item * Make sure pulling in [abcm]time doesn't duplicate date already present?
 
 =back
 
@@ -716,6 +739,9 @@ But now notices and reports them, at least.
 
 =item * 2022-12-08: Clean up help text and file-system spec table.
 
+=item * 2024-06-05: Improve stat reporting. Drop use of C<versionStatus.py>.
+Make --dateOutput an option, and integrate strftime. Add --dateTest.
+
 =back
 
 
@@ -729,6 +755,7 @@ L<https://creativecommons.org/licenses/by-sa/3.0>.
 For the most recent version, see L<http://www.derose.net/steve/utilities> or
 L<https://github.com/sderose>.
 
+
 =cut
 
 
@@ -736,25 +763,28 @@ L<https://github.com/sderose>.
 # Get month names from locale (see http://perldoc.perl.org/perllocale.html
 # and man(7) strftime (days of week are %a %A)
 #
-my %months = ();
-use POSIX qw(strftime);
+my %monthDict = ();
 for (my $i=0; $i<12; $i++) {
+    # strftime counts months from 0-11, we want 1-12....
     my $m = strftime("%B", 0, 0, 0, 1, $i, 96);  # Full name
-    $months{$m} = $i;
+    $monthDict{$m} = $i + 1;
     $m = strftime("%b", 0, 0, 0, 1, $i, 96);  # Abbreviated name
-    $months{$m} = $i;
+    $monthDict{$m} = $i + 1;
 }
 
-my $monthExpr = join("|", keys(%months));
+my $monthExpr = join("|", keys(%monthDict));
 # Allow for no-break space U+00A0, which is NOT included in \s!
 my $nbsp = chr(0xA0);
 
-my $date1expr = qr/\b([01]\d)([0-3]\d)(\d\d\d\d)\b\s*/;
-my $date2expr = qr/\b($monthExpr)[\s\xA0]*(\d+)[,\s\xA0][\s\xA0]*(\d\d\d\d)\b\s*/;
-#my $date2expr = qr/($monthExpr)[\s\u00A0]*(\d+)[,\s\u00A0][\s\u00a0]*(\d\d\d\d)\b\s*/;
-my $date3expr = qr/\b(\d+ )($monthExpr)\.? (\d{2,4})\b\s*/;
-my $date4expr = qr/\b([12]\d\d\d)-([01]\d)-([0123]\d)\b\s*/;
-my $date5expr = qr/\b([12]\d\d\d)([01]\d)([0123]\d)\b\s*/;
+# TODO: \\b is bad if adjacent char is "_".... neg lookbehind: (?<![\w_])
+# TODO: Accepts mdays like 39, mon like 29, period after full month name,....
+#
+my $date1expr  = qr/\b([01]?\d)\/([0-3]?\d)\/(\d{4})\b/;    # 12/31/1999
+my $dateUKexpr = qr/\b([0-3]\d)\/([01]\d)\/(\d{4})\b/;      # 31/12/1999
+my $date2expr  = qr/\b($monthExpr)\.?[\s\xA0]*([0-3]?\d?)?[,\s\xA0][\s\xA0]*(\d{4})\b/;
+my $date3expr  = qr/\b([0-3]?\d?)[,\s\xA0]($monthExpr)\.? (\d{4})\b/;  # 31 Dec 1999
+my $date4expr  = qr/\b(\d{4})-([01]\d)(?:-([0-3]?\d))?\b/;  # 1999-12-31 (ISO 8601)
+my $date5expr  = qr/\b(\d{4})([01]\d)([0-3]\d)\b/;          # 19991231
 
 # Names and indexes of the fields of a file stat block.
 # Strings that user can use to specify what to add with --addStat.
@@ -935,10 +965,11 @@ my @kMDItemKind_values = (
 my $BY = "bytes"; my $UC = "UChar";
 my $AS = "ASCII"; my $MS = "cp1252";
 my $U8 = "UTF-8"; my $U2 = "UCS-2"; my $U6 = "UTF-16";
-my $XX = 0;  # Unknown or unspecified value
 my $KB = 1<<9; my $MB = 1<<19; my $GB = 1<<29;
 my $TB = 1<<39; my $PB = 1<<49; my $EB = 1<<59; my $ZB = 1<<69;
 my $UNLIM = -1;
+my $XX = 0;  # Unknown or unspecified value
+
 # Expressions for banned characters
 my $NULL = "[\\x00]";
 my $NULLSOL = "[\\x00/]";
@@ -968,7 +999,7 @@ my %filesystemsAvailable = (
     "CBM DOS" =>    [  16, 1, $BY, $XX, 0,     16*$MB, 16*$MB, $NULL ],
     "V7FS" =>       [  14, 1, $BY, $XX, $XX,    1*$GB,  2*$TB, $NULLSOL ],
     "exFAT" =>      [ 255, 1, $UC, $XX, 32760, 16*$EB, 64*$ZB, $XX ],
-    "FAT8" =>       [ 6.3, 1, $BY, $AS, 0,        $XX,    $XX, "^[\\x00\\xFF]" ],
+    "FAT8" =>       [ 6.3, 1, $BY, $AS, 0,        $XX,    $XX, "[\\x80-\\xFF]" ],  # ??
     "FAT16 base" => [ 8.3, 1, $BY, $MS, $XX,   32*$MB, 32*$MB, $FAT16BAN ],
     "FAT16 LFN" =>  [ 255, 1, $UC, $XX, $XX,    4*$GB, 32*$MB, $FAT16LFN ],
     "FAT16B" =>     [ 8.3, 1, $BY, $MS, $XX,    2*$GB,  4*$GB, $XX ],
@@ -1013,11 +1044,14 @@ my $cleanChars      = "-\\.\\w";
 my $color           = ($ENV{CLI_COLOR} && -t STDERR) ? 1:0;
 my $copies          = 0;
 my $dates           = 0;
+my $dateOutput      = "%Y-%m-%d";
+my $dateTest        = 0;
 my $dateYears       = 0;
 my $dirs            = 1;
 my $dot             = 0;
 my $dropExtensions  = 0;
 my $dropOriginal    = 0;
+my $dryRun          = 0;
 my $expr            = "";
 my $ePad            = 0;
 my $ePadChar        = "0";
@@ -1039,9 +1073,9 @@ my $quiet           = 0;
 my $recursive       = 0;
 my $resolve         = 1;
 my $separator       = "_";
-my $test            = 0;
 my $toEnd           = 0;
 my $uc              = 0;
+my $uk              = 0;
 my $unescapeURI     = 0;
 my $unroman         = 0;
 my $verbose         = 0;
@@ -1062,13 +1096,15 @@ my %getOptHash = (
     "clean!"           => \$clean,
     "color!"           => \$color,
     "copies!"          => \$copies,
+    "dateOutput=s"     => \$dateOutput,
     "dates!"           => \$dates,
+    "dateTest!"        => \$dateTest,
     "dateYears!"       => \$dateYears,
     "dirs!"            => \$dirs,
     "dot!"             => \$dot,
     "dropExtensions!"  => \$dropExtensions,
     "dropOriginal!"    => \$dropOriginal,
-    "dry-run|dryrun!"  => \$test,
+    "dryRun|dry-run|test!" => \$dryRun,
     "e|expr=s"         => \$expr,
     "ePad=o"           => \$ePad,
     "ePadChar=s"       => \$ePadChar,
@@ -1124,9 +1160,9 @@ my %getOptHash = (
     "r|recursive!"     => \$recursive,
     "resolve!"         => \$resolve,
     "separator=s"      => \$separator,
-    "test!"            => \$test,
     "toEnd!"           => \$toEnd,
     "uc|upper!"        => \$uc,
+    "uk!"              => \$uk,
     "unescapeURI!"     => \$unescapeURI,
     "unroman!"         => \$unroman,
     "v|verbose+"       => \$verbose,
@@ -1144,6 +1180,11 @@ sjdUtils::setColors($color);
 
 my $cleanExprC  = qr/[^$cleanChars]/;
 my $cleanExtensions = 0;
+
+if ($dateTest) {
+    testDates();
+    exit;
+}
 
 ($padWidth >= 1) || die "Invalid --padwidth value '$padWidth'.\n";
 
@@ -1206,9 +1247,12 @@ if ($xattrAdd) {
 ###############################################################################
 # Main
 #
+# Stats for report() to show at end.
 my $fileCount        = 0;
 my $dirCount         = 0;
+my $weirdCount       = 0;  # Neither dir nor file
 my $notFoundCount    = 0;
+#
 my $unchanged        = 0;
 my $simpleCount      = 0;
 my $extFixes         = 0;
@@ -1284,7 +1328,6 @@ sub doOneItem {
     my ($path, $name, $ext) = rfsplitPath($fullPath);
     my $fullName = extensionJoin($name, $ext);
 
-    $fileCount++;
     my $newExt = "";  # See also under -expr with -extChanges
     if ($x && ($newExt = $extensionMap{lc($ext)})) {
         vMsg(2, "extensionMap");
@@ -1317,6 +1360,14 @@ sub doOneItem {
             vMsg(1, "Skipping directory '$name'.");
             return;
         }
+    }
+    elsif (-f "$fullPath") {
+        $fileCount++;
+    }
+    else {
+        vMsg(0, "Item is not directory or file: $fullPath.\n");
+        $weirdCount++;
+        return;
     }
 
     vMsg(2, "Before changes:  '$name' '$ext'.");
@@ -1703,28 +1754,34 @@ sub doRename {
     if ($fp2 =~ m/_0\.$/) {
        die "Fail! '$fp1' -> '$fp2'.\n"  # Some gory bug...
     }
-    if ($test || $verbose) {
-        vMsg(0, "  from: '$fp1'\n      to: '$fp2'");
+    if ($dryRun || $verbose) {
+        vMsg(0, "  from: '$fp1'\n" .
+                "    to: '$fp2'");
     }
     if (-e $fp2) {
         eMsg(0, "  *** Rename failed, target exists: '$fp1'\n  to: '$fp2':\n    $!");
         $failCount++;
-        return(0);
+        return;
     }
-    if ($test) { return(1); }
+    if ($dryRun) { return; }
 
-    my $gitStatus = system("versionStatus.py --nosystem '$fp1'");
-    if ($gitStatus =~ /^NOT_MINE/) {
-        my $rc = rename($fp1, $fp2);
-        if ($rc) { return(1); }
+    if ($gitMoves) {
+        my $gitStatus = system("versionStatus.py --nosystem '$fp1'");
+        if ($gitStatus !~ /^NOT_MINE/) {
+            vMsg(1, "Attempting git mv for $fp1...\n");
+            system("git mv '$fp1' '$fp2'");
+            $gitCount++;
+        }
+        return;
+    }
+
+    my $rc = rename($fp1, $fp2);
+    if (!$rc) {
         ($quiet) || eMsg(0, "  *** Rename failed: '$fp1'\n  to: '$fp2':\n    $!");
         $failCount++;
     }
-    else {
-        system("git mv '$fp1' '$fp2'");
-        $gitCount++;
-    }
-    return(0);
+
+    return;
 }
 
 
@@ -1732,22 +1789,31 @@ sub doRename {
 #
 sub report {
     warn("\nTotals:\n");
-    ($test) && warn("(testing only, no files renamed)\n");
+    ($dryRun) && warn("(testing only, no files renamed)\n");
     my $fmt = "    %-20s %6d\n";
     warn sprintf($fmt, "Files",             $fileCount);
     warn sprintf($fmt, "Directories",       $dirCount);
+    ($weirdCount) && warn
+         sprintf($fmt, "Not file or dir",   $weirdCount);
     warn sprintf($fmt, "Rename attempts",   $simpleCount+$resolveCount);
     warn sprintf($fmt, sjdUtils::colorize("green/bold", "Simple renames")
         . "      ", $simpleCount);  # Allow for the color escapes
-    warn sprintf($fmt, "git mv's (not yet)", $gitCount);
-    warn sprintf($fmt, "Extensions fixed",  $extFixes);
-    warn sprintf($fmt, "Not found",         $notFoundCount);
-    warn sprintf($fmt, "No net change",     $unchanged);
-    warn sprintf($fmt, "Name conflicts",    $conflictCount);
-    warn sprintf($fmt, "  Case-only",       $caseIssueCount);
-    warn sprintf($fmt, "  Forced",          $forceCount);
-    warn sprintf($fmt, "  Resolved",        $resolveCount);
-    warn sprintf($fmt, "  Failed",          $failCount);
+    ($gitCount) && warn
+         sprintf($fmt, "git mv's (not yet)", $gitCount);
+    ($extFixes) && warn
+         sprintf($fmt, "Extensions fixed",  $extFixes);
+    ($notFoundCount) && warn
+         sprintf($fmt, "Not found",         $notFoundCount);
+    ($unchanged) && warn
+         sprintf($fmt, "No net change",     $unchanged);
+
+    if ($conflictCount) {
+        warn sprintf($fmt, "Name conflicts",    $conflictCount);
+        warn sprintf($fmt, "  Case-only",       $caseIssueCount);
+        warn sprintf($fmt, "  Forced",          $forceCount);
+        warn sprintf($fmt, "  Resolved",        $resolveCount);
+        warn sprintf($fmt, "  Failed",          $failCount);
+    }
 }
 
 
@@ -1778,36 +1844,40 @@ sub doOsStuff {
     return($name);
 }
 
+# TODO: Would be nicer to integrate strftime generality....
+#
 sub fixDates {
     my ($name, $toEnd) = @_;
-    vMsg(1, "FixDate for: '$name',\n    e2: $date2expr.");
-    #for (my $i=0; $i<length($name); $i++) {
-    #    my $c = substr($name, $i, 1);
-    #    printf("    %3d: 0x%02x  '%s'\n", $i, ord($c), $c);
-    #}
+    vMsg(1, "FixDate for: '$name'.");
 
-    my $outFormat = "%04d-%02d-%02d";
     my $date = "";
-    if ($name =~ s/$date1expr//) {          # 02/28/1492
-        vMsg(1, "    Date matched (1): $1, $2, $3");
-        $date = sprintf($outFormat, $3, $1, $2);
+    if (!$uk && $name =~ s/$date1expr//) {             # 02/28/1776
+        vMsg(2, "    Date matched ($date1expr): $1, $2, $3");
+        $date = formatYMD($3, $1, $2);
     }
-    elsif ($name =~ s/$date2expr//) {       # Feb. 28, 1492
-        vMsg(1, "    Date matched (2): $1, $2, $3");
-        $date = sprintf($outFormat, $3, $months{$1}, $2 || "00");
+    elsif ($uk && $name =~ s/$dateUKexpr//) {          # 28/02/1776
+        vMsg(2, "    Date matched ($dateUKexpr): $1, $2, $3");
+        $date = formatYMD($3, $2, $1);
     }
-    elsif ($name =~ s/$date3expr//) {       # 28 Feb 92
-        vMsg(1, "    Date matched (3), year '$3'");
-        my $yr = (int($3) < 100) ? "20$3" : $3;
-        $date = sprintf($outFormat, $yr, $months{$2}, $1);
+ elsif ($name =~ s/$date2expr//) {                     # Feb. 28, 1776
+        vMsg(2, "    Date matched ($date2expr): $1, $2, $3");
+        $date = formatYMD($3, $monthDict{$1}, $2 || "01");
     }
-    elsif ($name =~ s/$date4expr//) {       # 1492-02-28
-        vMsg(1, "    Date matched (4)");
-        $date = sprintf($outFormat, $1, $2, $3);
+    elsif ($name =~ s/$date3expr//) {                  # 28 Feb 92
+        vMsg(2, "    Date matched ($date3expr), year '$3'");
+        my $yr = (int($3) < 100) ? "20$3" : $3;  # shouldn't happen currently
+        $date = formatYMD($yr, $monthDict{$2}, $1);
     }
-    elsif ($name =~ s/$date5expr//) {       # 20150328
-        vMsg(1, "    Date matched (5)");
-        $date = sprintf($outFormat, $1, $2, $3);
+    elsif ($name =~ s/$date4expr//) {                  # 1776-02-28
+        vMsg(2, "    Date matched ($date4expr)");
+        $date = formatYMD($1, $2, (defined $3 && $3>0) ? $3 : 1);
+    }
+    elsif ($name =~ s/$date5expr//) {                  # 20150328
+        vMsg(2, "    Date matched ($date5expr)");
+        $date = formatYMD($1, $2, $3);
+    }
+    else {
+        vMsg(1, "    ******* Date did not match any regex ******* ");
     }
 
     if ($date) {
@@ -1817,6 +1887,70 @@ sub fixDates {
         $name =~ s/\s+$//;
     }
     return($name);
+}
+
+sub formatYMD {
+    my ($y, $m, $d) = @_;
+    vMsg(1, "y $y, m $m, d $d.\n");
+    return itemftime($dateOutput, 0, 0, 0, $d, $m, $y);
+}
+
+sub itemftime {
+    # Like strftime() but takes 1-based days and years. E.g.:
+    #     itemftime("%m/%d/%Y",   0,  0,  0, 31, 12, 2024)
+    # TODO: Add support for month names and abbrevs?
+    #
+    my ($format, $sec, $min, $hr, $mday, $mon, $year, $wday, $yday, $isdst) = @_;
+
+    # Imperfect test -- like for '%%%'.
+    # (list based on man strftime on MacOS)
+    # Also doesn't know Gnu %-* %_* %0* extensions or POSIX %E* %O*.
+    my $extensionFlags = "CDegGhklnrRstTuVz+";
+    my $badFlagExpr = "%[^aAbBcdFHIjmMpSUvwWxXyYZ%+$extensionFlags]";
+    ($format =~ m/%\w/) || die "Bad format arg '$format'.\n";
+    ($format =~ m/($badFlagExpr)/) && die "Bad %-sequence '$1'.\n";
+
+    ($sec>=0 && $sec<=59) || die "Bad second arg '$sec'.\n";
+    ($min>=0 && $min<=59) || die "Bad minute arg '$min'.\n";
+    ($hr>=0 && $hr<=59) || die "Bad hour arg '$hr'.\n";
+    ($mday>=0 && $mday<=31) || die "Bad mday arg '$mday'.\n";
+    ($mon>=0 && $mon<=12) || die "Bad month arg '$mon'.\n";
+    ($year>=1582) || die "Bad year arg '$year' (min 1582).\n";
+    if (defined $wday && $wday!=-1) { die "Bad wday arg '$wday'.\n"; }
+    if (defined $yday && $yday!=-1) { die "Bad yday arg '$yday'.\n"; }
+    if (defined $isdst && $isdst!=-1) { die "Bad dst arg '$isdst'.\n"; }
+
+    my $buf = strftime($format, $sec, $min, $hr, $mday, $mon-1, $year-1900);
+    return $buf;
+}
+
+sub testDates {
+    print "\nTesting various date formats...\n";
+    my @data = (
+        "02/28/1776",                   # expr 1
+        "2/1/1776",                     # expr 1
+        "Feb. 28, 1776",                # expr 2
+        "Feb.  \t\r\n\xA0 28, 1776",    # expr 2
+        "Feb. 28 1776",                 # expr 2
+        "Feb 28, 1776",                 # expr 2
+        "February 28, 1776",            # expr 2
+        "Feb 1776",                     # expr 2
+        "28 Feb 1776",                  # expr 3
+        "1776-02-28",                   # expr 4
+        "1999-12",                      # expr 4
+        "17760228",                     # expr 5
+
+        # Fails
+        # "1492-01-12", "31/31/1999", "28 Zork 1998", "1999", "Sept.99.9999"
+    );
+    sjdUtils::setVerbose($verbose+1);
+    for my $k (@data) {
+        my $src = "fileName for $k.txt";
+        print "\nTrying '$src'\n";
+        my $tgt = fixDates($src, 0);
+        printf("    => '%s'\n", $tgt);
+    }
+    sjdUtils::setVerbose($verbose-1);
 }
 
 sub insertBeforeExtension {
