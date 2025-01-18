@@ -38,12 +38,15 @@ For example, you can open an editor on each file as it changes, with:
 
     watchDir --exec "$EDITOR" ~/myDir
 
+Or re-lint a program each time you save a change to it:
+    watchDir --exec "pylint" ~/myPythonStuff
+
 Some other handy commands to use with C<--exec> include C<ls -l>, C<diff> vs. a backup,
 C<backup>, C<lint>, and many others.
 
-There is not yet a way to watch a single file in isolation, although
-you can watch the parent directory, which includes catching changes to all files
-directly within that directory.
+There is not yet a way to watch a single file in isolation.
+Just watch the parent directory, which includes catching changes to all files
+directly within that directory. If you're only editing one, it's the same effect.
 
 
 =head1 Options
@@ -114,7 +117,7 @@ However, C<watchDir> has at least these differences:
 
 =back
 
-L<https://superuser.com/questions/181517/how-to-execute-a-command-whenever-a-file-changes> 
+L<https://superuser.com/questions/181517/how-to-execute-a-command-whenever-a-file-changes>
 has several additional solutions for similar problems.
 
 

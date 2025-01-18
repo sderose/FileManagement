@@ -29,7 +29,7 @@ __version__ = __metadata__["modified"]
 
 descr = """
 =Name=
-    """ +__metadata__["title"] + ": " + __metadata__["description"] + """
+randomFill: Fill space with random data.
 
 =Description=
 

@@ -412,7 +412,7 @@ def innerText(self:Node, sep:str='') -> str:
     inserting something in between all the text nodes (typically a space,
     so text of list items etc. don't join up. But putting in spaces around
     HTML inlines like i and b, is occasionally wrong.
-    (from DomExtensions.py)
+    (from domextensions)
     """
     if (self.nodeType == Node.TEXT_NODE or
         self.nodeType == Node.CDATA_SECTION_NODE):

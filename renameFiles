@@ -42,8 +42,8 @@ to rename a file(s). Can do systematic changes such as (see below for more):
   * inserting the values of various file attributes
 (date, owner id, or even the source URI when available) into the name.
 
-For files under git control, set --gitMoves to check status
-and attempt "git mv" instead of a regular rename. B<EXPERIMENTAL>.
+For files under git control, set I<--gitMoves> to check status
+and attempt "git mv" instead of a regular rename when applicable.
 
 =head2 Examples
 
@@ -311,7 +311,7 @@ This is not intended to overwrite output directories.
 
 =item * B<--gitMoves>
 
-Do "git move" instead of regular mv. B<EXPERIMENTAL>.
+Do "git mv" rather than regular mv (when applicable).
 
 =item * B<--ignoreCase> OR I<-i>
 
@@ -577,19 +577,33 @@ L<http://www.skytag.com/filebuddy/en/index.html> if interested.
 
 =over
 
-=item * Check for files under C<git> control and do C<git mv> instead of C<mv>!
+=item * Check and warn on git files even if they don't ask?
 
-=item * Do something better with case-change-only renames on case-insensitive systems.
+=item * Warn/fix hyphen-initial filenames, names w/ spaces (for *nix).
 
 =item * Option to operate *only* on directories, etc.
+
+=item * C<--clean> should also do C<--addExtension> 'txt' (for non-dirs).
+
+=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead
+of " " (can do with a regex change in the meantime).
+
+=item * Make C<--bactrianize> not put space after hyphens.
+
+=item * Unicode issues, esp nbsp with C<--dates>.
+
+=item * "To" vs "_to_" vs "2"?
+
+=item * Feature to increment, or make contiguous, numeric portions of filenames?
+Cf C<nextFilename>.
+
+=item * Do something better with case-change-only renames on case-insensitive systems.
 
 =item * Option to affect only the first (or Nth?) match with --expr.
 
 =item * Make --dropOriginal apply to other
 options (not just --pullContent), that similarly apend brand-new,
 likely-unique strings to the filenames.
-
-=item * Warn/fix hyphen-initial filenames, names w/ spaces (for *nix).
 
 =item * Port to Python and integrate PowerWalk.py.
 
@@ -608,23 +622,9 @@ PyPDF2, cb2bib, TET, Cermine.
 
 =item * Add a way to reference Mac fs metadata in C<--expr> RHS.
 
-=item * checksum of the file
-
-=item * C<--clean> should also do C<--addExtension> 'txt' (for non-dirs).
-
-=item * Feature to increment, or make contiguous, numeric portions of filenames?
-Cf C<nextFilename>.
+=item * pull checksum of the file into metadata or name?
 
 =item * C<--ePad> only allows I<left> padding at present.
-
-=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead
-of " " (can do with a regex change in the meantime).
-
-=item * Make C<--bactrianize> not put space after hyphens.
-
-=item * Unicode issues, esp nbsp with C<--dates>.
-
-=item * "To" vs "_to_" vs "2"?
 
 =item * Various date/time improvements:
 
@@ -1759,26 +1759,34 @@ sub doRename {
                 "    to: '$fp2'");
     }
     if (-e $fp2) {
-        eMsg(0, "  *** Rename failed, target exists: '$fp1'\n  to: '$fp2':\n    $!");
+        eMsg(0, "  *** Rename skipped, target exists: '$fp1'\n  to: '$fp2':\n    $!");
         $failCount++;
         return;
+    }
+
+    # TODO Should we check and warn even if they don't ask?
+    my $useGit = 0;
+    if ($gitMoves) {
+        #my $gitStatus = system("versionStatus.py --nosystem '$fp1'");
+        system("git ls-files --error-unmatch '$fp1' 2>&1 >/dev/null");
+        my $rc = $? >> 8;
+        if ($rc == 0) {
+            $useGit = 1;
+            if ($verbose || $dryRun) { vMsg(0, "git mv for '$fp1'\n"); }
+            $gitCount++;
+        }
     }
     if ($dryRun) { return; }
 
-    if ($gitMoves) {
-        my $gitStatus = system("versionStatus.py --nosystem '$fp1'");
-        if ($gitStatus !~ /^NOT_MINE/) {
-            vMsg(1, "Attempting git mv for $fp1...\n");
-            system("git mv '$fp1' '$fp2'");
-            $gitCount++;
-        }
-        return;
+    if ($useGit) {
+        system("git mv '$fp1' '$fp2'");
     }
-
-    my $rc = rename($fp1, $fp2);
-    if (!$rc) {
-        ($quiet) || eMsg(0, "  *** Rename failed: '$fp1'\n  to: '$fp2':\n    $!");
-        $failCount++;
+    else {
+        my $rc = rename($fp1, $fp2);
+        if (!$rc) {
+            ($quiet) || eMsg(0, "  *** Rename failed: '$fp1'\n  to: '$fp2':\n    $!");
+            $failCount++;
+        }
     }
 
     return;
@@ -1799,7 +1807,7 @@ sub report {
     warn sprintf($fmt, sjdUtils::colorize("green/bold", "Simple renames")
         . "      ", $simpleCount);  # Allow for the color escapes
     ($gitCount) && warn
-         sprintf($fmt, "git mv's (not yet)", $gitCount);
+         sprintf($fmt, "git mv(s)",         $gitCount);
     ($extFixes) && warn
          sprintf($fmt, "Extensions fixed",  $extFixes);
     ($notFoundCount) && warn
