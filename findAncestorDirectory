@@ -123,7 +123,7 @@ if __name__ == "__main__":
             "--child", "--containing", "-c", action="store_true",
             help="Look for ancester directory *containing* a matching file.")
         parser.add_argument(
-            "--ignoreCase", "-i", action="store_true",
+            "--ignoreCase", "--ignore-case", "-i", action="store_true",
             help="Disregard case distinctions.")
         parser.add_argument(
             "--nil", action="store_true",

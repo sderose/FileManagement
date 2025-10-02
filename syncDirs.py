@@ -148,23 +148,23 @@ if __name__ == "__main__":
             "--baseDir", type=str,
             help='Look for copies under this directory.')
         parser.add_argument(
-            "--hidden", action='store_true',
+            "--hidden", action="store_true",
             help='Include hidden (.-initial) files.')
         parser.add_argument(
-            "--ignore", type=str, action='append',
+            "--ignore", type=str, action="append",
             default=[ "README.txt" ],
             help='Ignore this filename even if on command line.')
         parser.add_argument(
-            "--quiet", "-q", action='store_true',
+            "--quiet", "-q", action="store_true",
             help='Suppress most messages.')
         parser.add_argument(
-            "--recursive", action='store_true',
+            "--recursive", action="store_true",
             help='Descend into subdirectories.')
         parser.add_argument(
-            "--verbose", "-v", action='count', default=0,
+            "--verbose", "-v", action="count", default=0,
             help='Add more messages (repeatable).')
         parser.add_argument(
-            "--version", action='version', version=__version__,
+            "--version", action="version", version=__version__,
             help='Display version information, then exit.')
 
         parser.add_argument(

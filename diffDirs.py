@@ -18,6 +18,11 @@ from PowerWalk import isHidden, isBackup, isGenerated
 
 lg = logging.getLogger()
 
+def pline(msg, val):
+    sys.stderr.write("%-40s %s\n" % (msg, val))
+
+lg.pline = pline
+
 __metadata__ = {
     "title"        : "diffDirs",
     "description"  : "Quick and dirty compare for directory trees.",
@@ -248,6 +253,7 @@ def compareDirs(path1, path2, depth:int=0):
     nSubsDifferent = 0
     differ = 0
     diffLine = ""
+    sep = ""
     for curName in dUnion:
         lg.log(logging.INFO-1, "Comparing '%s'.", curName)
         file1 = os.path.join(path1, curName)
@@ -388,47 +394,47 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--all", action='store_true',
+            "--all", action="store_true",
             help='Include copy, backup, hidden, and object files.')
         parser.add_argument(
-            "-b", action='store_true',
+            "-b", action="store_true",
             help='Ignore differences in whitespace.')
         parser.add_argument(
-            "--backups", action='store_true',
+            "--backups", action="store_true",
             help='Include copy and backup files (implied by --all).')
         parser.add_argument(
-            "--color", action='store_true', default=False,
+            "--color", action="store_true", default=False,
             help='Colorize the output.')
         parser.add_argument(
-            "--nocolor", action='store_false', dest="color",
+            "--nocolor", action="store_false", dest="color",
             help='Turn off colorizing.')
         parser.add_argument(
             "--comment", "--ignore-matching-lines", type=str, default="",
             help='Ignore lines matching this regex (e.g. "^\\s*#").')
         parser.add_argument(
-            "--diff", action='store_true', default=True,
+            "--diff", action="store_true", default=True,
             help='Compare contents (see also --showLines). Default: True.')
         parser.add_argument(
-            "--diffq", action='store_true',
+            "--diffq", action="store_true",
             help='Compare contents via system "diff -q".')
         parser.add_argument(
-            "--nodiff", action='store_false', dest='diff',
+            "--nodiff", action="store_false", dest='diff',
             help='Do NOT compare file contents.')
         parser.add_argument(
-            "--generated", action='store_true',
+            "--generated", action="store_true",
             help='Include generated files, such as .pyc, .DS_Store.')
         parser.add_argument(
-            "--hidden", action='store_true',
+            "--hidden", action="store_true",
             help='Include hidden (dot-initial) files (implied by --all).')
         parser.add_argument(
-            "--ignoreCase", "-i", action='store_true',
+            "--ignoreCase", "--ignore-case", "-i", action="store_true",
             help='Disregard case distinctions.')
         parser.add_argument(
-            "--md5", action='store_true',
+            "--md5", action="store_true",
             help='Compare file checksums using *nix md5 command.')
         parser.add_argument(
             "--nameWidth", type=int, default=32,
-            help='m to reserve for filenames.')
+            help='Columns to reserve for filenames.')
         parser.add_argument(
             "--nil", type=str, default="(NONE)",
             #chr(0xA4)*5,
@@ -437,37 +443,37 @@ if __name__ == "__main__":
             "--prefixWidth", type=int, default=8,
             help='Columns to reserve for status prefix (=== or !!!...).')
         parser.add_argument(
-            "--quiet", "-q", action='store_true',
+            "--quiet", "-q", action="store_true",
             help='Suppress most messages.')
         parser.add_argument(
-            "-permissions", action='store_true',
+            "-permissions", action="store_true",
             help='Check that permissions match.')
         parser.add_argument(
-            "--recursive", "-r", action='store_true',
+            "--recursive", "-r", action="store_true",
             help='Descend into subdirectories.')
         parser.add_argument(
-            "--report-identical-files", action='store_true',
+            "--report-identical-files", action="store_true",
             help='Just report files that *do* match across dirs.')
         parser.add_argument(
-            "--showDiffs", action='store_true',
+            "--showDiffs", action="store_true",
             help='For each differing file, list size, time, md5, etc.')
         parser.add_argument(
-            "--showLines", action='store_true',
+            "--showLines", action="store_true",
             help='Compare file sizes.')
         parser.add_argument(
-            "--size", action='store_true', default=True,
+            "--size", action="store_true", default=True,
             help='Compare file sizes.')
         parser.add_argument(
             "--tickInterval", type=int, default=0,
             help='For long file comparison, show progress / n lines.')
         parser.add_argument(
-            "--time", action='store_true',
+            "--time", action="store_true",
             help='Compare file times.')
         parser.add_argument(
-            "--verbose", "-v", action='count', default=0,
+            "--verbose", "-v", action="count", default=0,
             help='Add more messages (repeatable).')
         parser.add_argument(
-            "--version", action='version', version='Version of '+__version__,
+            "--version", action="version", version='Version of '+__version__,
             help='Display version information, then exit.')
 
         parser.add_argument(
@@ -482,12 +488,15 @@ if __name__ == "__main__":
     #
     args = processOptions()
 
+    if (args.verbose):
+        lg.setLevel(logging.INFO-10)
+        print("Verbose,")
     if (args.all):
         args.backups = args.hidden = True
 
-    if (not args.color):
-        args.color = ("CLI_COLOR" in os.environ and sys.stderr.isatty())
-    lg.setColors(args.color)
+    #if (not args.color):
+    #    args.color = ("CLI_COLOR" in os.environ and sys.stderr.isatty())
+    #lg.setColors(args.color)
 
     if (not (args.size or args.time or args.md5 or args.diff)):
         lg.info("No file comparisons specified (--size --time --md5 --diff)")

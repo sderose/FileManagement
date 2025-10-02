@@ -9,7 +9,7 @@ use File::Copy;
 
 our %metadata = (
     'title'        => "groupFiles",
-    'description'  => "",
+    'description'  => "Organize a folder into subfolders by similarity of names.",
     'rightsHolder' => "Steven J. DeRose",
     'creator'      => "http://viaf.org/viaf/50334488",
     'type'         => "http://purl.org/dc/dcmitype/Software",
@@ -39,18 +39,28 @@ This script does three main operations to help organize a big directory:
 
 =item Renames files to lose odd characters (I<--cleanNames>)
 
-=item Group files that have similar names (such as the same except for a
-number at the end), into subdirectories together (I<--serials>)
+=item Group files that have similar names.
 
 =back
 
-I<--serials> (only) defaults to be in effect.
-
-For example:
+By default, grouping uses the I<--serials>
+option, which removes final digits (ignoring any exstension), and uses
+each distinct remaining string as the group/subdirectory name (I<--serials>).
+For example,
     groupFiles *.jpg
 
 would move 'Yosemite01.jpg', 'Yosemite12.jpg', 'Yosemite1024.jpg', and
-so on, into a subdirectory named 'Yosemite'.
+so on, into a subdirectory named 'Yosemite', but 'foo1.jpg', 'foo039.png', etc.
+into a subdirectory named 'foo'.
+
+To group files by using a regular expression to extract the "common" part, use
+I<--regex>. The regex should use () to capture all the parts to be I<kept>.
+For example,
+
+    groupFiles --regex '(\\w+)'
+
+will extract the first group of 1 or more "word" characters (alphanumerics plus "_"),
+and use distinct value of that as the groups.
 
 
 =head1 Options
@@ -66,6 +76,7 @@ Standardize various extesions, such as html->htm, jpeg->jpg, etc. (default).
 =item * B<--cleanNames>
 
 Rename files to turn runs of unusual characters to "_".
+This would be better done separately, via C<renameFiles>.
 
 =item * B<--copyTo> I<path>
 
@@ -88,10 +99,15 @@ likely via "*" or similar) on the command line.
 =item * B<--quiet> OR B<-q>
 Suppress most messages.
 
+=item * B<--regex> I<expr>
+
+For each file, extract the first match to the regular expression I<expr>, and
+use that as the group name.
+
 =item * B<--serials>
 
-Group files that are the same except for a final serial number (before
-any extension). (default)
+Remove final digits (and any extension), and use the remainder as the group name.
+(default)
 
 For example, 'Yosemite01.jpg', 'Yosemite12.jpg', 'Yosemite1024.jpg' would
 all be moved into a subdirectory named 'Yosemite'.
@@ -136,11 +152,12 @@ C<renameFiles> does regex renaming (the *nix C<rename> command is similar).
     2018-09-25: Generalize. Better messaging. Add --copyTo, --onlyExtension,
 --singletons.
     2022-07-22: Layout. Update for push-reference being dropped from Perl.
+    2025-05-17: Add --regex.
 
 
 =head1 To do
 
-    Port to Python and use PowerWalk
+    Port to Python and use PowerWalk?
     Add --dry-run option.
 
 
@@ -170,6 +187,7 @@ my $numerics      = '';
 my $onlyExtension = '';
 my $quiet         = 0;
 my $recursive     = 0;
+my $regex         = "";
 my $serials       = 1;
 my $singletons    = 1;
 my $verbose       = 0;
@@ -186,6 +204,7 @@ my $result = GetOptions(
     "onlyExtension=s"  => \$onlyExtension,
     "q|quiet!"         => \$quiet,
     "recursive!"       => \$recursive,
+    "regex=s"          => \$regex,
     "singletons!"      => \$singletons,
     "serials!"         => \$serials,
     "v|verbose+"       => \$verbose,
@@ -193,8 +212,8 @@ my $result = GetOptions(
         die "Version of $VERSION_DATE, by Steven J. DeRose.\n";
     }
 );
-($result) || die "Bad options.\n";
-
+($result) || die
+    "Bad options.\n";
 ($dryRun) && die
     "--dryRun is not yet supported.\n";
 ($recursive) && die
@@ -273,39 +292,51 @@ if ($cleanNames) {
         }
     } # $c
 }
-
+# Find unique group names
+my %groups = ();
 if ($serials) {
-    # Find unique prefixes
-    my %prefixes = ();
     foreach my $f (@files) {
         (my $fpre = $f) =~ s/\d+\.\w+$//;
         if ($fpre == '' || $fpre == $f) { next; }
-        if (!defined $prefixes{$fpre}) {
-            $prefixes{$fpre} = [];
+        if (!defined $groups{$fpre}) {
+            $groups{$fpre} = [];
         }
-        else { 
-            my $aref = $prefixes{$fpre};
+        else {
+            my $aref = $groups{$fpre};
             push @$aref, $f;
         }
     }
-
-    foreach my $pre (keys(%prefixes)) {
-        if (!$singletons && scalar(@$pre)) { next; }
-        my $nfiles = scalar(@$pre);
-        vMsg(1, "Moving $nfiles files for '$pre*' to '_$pre/'");
-        if (-e "_$pre" == 0) {
-            mkdir("_$pre");
+}
+elsif ($regex) {
+    foreach my $f (@files) {
+        (my $fpre = $f) =~ m/$regex/;
+        if ($fpre == '' || $fpre == $f) { next; }
+        if (!defined $groups{$fpre}) {
+            $groups{$fpre} = [];
         }
-        foreach my $f (@$pre) {
-            if ($copyTo) {
-                File::copy($f, "$copyTo/$pre/$f");
-            }
-            else {
-                rename($f, "$pre/$f");
-            }
-            $nSerials++;
-        } # $f
-    } # $pre
+        else {
+            my $aref = $groups{$fpre};
+            push @$aref, $f;
+        }
+    }
+}
+
+foreach my $pre (keys(%groups)) {
+    if (!$singletons && scalar(@$pre)) { next; }
+    my $nfiles = scalar(@$pre);
+    vMsg(1, "Moving $nfiles files for '$pre*' to '_$pre/'");
+    if (-e "_$pre" == 0) {
+        mkdir("_$pre");
+    }
+    foreach my $f (@$pre) {
+        if ($copyTo) {
+            File::copy($f, "$copyTo/$pre/$f");
+        }
+        else {
+            rename($f, "$pre/$f");
+        }
+        $nSerials++;
+    } # $f
 }
 
 if ($numerics) {

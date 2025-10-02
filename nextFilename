@@ -231,26 +231,26 @@ if __name__ == '__main__':
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--list", action='store_true',
+            "--list", action="store_true",
             help='Just list all existing numerical variants, and exit.')
         parser.add_argument(
             "--maxTries", type=int, default=100,
             help='Only make this many tries before giving up.')
         parser.add_argument(
-            "--mustBeAvailable", "--available", "-a", action='store_true',
+            "--mustBeAvailable", "--available", "-a", action="store_true",
             help='Return the next name that does NOT yet exist.')
         parser.add_argument(
             "--no-mustBeAvailable", "--no-available",
-            action='store_false', dest='mustBeAvailable',
+            action="store_false", dest='mustBeAvailable',
             help='Return the next name whether or not it already exists.')
         parser.add_argument(
-            "--quiet", "-q", action='store_true',
+            "--quiet", "-q", action="store_true",
             help='Suppress most messages.')
         parser.add_argument(
-            "--verbose", "-v", action='count', default=0,
+            "--verbose", "-v", action="count", default=0,
             help='Add more messages (repeatable).')
         parser.add_argument(
-            '--version', action='version', version='Version of '+__version__,
+            '--version', action="version", version='Version of '+__version__,
             help='Display version information, then exit.')
         parser.add_argument(
             "--width", type=int, default=4,

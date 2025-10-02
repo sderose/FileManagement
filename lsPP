@@ -628,13 +628,13 @@ def processOptions():
         "--colorMap",         type=str, metavar="F",
         help="Use this file to specify how to colorize.")
     parser.add_argument(
-        "--ignoreCase", "-i", action="store_true",
+        "--ignoreCase", "--ignore-case", "-i", action="store_true",
         help="Disregard case distinctions when sorting.")
     parser.add_argument(
         "--interleave",       action="store_true",
         help="Sort directories and files together, not separately")
     parser.add_argument(
-        "--oformat", "--outputFormat", "--output-format",
+        "--oformat", "--output-format",
         type=str, metavar="F", choices=[ "TSV", "CSV", "JSON", "XSV", "ARRAY" ],
         help="Use this format for output data.")
     parser.add_argument(

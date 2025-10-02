@@ -527,10 +527,10 @@ if __name__ == "__main__":
             "--headers", action="store_true",
             help="Show the main header fields for selected emails.")
         parser.add_argument(
-            "--iencoding", type=str, default="ASCII",
+            "--iencoding", "--input-encoding", type=str, default="ASCII",
             help="Assume the (MIME) file is in this encoding.")
         parser.add_argument(
-            "--ignoreCase", "-i", action="store_true",
+            "--ignoreCase", "--ignore-case", "-i", action="store_true",
             help="Disregard case distinctions.")
         parser.add_argument(
             "--quiet", "-q", action="store_true",

@@ -163,16 +163,16 @@ if __name__ == "__main__":
             parser = argparse.ArgumentParser(description=descr)
 
         parser.add_argument(
-            "--dry-run", "--test", action='store_true',
+            "--dry-run", "--test", action="store_true",
             help='Do not actually change the filetime.')
         parser.add_argument(
-            "--list", action='store_true',
+            "--list", action="store_true",
             help='Display the "main" header fields.')
         parser.add_argument(
-            "--quiet", "-q", action='store_true',
+            "--quiet", "-q", action="store_true",
             help='Suppress most messages.')
         parser.add_argument(
-            "--recursive", action='store_true',
+            "--recursive", action="store_true",
             help='Descend into subdirectories.')
         parser.add_argument(
             "--unicode",action="store_const", dest="iencoding",
