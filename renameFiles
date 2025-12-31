@@ -68,7 +68,7 @@ Renames all .htm files in the current directory whose names contain
     renamefiles --expr "s/my(File|Stuff|Data)/Herodotuses_\$1/" *.htm
 
 B<Note>: Changes apply to each filename, not the path leading to it,
-nor to an extension.
+nor to an extension (unless you set certain options).
 They do apply to names of directories, unless you set I<--no-dirs>).
 
 There are options to:
@@ -80,8 +80,9 @@ There are options to:
 
 =item * modify character-set and case usage (I<--camelize>, I<--clean>, I<--lc>),
 
-=item * convert names to conform to various file-systems (I<--fileSystem>),
-such as by removing or replacing prohibited characters,
+=item * convert names to conform to various file-systems
+(I<--fileSystem [name]>, such as by removing or replacing prohibited characters.
+Use I<--help-filesystem> to get a list of names.
 
 =item * insert ancestor directory names into the filename (I<--pull>),
 
@@ -218,24 +219,25 @@ The formats recognized include:
     17760228
     Feb 1776
 
-To recognize European style (dd/mm/yyyy), set I<--uk>.
+To recognize European style (dd/mm/yyyy) instead of US, set I<--uk>.
 
 All matches must begin and end at word boundaries (regex "\\b").
 Month names are recognized spelled out in full or
 abbreviated, as set for the current C<locale>. Dots, commas, and the amount and type
-of whitespace can be varied.
+of whitespace can be varied. 4-digits years alone are not affected; for
+that see I<--dateyears>.
 
 =item * B<--dateyears>
 
 This option is similar to I<--dates>, but recognizes lone 4-digit years beginning
 with "1" or "2", and merely moves them to the front (a 4-digit year by itself
-is a valid ISO 8601 data representation). It will I<not> move
+is a valid ISO 8601 data representation). This option will I<not> move
 them if followed by a hyphen or digit.
 
 =item * B<--dirs>
 
-Rename directories just like anything else (default; use I<--no-dirs> to turn off).
-Compatible with, but not the same as, I<--recursive>.
+Rename directories just like anything else (defaults to be on; use
+I<--no-dirs> to turn off). Compatible with, but not the same as, I<--recursive>.
 There is no setting (yet) to operate I<only> on directories.
 
 =item * B<--dot>
@@ -265,7 +267,7 @@ The padding is applied to the right hand side as a whole:
 
 This would, for example, rename F<zork37> to F<zork000037>.
 
-See also I<--pad>, which affects numbers appended to avoid conflicts
+See also I<--pad>, which instead affects numbers appended to avoid conflicts
 while renaming.
 
 =item * B<--ePadChar> I<c>
@@ -275,7 +277,7 @@ With I<--expr>, left-pad the I<to> value to a minimum of I<num> characters.
 
 =item * B<--expr> I<'s/lhs/rhs/'> OR B<-e> I<'s/lhs/rhs/'>
 
-Apply the given regex to filenames (several example are given near the start of
+Apply the given regex to filenames (several examples are given near the start of
 this help). All matches are changed, not just the first.
 
 This uses PERL regexes, and respects the I<--ignorecase> option.
@@ -301,7 +303,7 @@ with their names and constraints, use I<--help-filesystems>.
 
 B<Note>: Maximum filename lengths for different file systems may not be
 measured the same. For example, both Mac and ext4 (at least on Synology)
-say 255, but if the Mac name includes UTF-8, the byte count can apparently
+say 255, but if the Mac name includes UTF-8 the byte count can apparently
 go over 255, in which case copying to ext4 seems to fail.
 
 =item * B<--force>
@@ -343,7 +345,7 @@ Force file extensions to lower case.
 
 =item * B<--onlyExtensions>
 Apply any I<--expr> changes to file extensions only (not to the
-basename, nor to the full name including the extension).
+basename, nor to the full name including the extension). Do not include the ".".
 Experimental. See also I<--extChanges>.
 
 =item * B<--pad> I<num>
@@ -361,17 +363,17 @@ proper, separated by the I<--separator> character (default "_").
 See also I<--ancestor> and I<--pullURI>.
 For example, with I<--pull 2> a file at
 
-    stuff/dax/ezri/pix/12.jpg
+    /home/jsmith/pix/pets/rover_12.jpg
 
 becomes
 
-    stuff/dax/ezri/pix/ezri_pix_12.jpg
+    /home/jsmith/pix/pets/pix_pets_rover_12.jpg
 
 =item * B<--pullContent>
 
 Extract content from the beginning of the file and put it into the name.
 The first record is read, and any HTML or XML tags are stripped out
-(for actual HTML or XML, it would be better to extract html/head/title or
+(for actual HTML or XML, it would typically be better to extract a title or
 similar). Unusual characters are removed, spaces are changed to "_", and
 the result is truncated at 40 characters, then appended to the filename.
 
@@ -421,7 +423,7 @@ This does not affect extensions.
 
 =item * B<--uk>
 
-Look for dd/mm/yyyy instead of mm/dd/yyyy.
+Look for dates as dd/mm/yyyy instead of mm/dd/yyyy.
 
 =item * B<--unescapeURI>
 
@@ -436,7 +438,7 @@ Find roman numerals within filenames and convert them to Arabic numerals
 Roman numerals are defined (too loosely) as sequences of [ivxlcm], without
 an adjacent letter on either side (enforced using regex C<\\b>).
 A single match must be in consistent case, but either case is ok.
-Experimental. Requires installing C<Roman> modules
+Experimental. Requires installing Perl's C<Roman> module
 (L<http://search.cpan.org/~chorny/Roman/lib/Roman.pm>).
 
 =item * B<--verbose> OR B<-v>
@@ -459,7 +461,7 @@ See also I<--addExtension> and I<--extChanges>.
 
 =head1 Known bugs and limitations
 
-Add a conflict resolution suffix for case-insensitive file systems if the
+Need a conflict resolution suffix for case-insensitive file systems if the
 rename only changes case (and thus looks different to the code, but not to a
 case-insensitive filesystem).
 
@@ -477,7 +479,7 @@ There is no option to change the set of allowed characters with I<--clean>.
 
 There is no option to change the set of extension mappings used by I<-x>.
 
-Regexes may include a C</options> portion, but it is not used.
+Regexes may include an C<options> portion, but it is not used.
 
 Does not know about some backup conventions, such as foo~, #foo#, or
 C<emacs>'s ability to put backups into a separate directory:
@@ -485,11 +487,12 @@ C<emacs>'s ability to put backups into a separate directory:
     (setq backup-directory-alist `(("." . "~/.saves")))
 
 I<--pull> doesn't do anything smart if there are
-embedded "//", "/./", or "/../" in any paths.
+embedded "//", "/./", or "/../" in any paths. It should probably
+call C<realpath> or similar first.
 
 It would be nice to be able to pull user- and group-names,
-image and/or file-system metadata, etc. into filenames. On Mac OS, you can
-get file-system metadata (xattrs) with commands like:
+image and/or file-system metadata, etc. into filenames. On Mac OS,
+file-system metadata (xattrs)is available with commands like:
 
     mdls [files]
     mdls -name kMDItemWhereFroms [files]
@@ -517,6 +520,7 @@ Some Linuces have a C<rename> that uses Perl regexes.
 However, the usual C<rename>s lack features such as
 I<--ancestor>, I<--bactrianize>, I<--camelize>, I<--clean>, I<--dates>,
 I<--moddates>, I<--resolve>, I<--pad>, I<--pull>, and I<-x>.
+Most also lack name conflict resolution, a I<--dry-run> mode, etc.
 
 Simple batch renames can also be done with the C<bash for> command:
 
@@ -526,23 +530,11 @@ Simple batch renames can also be done with the C<bash for> command:
         mv $x $y
     done
 
-In `zsh` as opposed to `bash`, you can use `zmv` to achieve renames like:
+In `zsh` as opposed to `bash` you can use `zmv` to achieve renames like:
 
     zmv "(*).jpeg" "$1.jpg"
     zmv "(*)-backup.(*)" "backups/$1.$2"
 
-On Mac OS X you can get a file's source URI (if applicable) via:
-
-    xattr -p com.apple.metadata:kMDItemWhereFroms [file] | xxd -r -p
-
-or
-
-    mdls -name kMDItemWhereFroms [file]
-
-The *nix C<pad> command is handy for padding names or numbers:
-    pad -c 0 -f -w 4
-
-will left-zero-pad each line of stdin to width 4.
 
 =head2 SJD commands
 
@@ -555,7 +547,7 @@ C<flattenDirs> -- Move all descendants of the current directory up into the
 current directory, prefixing the intermediate directory names to the filenames
 (separated by "_") instead of "/").
 
-C<groupfiles> -- Normalize file names and move files into sub-folders
+C<groupFiles> -- Normalize file names and move files into sub-folders
 based on common parts of their names, ignoring any final digits.
 
 C<lowerExtension> -- Force file extensions to lower case.
@@ -563,34 +555,64 @@ C<lowerExtension> -- Force file extensions to lower case.
 C<splitBigDir> -- Group files into several other directories, based on the
 first letter(s) of the files' names (or a few other things).
 
-C<renameOSISfiles> -- Specialty renaming for Biblical text in per-book files,
-to standardize and sequence-number the filenames.
-
-=head2 Other commands
-
-C<File Buddy> is a very nice Mac OS X utility that lets you do a wide range of
-things with groups of files, including some renaming, from a nice GUI. See
-L<http://www.skytag.com/filebuddy/en/index.html> if interested.
-
 
 =head1 To do
 
 =over
 
+=item * Apparently MacOS favors Unicode NFD (Canonical Decomposition),
+while others like NFC (Canonical Decomposition + Composition). Deal.
+
+=item * Add synonym options for case types like:
+
+    camelCase (or lowerCamelCase) — myVariableName
+    PascalCase (or UpperCamelCase) — MyClassName
+    snake_case — my_variable_name
+    SCREAMING_SNAKE_CASE — MY_CONSTANT
+    kebab-case (or lisp-case) — my-function-name
+    SCREAMING-KEBAB-CASE — MY-CONSTANT (rare)
+    Train-Case — My-Function-Name (HTTP headers)
+    flatcase — myvariablename (no separators at all)
+    UPPERFLATCASE — MYVARIABLENAME
+
+=item * Watch for filesystem-specific reserved names, etc:
+
+Windows:
+    Always reserved (any extension or none):
+        CON, PRN, AUX, NUL
+        COM1 through COM9
+        LPT1 through LPT9
+    Can't end with space or period (gets silently stripped)
+    <>:"|?* are illegal in names
+    Path component can't be just . or ..
+
+macOS:
+    : is illegal (legacy from HFS using it as path separator)
+
+Unix/Linux:
+    Only / and null are truly illegal, but newlines are problematic
+
+For munging reserved names, common strategies:
+    Prefix with _ → _CON.txt
+    Append _ → CON_.txt
+    Add tilde → CON~.txt
+    Percent-encode → %43ON.txt (ugly but reversible)
+
 =item * Check and warn on git files even if they don't ask?
 
-=item * Warn/fix hyphen-initial filenames, names w/ spaces (for *nix).
+=item * Warn/fix hyphen-initial filenames, names w/ spaces
+(in *nix these are annoying though not illegal).
 
-=item * Option to operate *only* on directories, etc.
+=item * Option to operate *only* on directories.
 
-=item * C<--clean> should also do C<--addExtension> 'txt' (for non-dirs).
+=item * I<--clean> should also do I<--addExtension> 'txt' (for non-dirs).
 
-=item * Option to make C<--camelize> and C<--bactrianize> use (e.g.) "_" instead
+=item * Option to make I<--camelize> and I<--bactrianize> use (e.g.) "_" instead
 of " " (can do with a regex change in the meantime).
 
-=item * Make C<--bactrianize> not put space after hyphens.
+=item * Make I<--bactrianize> not put space after hyphens.
 
-=item * Unicode issues, esp nbsp with C<--dates>.
+=item * Unicode issues, esp nbsp (U+A0) with I<--dates>.
 
 =item * "To" vs "_to_" vs "2"?
 
@@ -599,7 +621,7 @@ Cf C<nextFilename>.
 
 =item * Do something better with case-change-only renames on case-insensitive systems.
 
-=item * Option to affect only the first (or Nth?) match with --expr.
+=item * Option to affect only the first (or Nth?) match with I<--expr>.
 
 =item * Make --dropOriginal apply to other
 options (not just --pullContent), that similarly apend brand-new,
@@ -620,11 +642,11 @@ L<https://stackoverflow.com/questions/1813427/extracting-information-from-pdfs-o
 L<https://pypi.org/project/scholarly/>
 PyPDF2, cb2bib, TET, Cermine.
 
-=item * Add a way to reference Mac fs metadata in C<--expr> RHS.
+=item * Add a way to reference Mac fs metadata in I<--expr> RHS.
 
 =item * pull checksum of the file into metadata or name?
 
-=item * C<--ePad> only allows I<left> padding at present.
+=item * I<--ePad> only allows I<left> padding at present.
 
 =item * Various date/time improvements:
 
@@ -641,7 +663,7 @@ names like "foo copy 5.pdf". E.g.:
 
 =item * Allow localized date formats and month names, or C<strftime> formats.
 
-=item * Add times and datetimes to C<--addstat>.
+=item * Add times and datetimes to I<--addstat>.
 
 =item * Option to extract MIME "Date:" from .eml files.
 
@@ -670,60 +692,60 @@ names like "foo copy 5.pdf". E.g.:
 
 =item * 2010-09-12 sjd: Cleanup, Getopt.
 
-=item * 2011-05-25 sjd: More cleanup. Don't skip first file listed. Add C<--dirs>.
+=item * 2011-05-25 sjd: More cleanup. Don't skip first file listed. Add I<--dirs>.
 
-=item * 2012-02-06 sjd: Move regex to option. Allow non-Latin \\w,  C<--test>.
+=item * 2012-02-06 sjd: Move regex to option. Allow non-Latin \\w,  I<--test>.
 Add C<doRename()> and change from system C<mv> to Perl rename(). sjdUtils.
-Put serializers before extension! Add C<--pull> to pack ancestor dir
+Put serializers before extension! Add I<--pull> to pack ancestor dir
 name(s) onto front of filenames.
 
-=item * 2012-04-10 sjd: Add C<--force>, C<--recurse>, C<--ancestor>, C<--lc>.
+=item * 2012-04-10 sjd: Add I<--force>, I<--recurse>, I<--ancestor>, I<--lc>.
 
-=item * 2013-01-09 sjd: Clean up. Add C<--camelize>. OS stuff like "Copy N of ...".
-Add C<--dates>, C<--addExtension>, C<--toEnd>, C<--copies>.
+=item * 2013-01-09 sjd: Clean up. Add I<--camelize>. OS stuff like "Copy N of ...".
+Add I<--dates>, I<--addExtension>, I<--toEnd>, I<--copies>.
 
-=item * 2013-10-15: C<--pull> w/o C<--expr>. Add C<--ignoreCase>, C<--sep>.
-C<--copies> earlier. Use C<vMsg()>. Clean up path vs. name distinction.
+=item * 2013-10-15: I<--pull> w/o I<--expr>. Add I<--ignoreCase>, I<--sep>.
+I<--copies> earlier. Use C<vMsg()>. Clean up path vs. name distinction.
 
-=item * 2013-12-21: Add C<--pullURI>.
+=item * 2013-12-21: Add I<--pullURI>.
 
-=item * 2014-01-09ff: Fix C<--dates>, C<--pullURI>. Add C<--moddates>.
+=item * 2014-01-09ff: Fix I<--dates>, I<--pullURI>. Add I<--moddates>.
 
-=item * 2014-03-27: Add C<--ePad>.
+=item * 2014-03-27: Add I<--ePad>.
 
-=item * 2014-05-09ff: Add C<--unescapeURI>, C<-x>. Count/report extension changes.
+=item * 2014-05-09ff: Add I<--unescapeURI>, I<-x>. Count/report extension changes.
 
 =item * 2014-08-22: Fix recursion. Separate splitPath, joinPath.
 
-=item * 2014-12-15: Add C<--bactrianize>.
+=item * 2014-12-15: Add I<--bactrianize>.
 
-=item * 2015-02-25ff: Fix bugs that prevented backreferences with C<-e>,
-and RHS like "11-4" becoming "7" due to eval. Add C<--dot>, fix C<--dates>.
+=item * 2015-02-25ff: Fix bugs that prevented backreferences with I<-e>,
+and RHS like "11-4" becoming "7" due to eval. Add I<--dot>, fix I<--dates>.
 
 =item * 2015-08-04: Remember to include Encode. Use C<strftime()> for month names.
-Change C<--moddate> to C<--addStat statName>.
+Change I<--moddate> to I<--addStat statName>.
 
-=item * 2017-01-31: Add C<--unroman> to convert Roman to Arabic numerals.
+=item * 2017-01-31: Add I<--unroman> to convert Roman to Arabic numerals.
 
 =item * 2018-01-26: Add conflict check immediately before C<doRename()> acts.
 
-=item * 2018-04-12: Missing return for C<--expr>. Add C<-v> messages. Fix C<--addStat>.
+=item * 2018-04-12: Missing return for I<--expr>. Add I<-v> messages. Fix I<--addStat>.
 
-=item * 2018-08-09: Finish C<--extChanges>. Add C<--uc>. Split out variousChanges().
+=item * 2018-08-09: Finish I<--extChanges>. Add I<--uc>. Split out variousChanges().
 
-=item * 2018-10-16: Use C<file> command with C<--addExtension> "!".
+=item * 2018-10-16: Use C<file> command with I<--addExtension> "!".
 
-=item * 2019-10-29: Clean up expr parsing logic. Add C<--dropExtensions>, C<--onlyExt>.
-Start C<--kmdAdd>, C<--kmdList>.
+=item * 2019-10-29: Clean up expr parsing logic. Add I<--dropExtensions>, I<--onlyExt>.
+Start I<--kmdAdd>, I<--kmdList>.
 
 =item * 2020-06-26: New layout. Add I<--dateYears>.
 
-=item * 2020-10-12: Rename C<--kmdXXX> to C<--xattrXXX>, C<--onlyExt> to
-C<--onlyExtensions>. Add C<--extensions> synonym.
+=item * 2020-10-12: Rename I<--kmdXXX> to I<--xattrXXX>, I<--onlyExt> to
+I<--onlyExtensions>. Add I<--extensions> synonym.
 
-=item * 2021-02-16: Add C<--lcExtensions>.
+=item * 2021-02-16: Add I<--lcExtensions>.
 
-=item * 2021-04-27: Start C<--filesystem>.
+=item * 2021-04-27: Start I<--filesystem>.
 
 =item * 2022-01-07: Fix bug with name conflicts when there's no extension.
 Still not great for case-insensitive file-systems when you change only case.
@@ -1580,19 +1602,19 @@ sub variousChanges {
 
     if ($expr) {
         if ($onlyExtensions) {
-            vMsg(2, "changing ext '$frExpr' to '$toExpr', fromC = /$frC/.");
+            vMsg(1, "changing ext '$frExpr' to '$toExpr', fromC = /$frC/.");
             $ext2 = applyRegex($ext2, $frC, $toExpr);
-            vMsg(2, "--expr, changed EXTENSION '$ext' to '$ext2'.");
+            vMsg(1, "--expr, changed EXTENSION '$ext' to '$ext2'.");
         }
         if ($extChanges) {
             my $fullName = extensionJoin($name2, $ext);
-            vMsg(2, "changing full name '$fullName': '$frExpr' => '$toExpr'.");
+            vMsg(1, "changing full name '$fullName': '$frExpr' => '$toExpr'.");
             my $fullName2 = applyRegex($fullName, $frC, $toExpr);
             ($name2, $ext2) = extensionSplit($fullName2);
-            vMsg(2, "--expr, changed FULL NAME '$fullName' to '$fullName2' ('$name2', '$ext2').");
+            vMsg(1, "--expr, changed FULL NAME '$fullName' to '$fullName2' ('$name2', '$ext2').");
         }
         else {
-            vMsg(2, "expr, changing '$frExpr' to '$toExpr', fromC = /$frC/.");
+            vMsg(1, "expr, changing '$frExpr' to '$toExpr', fromC = /$frC/.");
             $name2 = applyRegex($name2, $frC, $toExpr);
             vMsg(1, "--expr gives:  '$name2'");
         }
